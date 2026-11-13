@@ -1,0 +1,132 @@
+# DEVELOPMENT_PLAN.md — Creatora
+
+Phases are gated: a phase is done only when its acceptance criteria are demonstrated and PROJECT_STATUS.md is updated.
+
+## Module dependency map
+
+```
+                 ┌────────────┐
+                 │ Foundation │ (shell, db, jobs, settings, i18n, logging)
+                 └─────┬──────┘
+        ┌──────────────┼───────────────────┐
+        ▼              ▼                   ▼
+   Projects/       Media import        Render plan
+   persistence     + Library           (timeline model)
+        │              │                   │
+        │              ▼                   ▼
+        │         Media Library      Video Editor ──► Export engine
+        │              │                   │
+        │              │      ┌────────────┼──────────────┐
+        │              │      ▼            ▼              ▼
+        │              │  Multi-format  Subtitles      Audio
+        │              │  Studio        Studio        Studio
+        │              │      │            │              │
+        │              ▼      ▼            ▼              │
+        │         Graphics/Thumbnail + Brand Kit          │
+        │                                                 │
+        ▼                                                 ▼
+   Social accounts ─► Planner/Calendar ─► Analytics ◄── Publications
+```
+
+Order rationale: nothing works without foundation; library needs import; editor needs the render model; multi-format/subtitles/graphics extend the editor; export needs the render plan; social/calendar/analytics sit on top of publications.
+
+## PHASE 0 — Audit & planning ✅ DONE 2026-11-13
+
+## PHASE 1 — Foundations & design system
+
+**Tasks**
+1. Scaffold: Vite + React + TS frontend; Tauri 2 core; Tailwind + shadcn/ui.
+2. Design tokens + dark-first theme (light variant for management areas), typography, icon set.
+3. App shell: titlebar-friendly layout, sidebar navigation, module routing, command-palette-ready structure.
+4. Rust core: `db` (rusqlite + WAL + migrations), `error` (typed AppError), `logging` (file + console), `settings` commands.
+5. i18n: react-i18next-style loader, `en`/`es` catalogs, zero hardcoded UI strings.
+6. Autosave foundation: dirty-state tracking + debounced save + recovery record (full project save lands in Phase 2).
+7. Global error boundary + toast/error surfacing.
+
+**Acceptance criteria**
+- `npm run tauri build` (or `tauri dev` compile) succeeds; `npm run build` (tsc + vite) clean.
+- App launches to a navigable shell with all module placeholders routed.
+- Theme switch works; strings externalized; settings persist across restart.
+- DB created with migrations applied; `user_version` correct.
+- Structured errors reach the UI as toasts, not silent failures.
+
+## PHASE 2 — Projects & media library
+
+- Project create/open/save-as/duplicate/archive/delete/recover; `.creatora` format v1; autosave + crash recovery.
+- Media import (drag-drop + picker), ffprobe metadata extraction, thumbnails, proxy jobs, hash dedup.
+- Library UI: grid/list, collections, tags, search/filter, favorites, missing-media detection + relink.
+- Project thumbnails + recents; import/export project package.
+
+**Acceptance criteria**: create → edit → save → close → reopen round-trips losslessly; killing the app mid-edit recovers via autosave; deleting a media file on disk flags it missing and relinking restores it.
+
+## PHASE 3 — Video engine & editor
+
+- Timeline model (tracks/clips/keyframes) in shared TS types + mirror serde types in Rust.
+- Preview compositor: WebGL2, HTMLVideoElement decode, transform/opacity/effects; Canvas2D fallback.
+- Timeline UI: multi-track, trim/split/reorder/ripple, snapping, zoom, markers, undo/redo, frame stepping.
+- Clip properties: transform, opacity, volume, speed, fades, filters (brightness/contrast/saturation/exposure/temp/tint/blur/sharpen/vignette), transitions, keyframe interpolation.
+- RenderPlan → ffmpeg filter_complex; render a real export proving preview/export parity.
+- Proxy generation + preview quality settings.
+
+**Acceptance criteria**: a real project with cuts, overlays, text, filters and keyframes plays back and exports to a file whose duration/resolution/visuals match the preview (validated by ffprobe + frame diff on key frames).
+
+## PHASE 4 — Multi-format studio
+
+- Format presets (16:9, 9:16, 1:1, 4:5, custom) + per-format override layers in the project model.
+- Canvas preview per format, safe zones, reframing tools, blurred/color/custom background fill.
+- Derived versions: create/sync/branch from master with explicit conflict handling.
+- Smart reframing: heuristic subject tracking (motion/face via OpenCV-sidecar or ffmpeg cropdetect/scenedetect fallback) + keyframed manual correction.
+
+**Acceptance criteria**: one master produces N derived projects; editing master then syncing preserves per-format customizations flagged as overridden; exports of each format are correct.
+
+## PHASE 5 — Subtitle & audio studio
+
+- Transcription engine trait + whisper.cpp sidecar (model download manager with progress/cancel).
+- Subtitle editor: cues on timeline, split/merge, styling (font/size/color/bg/outline/shadow), word-level karaoke, templates, SRT/VTT import/export, burn-in via subtitles filter + styled ASS.
+- Audio: waveforms, volume automation, fades, normalize, EQ, noise reduction (ffmpeg afftdn/anlmdn), ducking, voice-over recording (getUserMedia → file → track).
+
+**Acceptance criteria**: transcription produces timed cues editable and burnable; exported video contains chosen subtitle rendering; audio adjustments audible in export.
+
+## PHASE 6 — Thumbnails, graphics, brand kit
+
+- Canvas-based graphic editor (fabric.js or custom Konva-like layer engine): text/shapes/images/adjustments/layers/templates; export PNG/JPEG/WebP.
+- Brand kits CRUD + one-click apply to graphics/subtitle styles/watermarks.
+
+**Acceptance criteria**: produce a 1280×720 thumbnail with text+image+shapes, export valid PNG/JPEG/WebP; brand kit switching re-skins presets.
+
+## PHASE 7 — Export & render engine
+
+- Profile system (codec/bitrate/fps/resolution/container presets per platform), queue, batch + multi-format export, progress/cancel/resume-safe, output validation (ffprobe), history, temp cleanup.
+- Hardware encoders where present (NVENC/QSV/AMF) with software fallback; expose in settings.
+
+**Acceptance criteria**: queue of mixed jobs completes; cancel kills ffmpeg cleanly and frees temp space; every output passes ffprobe validation; crash mid-export leaves recoverable state.
+
+## PHASE 8 — Social integrations (per-platform, capability-matrix driven)
+
+- Account connect via system-browser OAuth + loopback redirect; tokens in Credential Manager.
+- Adapters: YouTube (upload/metadata/thumbnail/schedule-per-API/analytics), TikTok Content Posting API, Instagram Graph (professional), Facebook Pages video/reels.
+- Where review/approval blocks a capability: adapter ships disabled with honest status; export + "publish packet" (video + metadata txt + thumbnail) fallback offered.
+
+**Acceptance criteria**: each wired operation verified against real API/test app OR documented as blocked in API_INTEGRATIONS.md. No simulated publishes — `published` state only from platform confirmation.
+
+## PHASE 9 — Planner & analytics
+
+- Calendar (month/week/day), publication cards per platform-version, drag-drop scheduling (only through confirmed mechanisms), reminders.
+- Analytics workspace: metrics per platform with availability flags, filters, comparisons, CSV export.
+
+**Acceptance criteria**: statuses reflect real API states; metrics shown only when API actually returns them; report export works.
+
+## PHASE 10 — Security, performance, reliability audit
+
+- Load tests: 4K sources, 100+ clip projects, large libraries, queue stress; memory profiling.
+- Failure drills: kill mid-export, corrupt project file, missing ffmpeg, expired tokens, offline operation.
+- Security review: token storage, path traversal on import/package, CSP, dependency audit (`cargo audit`, `npm audit`).
+
+## PHASE 11 — Licensing & distribution
+
+- License manager: perpetual key, offline-capable activation, grace handling; never gates access to user's own projects/media.
+- NSIS/MSI installer via Tauri bundler, code-signing story, update mechanism, third-party notices shipped in-app (FFmpeg source offer, whisper.cpp MIT, etc.).
+
+## PHASE 12 — Final QA & release
+
+- Full regression against acceptance criteria of all phases; clean-install test; upgrade + uninstall tests; release notes; USER_GUIDE completion.

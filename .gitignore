@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Provisioned tool binaries (ffmpeg, whisper) — never commit
+tools/bin/
+tools/models/
+
+# Test media corpus (large files)
+tools/test-media/
+!tools/test-media/README.md
+
+# Logs / local state
+*.log
+.creatora-cache/
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
