@@ -357,3 +357,30 @@ suite without dependency-injection plumbing or new crates.
 
 **MSRV.** EP_OVERRIDES uses `Mutex<Vec>` (const-stable in 1.77) instead
 of `LazyLock` (1.80) to keep the declared `rust-version` honest.
+
+## ADR-031 - Phase 10 hardening decisions
+
+**CSP.** Strict policy added; `style-src 'unsafe-inline'` is a deliberate,
+documented exception - timeline/preview position elements via dynamic
+`style={}` and refactoring to CSS custom-property classes buys nothing
+security-wise (same-surface attribute). `script-src 'self'` is the real
+XIX kill and is absolute.
+
+**Asset scope `**` kept.** convertFileSrc must serve media from any user
+location; scoping to app dirs breaks the product. Mitigations: CSP +
+React-only rendering (zero dangerouslySetInnerHTML). Residual risk filed.
+
+**Lazy modules, not lazy components.** React.lazy per top-level module
+(one Suspense in App.tsx): predictable chunks, no layout-shift inside
+pages. Shell + Home stay eager for instant first paint.
+
+**Playhead isolation.** playheadMs fires at rAF rate; only tiny overlay
+components subscribe. Heavy panels read getState() in handlers - the
+subscription-boundary pattern now documented in ARCHITECTURE.md.
+
+**64 MiB project cap.** Real .creatora files are KB-low MB (JSON timeline
+docs). The cap sits far above legitimate sizes while bounding parse
+memory on malformed files.
+
+**plugin-fs removed.** Zero imports, no capability grant, no rust plugin -
+dead dependency cut rather than carried.

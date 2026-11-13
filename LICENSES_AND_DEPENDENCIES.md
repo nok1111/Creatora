@@ -106,3 +106,16 @@ is a future optional build); CPU AVX2 is the baseline.
   as a subprocess, no linking changes).
 - **WebAudio API** — browser/webview built-in; no new dependency.
 - **xxhash-rust** — BSL-1.0 (already listed; waveform cache keys).
+
+## Phase 10 audit additions
+
+- **Removed**: `@tauri-apps/plugin-fs` (npm) - unused, no capability.
+- **Verified present + licensed** (actual Cargo.toml): parking_lot
+  (MIT/Apache-2.0), keyring 3.6 (MIT/Apache-2.0), sha2 (MIT/Apache-2.0),
+  base64 (MIT/Apache-2.0), webbrowser (MIT/Apache-2.0), ureq 3 (MIT/
+  Apache-2.0) - the table's "reqwest" row is superseded by ureq (already
+  listed Phase 5); tauri-plugin-dialog/log (MIT/Apache-2.0).
+- **npm audit**: 0 vulnerabilities (2026-11). **cargo-audit**: not run
+  (tool absent) - Phase 11 CI item.
+- **Icons**: lucide-react ISC - covered by table. **Fonts**: none bundled.
+- No new dependencies added this phase.

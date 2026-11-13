@@ -38,6 +38,7 @@ pub fn run() {
             log::info!("catalog ready at {}", data_dir.display());
             let jobs = jobs::JobManager::default();
             jobs.attach_db(db.clone());
+            jobs.sweep_interrupted();
             app.manage(jobs);
             social::scheduler::start(app.handle().clone(), db.clone());
             app.manage(db);

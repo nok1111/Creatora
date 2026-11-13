@@ -142,3 +142,18 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
 - Local insights: top posts/platforms/durations/times/hashtags with
   sample sizes and correlation-not-causation caveats; works offline.
 - Totals: 141 rust + 70 vitest green; clippy 0 warnings, fmt/tsc/build clean.
+
+## Phase 10 — Product hardening (ADR-031)
+
+- Strict CSP (script-src 'self', object-src 'none'); documented residual:
+  asset scope ** + style unsafe-inline (timeline positioning).
+- Code splitting: React.lazy per module -> initial JS -33% (684->456 kB),
+  gzip -26%; 6 lazy module chunks.
+- Playhead re-render isolation: TimelinePanel no longer renders at rAF
+  rate during playback (PlayheadOverlay/PlayheadTimecode + imperative
+  auto-scroll).
+- Startup sweep: crashed 'running' jobs -> 'interrupted'.
+- .creatora open capped at 64 MiB.
+- Removed unused @tauri-apps/plugin-fs.
+- +3 hardening tests (sweep, size cap, 10k-snapshot query <100 ms).
+- Totals: 144 rust + 70 vitest green; clippy/fmt/tsc/build clean.

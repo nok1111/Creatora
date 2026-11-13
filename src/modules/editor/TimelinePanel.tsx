@@ -39,7 +39,7 @@ import {
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-import type { Clip, Track } from "@/lib/project-types";
+import type { Clip, Track, ProjectDoc } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
 /**
@@ -55,7 +55,10 @@ const SNAP_PX = 10;
 export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> }) {
   const { t } = useTranslation();
   const doc = useProject((s) => s.doc);
-  const playheadMs = useEditor((s) => s.playheadMs);
+  // NOTE: playheadMs updates at rAF rate — subscribing here would re-render
+  // the whole timeline per frame. Handlers read getState() instead; the
+  // moving UI lives in PlayheadOverlay/PlayheadTimecode below.
+  const playheadNow = () => useEditor.getState().playheadMs;
   const playing = useEditor((s) => s.playing);
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const selection = useEditor((s) => s.selection);
@@ -77,15 +80,22 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const msToPx = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec]);
   const pxToMs = useCallback((px: number) => (px / pxPerSec) * 1000, [pxPerSec]);
 
-  // Auto-scroll to keep the playhead in view during playback.
+  // Auto-scroll to keep the playhead in view during playback — imperative
+  // rAF loop mutates scrollLeft; no React re-render per frame.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !playing || !doc) return;
-    const px = msToPx(playheadMs);
-    if (px > el.scrollLeft + el.clientWidth - 80 || px < el.scrollLeft) {
-      el.scrollLeft = Math.max(0, px - 80);
-    }
-  }, [playheadMs, playing, doc, msToPx]);
+    let raf = 0;
+    const tick = () => {
+      const px = msToPx(playheadNow());
+      if (px > el.scrollLeft + el.clientWidth - 80 || px < el.scrollLeft) {
+        el.scrollLeft = Math.max(0, px - 80);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, doc, msToPx]);
 
   if (!doc) return null;
   const durationMs = Math.max(timelineDuration(doc), 10_000);
@@ -102,7 +112,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           ignored.add(c.startMs + c.durationMs);
         }
       }
-      const pts = snapPoints(doc, playheadMs).filter((p) => !ignored.has(p));
+      const pts = snapPoints(doc, playheadNow()).filter((p) => !ignored.has(p));
       for (const p of pts) {
         if (Math.abs(msToPx(p) - msToPx(ms)) <= SNAP_PX) {
           setSnapLine(p);
@@ -221,7 +231,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const splitAtPlayhead = () => {
     for (const clipId of selection) {
       mutate((d) => {
-        const r = splitClip(d, clipId, playheadMs);
+        const r = splitClip(d, clipId, playheadNow());
         return r ? r.doc : d;
       });
     }
@@ -336,9 +346,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     <div className="flex h-full flex-col border-t border-border bg-card" onWheel={onWheel}>
       {/* Toolbar */}
       <div className="flex items-center gap-1 border-b border-border px-2 py-1">
-        <span className="font-mono text-xs text-muted-foreground">
-          {timecode(playheadMs, doc)} / {timecode(durationMs, doc)}
-        </span>
+        <PlayheadTimecode doc={doc} durationMs={durationMs} />
         <div className="mx-2 h-4 w-px bg-border" />
         <Button variant="ghost" size="icon" className="size-7" onClick={splitAtPlayhead} title={t("editor.split")}>
           <Scissors className="size-4" />
@@ -550,16 +558,40 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               />
             )}
 
-            {/* Playhead */}
-            <div
-              className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-red-500"
-              style={{ left: msToPx(playheadMs) }}
-            >
-              <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-red-500" />
-            </div>
+            <PlayheadOverlay msToPx={msToPx} />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Playhead line — the ONLY piece that subscribes to playheadMs, so the
+ * 60 fps store updates re-render this ~10-line div, not the whole panel. */
+function PlayheadOverlay({ msToPx }: { msToPx: (ms: number) => number }) {
+  const playheadMs = useEditor((s) => s.playheadMs);
+  return (
+    <div
+      className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-red-500"
+      style={{ left: msToPx(playheadMs) }}
+    >
+      <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-red-500" />
+    </div>
+  );
+}
+
+/** Toolbar timecode — subscribes to playheadMs in isolation. */
+function PlayheadTimecode({
+  doc,
+  durationMs,
+}: {
+  doc: ProjectDoc;
+  durationMs: number;
+}) {
+  const playheadMs = useEditor((s) => s.playheadMs);
+  return (
+    <span className="font-mono text-xs text-muted-foreground">
+      {timecode(playheadMs, doc)} / {timecode(durationMs, doc)}
+    </span>
   );
 }

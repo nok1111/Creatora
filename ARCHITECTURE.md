@@ -203,3 +203,18 @@ snapshots + media_assets metadata - fully offline.
 Job plumbing: analytics_sync runs through the existing JobManager; the
 60 s scheduler tick also checks the auto-sync interval (settings key
 `analytics.sync_interval_minutes`, 0=off).
+
+## Phase 10 hardening notes
+
+- Frontend: each module is a `React.lazy` boundary under one Suspense in
+  `App.tsx`; shell+Home stay eager. Chunks: index 227 kB + shared vendor
+  224 kB eager; Editor 128, Social 40, Analytics 34, Library 26, Settings
+  3 kB lazy.
+- Re-render contract: `playheadMs` updates at rAF rate - components that
+  need it subscribe in isolation (PlayheadOverlay/Timecode); heavy panels
+  read `useEditor.getState()` inside handlers. New timeline code must
+  follow this pattern.
+- JobManager.sweep_interrupted(): startup marks crashed 'running' rows
+  'interrupted' - UI never shows phantom work.
+- store::open rejects .creatora > 64 MiB before parsing.
+- CSP in tauri.conf.json - see PHASE_10_SECURITY_REPORT.md.

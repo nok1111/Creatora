@@ -162,3 +162,13 @@ Sub-phased per product review — vertical slice first, then depth, then perform
 - Phase 10 candidates: perf sprint (bundle code-splitting, WebGL
   compositor), packaging/installer (MSIX/NSIS), auto-update, license
   activation, public beta hardening.
+
+## Execution status update (post Phase 10)
+
+- Phase 10 (hardening) - **DONE**: CSP, code splitting (-33% initial
+  JS), playhead re-render isolation, job sweep, size caps, dep cleanup,
+  reports in PHASE_10_AUDIT / _PERFORMANCE_REPORT / _SECURITY_REPORT.
+  144 rust + 70 vitest green.
+- Phase 11 (distribution): installer (MSIX/NSIS), auto-update, license
+  activation for one-time purchase, cargo-audit in CI, CSP dev-mode
+  smoke check, real-GPU perf matrix, third-party notices in About.

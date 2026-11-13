@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
@@ -7,11 +7,31 @@ import { ModulePlaceholder } from "@/components/ModulePlaceholder";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MODULES } from "@/app/nav";
 import { HomePage } from "@/modules/home/HomePage";
-import { LibraryPage } from "@/modules/library/LibraryPage";
-import { EditorPage } from "@/modules/editor/EditorPage";
-import { SettingsPage } from "@/modules/settings/SettingsPage";
-import { SocialPage } from "@/modules/social/SocialPage";
-import { AnalyticsPage } from "@/modules/analytics/AnalyticsPage";
+
+// Heavy modules are lazy — each ships its own chunk, loaded on first visit.
+const LibraryPage = lazy(() =>
+  import("@/modules/library/LibraryPage").then((m) => ({ default: m.LibraryPage })),
+);
+const EditorPage = lazy(() =>
+  import("@/modules/editor/EditorPage").then((m) => ({ default: m.EditorPage })),
+);
+const SettingsPage = lazy(() =>
+  import("@/modules/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+const SocialPage = lazy(() =>
+  import("@/modules/social/SocialPage").then((m) => ({ default: m.SocialPage })),
+);
+const AnalyticsPage = lazy(() =>
+  import("@/modules/analytics/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })),
+);
+
+function ModuleLoading() {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      Loading module…
+    </div>
+  );
+}
 import { useSettings } from "@/stores/settings";
 import { autosave } from "@/services/autosave";
 
@@ -66,7 +86,11 @@ export default function App() {
                   key={m.key}
                   path={m.path === "/" ? "/" : m.path}
                   index={m.path === "/"}
-                  element={pageFor(m.key) ?? <ModulePlaceholder module={m} />}
+                  element={
+                    <Suspense fallback={<ModuleLoading />}>
+                      {pageFor(m.key) ?? <ModulePlaceholder module={m} />}
+                    </Suspense>
+                  }
                 />
               ))}
             </Route>

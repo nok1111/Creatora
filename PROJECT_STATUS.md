@@ -260,3 +260,13 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 - **Publish packets**: carpeta por target (video hardlink→copy, thumbnail, metadata.txt legible + publication.json), batch, regenerable, registrado en `publish_packets`.
 - **Import CSV/JSON**: ≤10 MiB, preview (format detect, columnas, rows matched/unmatched por remote_id, issues), commit sin sobreescritura (dedupe), source='import' + label de usuario, audit batch.
 - **Tests**: +17 mock HTTP adaptadores (success/400/401/403/429+RetryAfter/500/malformed JSON/body incompleto/duplicado/retry/timeout/expired token/refresh fail/conexión cortada), +6 integración engine (snapshot roundtrip+dedupe, compare solo-métricas-comunes, insights sample-size, sync audit, packet, csv import), +3 vitest (metricValue null-vs-0).
+
+## PHASE 10 — Hardening, Security & Performance (COMPLETE)
+
+- **Audit**: PHASE_10_AUDIT.md — verified-OK table + findings H1/H2, M1–M3, L1–L4.
+- **Security**: strict CSP on webview (script-src self — XSS kill; object-src none; unsafe-inline only for styles, documented); asset scope `**` kept by design + documented; unused @tauri-apps/plugin-fs removed; .creatora open capped at 64 MiB.
+- **Perf**: React.lazy per module — initial JS 684.21→456.0 kB (-33%), gzip 201→~148 kB (-26%); chunks: Editor 128, Social 40, Analytics 34, Library 26, Settings 3 kB on-demand.
+- **Re-render fix**: playheadMs (rAF rate) isolated to PlayheadOverlay/PlayheadTimecode — full timeline no longer re-renders ~60x/s during playback; auto-scroll via imperative rAF loop.
+- **Reliability**: startup sweep marks crashed 'running' jobs 'interrupted'.
+- **Tests**: +3 hardening (job sweep, oversized-project reject, 10k-snapshot dashboard query <100 ms asserted). Totals: 144 rust + 70 vitest green; clippy 0, fmt/tsc/build clean.
+- **Not measured** (honest): cold-start wall time, 4K/500-clip preview fps, heap profile — see PHASE_10_PERFORMANCE_REPORT.md.

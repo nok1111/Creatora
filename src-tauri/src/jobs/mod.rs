@@ -78,6 +78,21 @@ impl JobManager {
         *self.db.lock() = Some(db);
     }
 
+    /// Mark jobs left 'running' by a crash/kill as 'interrupted' so the UI
+    /// never shows phantom work. Called once at startup.
+    pub fn sweep_interrupted(&self) {
+        if let Some(db) = self.db.lock().as_ref() {
+            let _ = db.with(|c| {
+                c.execute(
+                    "UPDATE jobs SET status = 'interrupted', finished_at = datetime('now')
+                     WHERE status = 'running'",
+                    [],
+                )?;
+                Ok(())
+            });
+        }
+    }
+
     fn record_start(&self, id: &str, kind: &str) {
         if let Some(db) = self.db.lock().as_ref() {
             let _ = db.with(|c| {

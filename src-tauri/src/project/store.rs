@@ -5,6 +5,8 @@ use crate::project::document::{now_iso, ProjectDoc};
 use std::path::{Path, PathBuf};
 
 pub const PROJECT_EXT: &str = "creatora";
+/// Real projects are KB–low MB; reject absurd files before parsing.
+const MAX_PROJECT_BYTES: u64 = 64 << 20;
 
 /// Windows-safe file stem for a project name.
 pub fn sanitize_filename(name: &str) -> String {
@@ -49,6 +51,12 @@ pub fn open(path: &Path) -> Result<ProjectDoc, AppError> {
         return Err(AppError::NotFound(format!(
             "project file not found: {}",
             path.display()
+        )));
+    }
+    let size = std::fs::metadata(path)?.len();
+    if size > MAX_PROJECT_BYTES {
+        return Err(AppError::InvalidInput(format!(
+            "project file too large ({size} bytes, max {MAX_PROJECT_BYTES})"
         )));
     }
     let json = std::fs::read_to_string(path)?;

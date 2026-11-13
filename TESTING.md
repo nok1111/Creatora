@@ -125,3 +125,13 @@ Mocked-HTTP adapter tests are a pending Phase 9 item.
 Manual matrix before release (real credentials needed): connect ->
 publish test video -> wait -> analytics sync -> verify snapshots match
 the platform's own dashboard numbers.
+
+## Phase 10 - hardening tests
+
+- tests/hardening.rs: running-job sweep to interrupted (and 'done'
+  untouched), oversized .creatora rejection (sparse 65 MiB file),
+  10k-snapshot dashboard query <100 ms (benchmark + index guard).
+- Structural (documented, not unit-tested): React.lazy boundaries
+  verified via build chunk table; playhead isolation verified by
+  subscription audit - profiler capture deferred to Phase 11 QA.
+- Not run: cargo-audit (tool absent) - CI item for Phase 11.
