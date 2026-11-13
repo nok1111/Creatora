@@ -183,7 +183,8 @@ pub fn open_project(
     path: String,
 ) -> CmdResult<OpenProjectResult> {
     let path = PathBuf::from(&path);
-    let doc = store::open(&path)?;
+    let mut doc = store::open(&path)?;
+    resolve_media_paths(&mut doc, &path);
     upsert_catalog(&db, &doc, &path)?;
     let recovery = store::find_recovery(&data_dir(&app)?, &doc.meta.id, &path)
         .map(|p| p.to_string_lossy().into_owned());
@@ -192,6 +193,27 @@ pub fn open_project(
         file_path: path.to_string_lossy().into_owned(),
         recovery_path: recovery,
     })
+}
+
+/// When a project was moved as a bundle (media/ sibling dir), refs whose
+/// stored absolute path vanished get rewritten to the bundled copy.
+/// Skipped refs stay as-is so the missing-media UI reports them honestly.
+fn resolve_media_paths(doc: &mut document::ProjectDoc, project_file: &Path) {
+    let Some(dir) = project_file.parent() else { return };
+    let bundle_media = dir.join("media");
+    if !bundle_media.is_dir() {
+        return;
+    }
+    for m in &mut doc.media_refs {
+        if Path::new(&m.path).is_file() {
+            continue;
+        }
+        let Some(name) = Path::new(&m.path).file_name() else { continue };
+        let candidate = bundle_media.join(name);
+        if candidate.is_file() {
+            m.path = candidate.to_string_lossy().into_owned();
+        }
+    }
 }
 
 #[tauri::command]
@@ -204,8 +226,27 @@ pub fn save_project(
     let path = PathBuf::from(&path);
     store::save(&path, &doc)?;
     upsert_catalog(&db, &doc, &path)?;
+    sync_usage(&db, &doc)?;
     store::discard_autosave(&data_dir(&app)?, &doc.meta.id);
     Ok(())
+}
+
+/// Keep `project_asset` usage refs in sync with the doc's media_refs —
+/// powers "used by" lookups and missing-media impact analysis.
+fn sync_usage(db: &Db, doc: &document::ProjectDoc) -> Result<(), AppError> {
+    db.with(|c| {
+        c.execute(
+            "DELETE FROM project_asset WHERE project_id = ?1",
+            [&doc.meta.id],
+        )?;
+        for m in &doc.media_refs {
+            c.execute(
+                "INSERT OR IGNORE INTO project_asset (project_id, asset_id) VALUES (?1, ?2)",
+                [&doc.meta.id, &m.asset_id],
+            )?;
+        }
+        Ok(())
+    })
 }
 
 #[tauri::command]
@@ -317,4 +358,93 @@ pub fn delete_project(
     }
     store::discard_autosave(&data_dir(&app)?, &id);
     Ok(())
+}
+
+/// Export a self-contained bundle: `<dest>/<name>/project.creatora` +
+/// `<dest>/<name>/media/<files>` + manifest. Media is consolidated by copy —
+/// referenced files found missing are skipped and reported.
+#[tauri::command]
+pub fn export_project_bundle(
+    db: State<'_, Arc<Db>>,
+    id: String,
+    dest_dir: String,
+) -> CmdResult<serde_json::Value> {
+    let (name, file_path) = db.with(|c| {
+        c.query_row(
+            "SELECT name, file_path FROM projects WHERE id = ?1",
+            [&id],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+        .map_err(AppError::from)
+    })?;
+    let doc = store::open(&PathBuf::from(&file_path))?;
+
+    let dest = PathBuf::from(&dest_dir);
+    let stem = store::sanitize_filename(&format!("{name}-bundle"));
+    let mut bundle_dir = dest.join(&stem);
+    for i in 2..10_000 {
+        if !bundle_dir.exists() {
+            break;
+        }
+        bundle_dir = dest.join(format!("{stem} {i}"));
+    }
+    let media_dir = bundle_dir.join("media");
+    std::fs::create_dir_all(&media_dir)?;
+
+    let mut copied = 0u32;
+    let mut missing: Vec<String> = Vec::new();
+    let mut new_doc = doc.clone();
+    for m in &mut new_doc.media_refs {
+        let src = PathBuf::from(&m.path);
+        if !src.is_file() {
+            missing.push(m.path.clone());
+            continue;
+        }
+        let fname = src
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| format!("{}.bin", m.asset_id));
+        let target = unique_media_name(&media_dir, &fname);
+        std::fs::copy(&src, &target)?;
+        m.path = target.to_string_lossy().into_owned();
+        copied += 1;
+    }
+
+    let project_file = bundle_dir.join(format!("{}.{}", store::sanitize_filename(&name), store::PROJECT_EXT));
+    store::save(&project_file, &new_doc)?;
+
+    let manifest = serde_json::json!({
+        "bundleVersion": 1,
+        "project": name,
+        "projectFile": project_file.file_name().unwrap().to_string_lossy(),
+        "mediaCopied": copied,
+        "mediaMissing": missing,
+        "createdAt": document::now_iso(),
+    });
+    std::fs::write(
+        bundle_dir.join("manifest.json"),
+        serde_json::to_string_pretty(&manifest).unwrap(),
+    )?;
+
+    Ok(serde_json::json!({
+        "bundleDir": bundle_dir.to_string_lossy(),
+        "mediaCopied": copied,
+        "mediaMissing": missing,
+    }))
+}
+
+fn unique_media_name(dir: &Path, name: &str) -> PathBuf {
+    let p = dir.join(name);
+    if !p.exists() {
+        return p;
+    }
+    let stem = p.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+    let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    for i in 1..10_000 {
+        let c = dir.join(format!("{stem}-{i}{ext}"));
+        if !c.exists() {
+            return c;
+        }
+    }
+    p
 }

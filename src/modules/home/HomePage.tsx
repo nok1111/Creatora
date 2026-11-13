@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, Clock, Film, Star, MoreVertical, FolderOpen, Archive, Copy, Trash2, Undo2 } from "lucide-react";
+import { FilePlus2, Clock, Film, Star, MoreVertical, FolderOpen, Archive, Copy, Trash2, Undo2, PackageOpen } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
 import type { ProjectSummary } from "@/lib/project-types";
 import { useProject } from "@/stores/project";
@@ -70,6 +71,21 @@ export function HomePage() {
     try {
       await api.setProjectFlag(id, flags);
       refresh();
+    } catch (e) {
+      toast.error(t("common.error"), { description: String(e) });
+    }
+  };
+
+  const exportBundle = async (p: ProjectSummary) => {
+    const dest = await openDialog({ directory: true, title: t("home.exportBundleDest") });
+    if (typeof dest !== "string" || !dest) return;
+    try {
+      const r = await api.exportProjectBundle(p.id, dest);
+      toast.success(
+        r.mediaMissing.length
+          ? t("home.exportBundlePartial", { dir: r.bundleDir, count: r.mediaMissing.length })
+          : t("home.exportBundleDone", { dir: r.bundleDir }),
+      );
     } catch (e) {
       toast.error(t("common.error"), { description: String(e) });
     }
@@ -192,6 +208,9 @@ export function HomePage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => void flag(p.id, { archived: true })}>
                       <Archive className="size-4" /> {t("home.archive")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void exportBundle(p)}>
+                      <PackageOpen className="size-4" /> {t("home.exportBundle")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem destructive onClick={() => setDeleteTarget(p)}>

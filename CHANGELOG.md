@@ -18,3 +18,4 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
 - Phase 2: project CRUD commands + catalog sync; New Project dialog with presets; Home recents with favorite/archive/duplicate/delete+recovery prompt.
 - Phase 2: job engine (progress events, cancellation, durable rows); FFmpeg provisioned as subprocess tools (9.0.2 GPL build, notices recorded).
 - Phase 2: media import pipeline — ffprobe metadata, xxh3 dedup, ffmpeg thumbnails; Library UI with kind filters, search, missing-media detection + relink; integration tests against real ffmpeg.
+- Phase 2 (2nd pass): asset favorites (migration 0002), collections CRUD + sidebar, tags (create-on-use), project_asset usage sync on save, drag-drop import, project bundle export with media consolidation + missing-media self-heal on open.

@@ -5,10 +5,10 @@
 
 ## Current state
 
-- **Current phase:** PHASE 2 — Projects & Media Library (IN PROGRESS)
-- **Current task:** Phase 2 remainder — collections/tags UI, project packaging, asset favorites, drag-drop import
-- **Build status:** `npm run build` ✓ · `cargo check` ✓ · `cargo test` 11/11 ✓ · `cargo test --test media_import` 3/3 ✓ · `npm test` 3/3 ✓
-- **Next exact action:** Collections + tags UI in Library; `project_asset` usage wiring on save; drag-drop import via window file-drop event
+- **Current phase:** PHASE 2 — substantially complete; remaining items noted below are minor/follow-up. PHASE 3 — Video Engine & Editor is next (largest phase).
+- **Current task:** Phase 3 design — timeline model already in `.creatora` v1; next is the preview compositor + timeline UI
+- **Build status:** `npm run build` ✓ · `cargo check` ✓ · `cargo test` 11+3 ✓ · `npm test` 3/3 ✓
+- **Next exact action:** Phase 3 — implement `render/` plan types, timeline store with undo/redo, preview compositor skeleton (HTMLVideoElement + WebGL2), timeline UI v1 (tracks, trim, split, snapping, markers)
 
 ## PHASE 0 — Repository Audit (COMPLETE)
 
@@ -65,15 +65,23 @@ Implemented: Vite 8 + React 18 + TS strict + Tauri 2 + Tailwind 3 scaffold; Crea
 - Library UI: kind filter chips, search, asset grid w/ thumbnails via asset:// protocol (scope enabled), missing overlay badge, duplicate icon, relink/delete menu, missing banner count, import progress in button, per-file import error toasts.
 - Test corpus generated in `tools/test-media/` (720p h264+aac, vertical, mp3, png) — gitignored.
 
-### Not yet done (Phase 2 remainder)
+### Also completed in second Phase-2 pass
 
-- [ ] Collections + tags UI (schema exists; no commands/UI yet)
-- [ ] `project_asset` usage refs written on save
-- [ ] Drag-drop import (only file-dialog import currently)
-- [ ] Asset favorites + batch operations
-- [ ] Project packaging/export-import bundle (media consolidation)
-- [ ] Project thumbnail generation
-- [ ] Autosave→editor integration (store exists; editor lands Phase 3)
+- Migration 0002: `media_assets.is_favorite`; favorites filter + star toggle in UI.
+- Collections: full CRUD commands + sidebar UI (create, click-filter, delete w/ counts); assign via card menu.
+- Tags: create-on-use `tag_asset`/`untag_asset`, sidebar list + filter, tag dialog on cards.
+- `project_asset` usage refs synced on every `save_project`.
+- Drag-drop import via `getCurrentWindow().onDragDropEvent` (drop paths → import job, drop-zone highlight).
+- Project bundle export: `export_project_bundle` → `<dest>/<name>-bundle/` with consolidated `media/` copies + `manifest.json`; missing media reported. On `open_project`, missing refs resolve against sibling `media/` (bundle self-heal).
+- `list_assets` filters: kind, name query, favoritesOnly, collectionId, tagId.
+
+### Not yet done (Phase 2 follow-ups, non-blocking)
+
+- [ ] Batch operations (multi-select delete/tag/assign)
+- [ ] Project thumbnails (auto-generated preview on Home)
+- [ ] Zip-compressed bundle (folder bundle works; zip needs `zip` crate — defer until needed)
+- [ ] Collection nesting UI (parent_id supported in schema/commands, UI is flat)
+- [ ] Import directly into a chosen project (media_refs link on import is manual today)
 
 ## Known bugs
 

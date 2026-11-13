@@ -28,6 +28,7 @@ pub struct AssetSummary {
     pub status: String,
     /// Set when a different existing asset has the same content hash.
     pub duplicate_of: Option<String>,
+    pub is_favorite: bool,
 }
 
 #[derive(Serialize)]
@@ -94,7 +95,7 @@ fn existing_by_path(db: &Db, path: &Path) -> Result<Option<AssetSummary>, AppErr
     db.with(|c| {
         let p = path.to_string_lossy().to_string();
         let mut stmt = c.prepare(
-            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status
+            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status, is_favorite
              FROM media_assets WHERE file_path = ?1",
         )?;
         let mut rows = stmt.query_map([p], row_to_asset)?;
@@ -127,6 +128,7 @@ fn row_to_asset(r: &rusqlite::Row) -> rusqlite::Result<AssetSummary> {
         thumbnail_path: r.get(8)?,
         status: r.get(9)?,
         duplicate_of: None,
+        is_favorite: r.get::<_, i64>(10)? != 0,
     })
 }
 
@@ -229,6 +231,7 @@ pub fn import_one(
         thumbnail_path: thumb.map(|p| p.to_string_lossy().to_string()),
         status: "ok".into(),
         duplicate_of,
+        is_favorite: false,
     })
 }
 
@@ -284,28 +287,68 @@ pub fn list_assets(
     db: State<'_, Arc<Db>>,
     kind: Option<String>,
     query: Option<String>,
+    favorites_only: Option<bool>,
+    collection_id: Option<String>,
+    tag_id: Option<String>,
 ) -> CmdResult<Vec<AssetSummary>> {
     db.with(|c| {
         let mut sql = String::from(
-            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status
-             FROM media_assets WHERE 1=1",
+            "SELECT DISTINCT a.id, a.kind, a.file_path, a.name, a.width, a.height,
+                    a.duration_ms, a.codec, a.thumbnail_path, a.status, a.is_favorite
+             FROM media_assets a WHERE 1=1",
         );
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        let mut next = |v: Box<dyn rusqlite::ToSql>| {
+            params.push(v);
+            format!("?{}", params.len())
+        };
         if let Some(k) = &kind {
-            params.push(Box::new(k.clone()));
-            sql.push_str(&format!(" AND kind = ?{}", params.len()));
+            if k != "all" {
+                sql.push_str(&format!(" AND a.kind = {}", next(Box::new(k.clone()))));
+            }
         }
         if let Some(q) = &query {
             if !q.is_empty() {
-                params.push(Box::new(format!("%{q}%")));
-                sql.push_str(&format!(" AND name LIKE ?{}", params.len()));
+                sql.push_str(&format!(" AND a.name LIKE {}", next(Box::new(format!("%{q}%")))));
             }
         }
-        sql.push_str(" ORDER BY imported_at DESC");
+        if favorites_only == Some(true) {
+            sql.push_str(" AND a.is_favorite = 1");
+        }
+        if let Some(cid) = &collection_id {
+            sql.push_str(&format!(
+                " AND EXISTS (SELECT 1 FROM asset_collection ac
+                 WHERE ac.asset_id = a.id AND ac.collection_id = {})",
+                next(Box::new(cid.clone()))
+            ));
+        }
+        if let Some(tid) = &tag_id {
+            sql.push_str(&format!(
+                " AND EXISTS (SELECT 1 FROM asset_tag at
+                 WHERE at.asset_id = a.id AND at.tag_id = {})",
+                next(Box::new(tid.clone()))
+            ));
+        }
+        sql.push_str(" ORDER BY a.imported_at DESC");
         let mut stmt = c.prepare(&sql)?;
         let refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt
-            .query_map(refs.as_slice(), row_to_asset)?
+            .query_map(refs.as_slice(), |r| {
+                Ok(AssetSummary {
+                    id: r.get(0)?,
+                    kind: r.get(1)?,
+                    file_path: r.get(2)?,
+                    name: r.get(3)?,
+                    width: r.get(4)?,
+                    height: r.get(5)?,
+                    duration_ms: r.get(6)?,
+                    codec: r.get(7)?,
+                    thumbnail_path: r.get(8)?,
+                    status: r.get(9)?,
+                    duplicate_of: None,
+                    is_favorite: r.get::<_, i64>(10)? != 0,
+                })
+            })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     })
@@ -355,6 +398,187 @@ pub fn relink_asset(db: State<'_, Arc<Db>>, id: String, new_path: String) -> Cmd
 pub fn delete_asset(db: State<'_, Arc<Db>>, id: String) -> CmdResult<()> {
     db.with(|c| {
         c.execute("DELETE FROM media_assets WHERE id = ?1", [&id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn set_asset_favorite(
+    db: State<'_, Arc<Db>>,
+    id: String,
+    favorite: bool,
+) -> CmdResult<()> {
+    db.with(|c| {
+        c.execute(
+            "UPDATE media_assets SET is_favorite = ?1 WHERE id = ?2",
+            rusqlite::params![favorite as i64, id],
+        )?;
+        Ok(())
+    })
+}
+
+// ---- Collections ----
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionSummary {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub asset_count: i64,
+}
+
+#[tauri::command]
+pub fn list_collections(db: State<'_, Arc<Db>>) -> CmdResult<Vec<CollectionSummary>> {
+    db.with(|c| {
+        let mut stmt = c.prepare(
+            "SELECT c.id, c.name, c.parent_id,
+                    (SELECT COUNT(*) FROM asset_collection ac WHERE ac.collection_id = c.id)
+             FROM collections c ORDER BY c.name",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(CollectionSummary {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    parent_id: r.get(2)?,
+                    asset_count: r.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+#[tauri::command]
+pub fn create_collection(
+    db: State<'_, Arc<Db>>,
+    name: String,
+    parent_id: Option<String>,
+) -> CmdResult<String> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 200 {
+        return Err(AppError::InvalidInput("collection name required".into()));
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    db.with(|c| {
+        c.execute(
+            "INSERT INTO collections (id, name, parent_id) VALUES (?1, ?2, ?3)",
+            rusqlite::params![id, name, parent_id],
+        )?;
+        Ok(())
+    })?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn delete_collection(db: State<'_, Arc<Db>>, id: String) -> CmdResult<()> {
+    db.with(|c| {
+        c.execute(
+            "DELETE FROM asset_collection WHERE collection_id = ?1",
+            [&id],
+        )?;
+        c.execute("DELETE FROM collections WHERE id = ?1", [&id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn assign_asset_to_collection(
+    db: State<'_, Arc<Db>>,
+    asset_id: String,
+    collection_id: String,
+) -> CmdResult<()> {
+    db.with(|c| {
+        c.execute(
+            "INSERT OR IGNORE INTO asset_collection (asset_id, collection_id) VALUES (?1, ?2)",
+            [asset_id, collection_id],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn remove_asset_from_collection(
+    db: State<'_, Arc<Db>>,
+    asset_id: String,
+    collection_id: String,
+) -> CmdResult<()> {
+    db.with(|c| {
+        c.execute(
+            "DELETE FROM asset_collection WHERE asset_id = ?1 AND collection_id = ?2",
+            [asset_id, collection_id],
+        )?;
+        Ok(())
+    })
+}
+
+// ---- Tags ----
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagSummary {
+    pub id: String,
+    pub name: String,
+    pub asset_count: i64,
+}
+
+#[tauri::command]
+pub fn list_tags(db: State<'_, Arc<Db>>) -> CmdResult<Vec<TagSummary>> {
+    db.with(|c| {
+        let mut stmt = c.prepare(
+            "SELECT t.id, t.name,
+                    (SELECT COUNT(*) FROM asset_tag at2 WHERE at2.tag_id = t.id)
+             FROM tags t ORDER BY t.name",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(TagSummary {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    asset_count: r.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
+/// Tag by name — creates the tag if new (case-insensitive dedup).
+#[tauri::command]
+pub fn tag_asset(db: State<'_, Arc<Db>>, asset_id: String, tag: String) -> CmdResult<()> {
+    let tag = tag.trim();
+    if tag.is_empty() || tag.len() > 64 {
+        return Err(AppError::InvalidInput("tag must be 1-64 chars".into()));
+    }
+    db.with(|c| {
+        let tag_id: String = match c.query_row(
+            "SELECT id FROM tags WHERE name = ?1 COLLATE NOCASE",
+            [tag],
+            |r| r.get(0),
+        ) {
+            Ok(id) => id,
+            Err(_) => {
+                let id = uuid::Uuid::new_v4().to_string();
+                c.execute("INSERT INTO tags (id, name) VALUES (?1, ?2)", [&id, tag])?;
+                id
+            }
+        };
+        c.execute(
+            "INSERT OR IGNORE INTO asset_tag (asset_id, tag_id) VALUES (?1, ?2)",
+            [asset_id, tag_id],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn untag_asset(db: State<'_, Arc<Db>>, asset_id: String, tag_id: String) -> CmdResult<()> {
+    db.with(|c| {
+        c.execute(
+            "DELETE FROM asset_tag WHERE asset_id = ?1 AND tag_id = ?2",
+            [asset_id, tag_id],
+        )?;
         Ok(())
     })
 }

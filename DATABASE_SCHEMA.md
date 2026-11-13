@@ -49,6 +49,8 @@ CREATE INDEX idx_assets_kind ON media_assets(kind);
 CREATE INDEX idx_assets_hash ON media_assets(file_hash);
 ```
 
+*Migration 0002 adds:* `is_favorite INTEGER NOT NULL DEFAULT 0` on `media_assets`.
+
 ### collections + asset_collection
 ```sql
 CREATE TABLE collections (

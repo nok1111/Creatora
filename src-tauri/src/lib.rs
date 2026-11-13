@@ -52,12 +52,22 @@ pub fn run() {
             project::commands::set_project_flag,
             project::commands::duplicate_project,
             project::commands::delete_project,
+            project::commands::export_project_bundle,
             media::commands::import_media,
             media::commands::cancel_job,
             media::commands::list_assets,
             media::commands::scan_missing_assets,
             media::commands::relink_asset,
             media::commands::delete_asset,
+            media::commands::set_asset_favorite,
+            media::commands::list_collections,
+            media::commands::create_collection,
+            media::commands::delete_collection,
+            media::commands::assign_asset_to_collection,
+            media::commands::remove_asset_from_collection,
+            media::commands::list_tags,
+            media::commands::tag_asset,
+            media::commands::untag_asset,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

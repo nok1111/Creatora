@@ -86,14 +86,42 @@ export const api = {
     cmd<import("./project-types").OpenProjectResult>("duplicate_project", { id }),
   deleteProject: (id: string, deleteFile: boolean) =>
     cmd<void>("delete_project", { id, deleteFile }),
+  exportProjectBundle: (id: string, destDir: string) =>
+    cmd<{ bundleDir: string; mediaCopied: number; mediaMissing: string[] }>(
+      "export_project_bundle",
+      { id, destDir },
+    ),
 
   // Media
   importMedia: (paths: string[]) => cmd<string>("import_media", { paths }),
   cancelJob: (jobId: string) => cmd<boolean>("cancel_job", { jobId }),
-  listAssets: (opts?: { kind?: string; query?: string }) =>
-    cmd<import("./media-types").AssetSummary[]>("list_assets", opts ?? {}),
+  listAssets: (opts?: {
+    kind?: string;
+    query?: string;
+    favoritesOnly?: boolean;
+    collectionId?: string;
+    tagId?: string;
+  }) => cmd<import("./media-types").AssetSummary[]>("list_assets", opts ?? {}),
   scanMissingAssets: () => cmd<number>("scan_missing_assets"),
   relinkAsset: (id: string, newPath: string) =>
     cmd<void>("relink_asset", { id, newPath }),
   deleteAsset: (id: string) => cmd<void>("delete_asset", { id }),
+  setAssetFavorite: (id: string, favorite: boolean) =>
+    cmd<void>("set_asset_favorite", { id, favorite }),
+
+  // Collections & tags
+  listCollections: () =>
+    cmd<import("./media-types").CollectionSummary[]>("list_collections"),
+  createCollection: (name: string, parentId?: string) =>
+    cmd<string>("create_collection", { name, parentId }),
+  deleteCollection: (id: string) => cmd<void>("delete_collection", { id }),
+  assignToCollection: (assetId: string, collectionId: string) =>
+    cmd<void>("assign_asset_to_collection", { assetId, collectionId }),
+  removeFromCollection: (assetId: string, collectionId: string) =>
+    cmd<void>("remove_asset_from_collection", { assetId, collectionId }),
+  listTags: () => cmd<import("./media-types").TagSummary[]>("list_tags"),
+  tagAsset: (assetId: string, tag: string) =>
+    cmd<void>("tag_asset", { assetId, tag }),
+  untagAsset: (assetId: string, tagId: string) =>
+    cmd<void>("untag_asset", { assetId, tagId }),
 };

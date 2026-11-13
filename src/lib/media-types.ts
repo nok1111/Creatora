@@ -21,6 +21,20 @@ export interface AssetSummary {
   thumbnailPath: string | null;
   status: "ok" | "missing" | "processing";
   duplicateOf: string | null;
+  isFavorite: boolean;
+}
+
+export interface CollectionSummary {
+  id: string;
+  name: string;
+  parentId: string | null;
+  assetCount: number;
+}
+
+export interface TagSummary {
+  id: string;
+  name: string;
+  assetCount: number;
 }
 
 export interface ImportOutcome {
