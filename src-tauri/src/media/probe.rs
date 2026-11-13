@@ -54,9 +54,7 @@ fn parse_fps(rate: &str) -> Option<(u32, u32)> {
 
 pub fn probe(path: &Path) -> Result<MediaInfo, AppError> {
     let ffprobe = super::ffprobe_path().ok_or_else(|| {
-        AppError::Internal(
-            "ffprobe not found — install FFmpeg or set CREATORA_FFPROBE".into(),
-        )
+        AppError::Internal("ffprobe not found — install FFmpeg or set CREATORA_FFPROBE".into())
     })?;
     run_probe(&ffprobe, path)
 }
@@ -64,8 +62,10 @@ pub fn probe(path: &Path) -> Result<MediaInfo, AppError> {
 fn run_probe(ffprobe: &PathBuf, path: &Path) -> Result<MediaInfo, AppError> {
     let out = Command::new(ffprobe)
         .args([
-            "-v", "error",
-            "-print_format", "json",
+            "-v",
+            "error",
+            "-print_format",
+            "json",
             "-show_format",
             "-show_streams",
         ])
@@ -76,7 +76,10 @@ fn run_probe(ffprobe: &PathBuf, path: &Path) -> Result<MediaInfo, AppError> {
         return Err(AppError::InvalidInput(format!(
             "ffprobe failed for {}: {}",
             path.display(),
-            String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("")
+            String::from_utf8_lossy(&out.stderr)
+                .lines()
+                .next()
+                .unwrap_or("")
         )));
     }
     let raw: serde_json::Value = serde_json::from_slice(&out.stdout)
@@ -84,8 +87,14 @@ fn run_probe(ffprobe: &PathBuf, path: &Path) -> Result<MediaInfo, AppError> {
     let parsed: ProbeOutput = serde_json::from_value(raw.clone())
         .map_err(|e| AppError::Internal(format!("decode ffprobe output: {e}")))?;
 
-    let video = parsed.streams.iter().find(|s| s.codec_type.as_deref() == Some("video"));
-    let audio = parsed.streams.iter().find(|s| s.codec_type.as_deref() == Some("audio"));
+    let video = parsed
+        .streams
+        .iter()
+        .find(|s| s.codec_type.as_deref() == Some("video"));
+    let audio = parsed
+        .streams
+        .iter()
+        .find(|s| s.codec_type.as_deref() == Some("audio"));
 
     let duration_ms = parsed
         .format

@@ -16,12 +16,21 @@ import { api } from "@/lib/ipc";
 import { awaitJob, onJobProgress } from "@/services/jobs";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
-import { splitClip, removeClip } from "@/lib/timeline-engine";
+import {
+  splitClip,
+  removeClips,
+  extractClips,
+  pasteClips,
+  duplicateClips,
+  frameToMs,
+  timelineDuration,
+} from "@/lib/timeline-engine";
 import type { AssetSummary } from "@/lib/media-types";
 import { Button } from "@/components/ui/button";
 import { Preview } from "./Preview";
 import { TimelinePanel } from "./TimelinePanel";
 import { MediaBin } from "./MediaBin";
+import { Inspector } from "./Inspector";
 
 /**
  * Phase-3 vertical slice editor: media bin → preview → timeline → export.
@@ -61,34 +70,77 @@ export function EditorPage() {
     (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA") return;
       const meta = e.ctrlKey || e.metaKey;
-      if (meta && e.key.toLowerCase() === "s") {
+      const key = e.key.toLowerCase();
+      const es = useEditor.getState();
+      const currentDoc = useProject.getState().doc;
+      if (!currentDoc) return;
+
+      if (meta && key === "s" && !e.shiftKey) {
         e.preventDefault();
         void save().then(() => toast.success(t("editor.saved")));
-      } else if (meta && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      } else if (meta && key === "z" && !e.shiftKey) {
         e.preventDefault();
         undo();
-      } else if ((meta && e.key.toLowerCase() === "y") || (meta && e.shiftKey && e.key.toLowerCase() === "z")) {
+      } else if ((meta && key === "y") || (meta && e.shiftKey && key === "z")) {
         e.preventDefault();
         redo();
+      } else if (meta && key === "c") {
+        if (es.selection.length) {
+          es.setClipboard(extractClips(currentDoc, es.selection));
+          toast.success(t("editor.copied", { count: es.selection.length }));
+        }
+      } else if (meta && key === "x") {
+        if (es.selection.length) {
+          es.setClipboard(extractClips(currentDoc, es.selection));
+          mutate((d) => removeClips(d, es.selection).doc);
+          select([]);
+        }
+      } else if (meta && key === "v") {
+        if (es.clipboard.length) {
+          let ids: string[] = [];
+          mutate((d) => {
+            const r = pasteClips(d, es.clipboard, es.playheadMs);
+            ids = r.clipIds;
+            return r.doc;
+          });
+          select(ids);
+        }
+      } else if (meta && key === "d") {
+        e.preventDefault();
+        if (es.selection.length) {
+          let ids: string[] = [];
+          mutate((d) => {
+            const r = duplicateClips(d, es.selection);
+            ids = r.clipIds;
+            return r.doc;
+          });
+          select(ids);
+        }
+      } else if (meta && key === "a") {
+        e.preventDefault();
+        select(currentDoc.timeline.tracks.flatMap((tr) => tr.clips.map((c) => c.id)));
       } else if (e.key === " ") {
         e.preventDefault();
-        setPlaying(!useEditor.getState().playing);
-      } else if (e.key.toLowerCase() === "s" && !meta) {
-        for (const id of useEditor.getState().selection) {
+        setPlaying(!es.playing);
+      } else if (key === "s" && !meta) {
+        for (const id of es.selection) {
           mutate((d) => {
-            const r = splitClip(d, id, useEditor.getState().playheadMs);
+            const r = splitClip(d, id, es.playheadMs);
             return r ? r.doc : d;
           });
         }
       } else if (e.key === "Delete" || e.key === "Backspace") {
-        const sel = useEditor.getState().selection;
-        if (sel.length) {
-          mutate((d) => sel.reduce((acc, id) => removeClip(acc, id), d));
+        if (es.selection.length) {
+          mutate((d) => removeClips(d, es.selection).doc);
           select([]);
         }
       } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        const frame = 1000 / 30;
-        setPlayhead(useEditor.getState().playheadMs + (e.key === "ArrowRight" ? frame : -frame));
+        const step = frameToMs(e.shiftKey ? 10 : 1, currentDoc);
+        setPlayhead(es.playheadMs + (e.key === "ArrowRight" ? step : -step));
+      } else if (e.key === "Home") {
+        setPlayhead(0);
+      } else if (e.key === "End") {
+        setPlayhead(timelineDuration(currentDoc));
       }
     },
     [save, t, undo, redo, setPlaying, mutate, select, setPlayhead],
@@ -191,6 +243,9 @@ export function EditorPage() {
               {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
             </Button>
           </div>
+        </div>
+        <div className="w-64 shrink-0">
+          <Inspector />
         </div>
       </div>
 

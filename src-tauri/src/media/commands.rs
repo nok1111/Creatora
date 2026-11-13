@@ -59,18 +59,29 @@ fn content_hash(path: &Path) -> Result<String, AppError> {
 
 /// Thumbnail via ffmpeg: for video seek ~1s, single scaled frame → JPEG.
 /// Returns output path on success; failures are non-fatal (None).
-fn make_thumbnail(thumbs_dir: &Path, asset_id: &str, src: &Path, seek_ms: Option<i64>) -> Option<PathBuf> {
+fn make_thumbnail(
+    thumbs_dir: &Path,
+    asset_id: &str,
+    src: &Path,
+    seek_ms: Option<i64>,
+) -> Option<PathBuf> {
     let ffmpeg = super::ffmpeg_path()?;
     std::fs::create_dir_all(thumbs_dir).ok()?;
     let out = thumbs_dir.join(format!("{asset_id}.jpg"));
     let mut cmd = Command::new(ffmpeg);
-    cmd.arg("-hide_banner").arg("-loglevel").arg("error").arg("-y");
+    cmd.arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-y");
     if let Some(ms) = seek_ms {
         cmd.arg("-ss").arg(format!("{:.3}", ms as f64 / 1000.0));
     }
-    cmd.arg("-i").arg(src)
-        .arg("-frames:v").arg("1")
-        .arg("-vf").arg("scale='min(320,iw)':-2")
+    cmd.arg("-i")
+        .arg(src)
+        .arg("-frames:v")
+        .arg("1")
+        .arg("-vf")
+        .arg("scale='min(320,iw)':-2")
         .arg(&out);
     match cmd.output() {
         Ok(o) if o.status.success() && out.is_file() => Some(out),
@@ -85,9 +96,31 @@ fn is_probably_media(path: &Path) -> bool {
             .unwrap_or("")
             .to_lowercase()
             .as_str(),
-        "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mts" | "mpg" | "mpeg"
-            | "mp3" | "wav" | "aac" | "m4a" | "flac" | "ogg" | "opus" | "wma"
-            | "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tiff" | "tif"
+        "mp4"
+            | "mov"
+            | "mkv"
+            | "avi"
+            | "webm"
+            | "m4v"
+            | "mts"
+            | "mpg"
+            | "mpeg"
+            | "mp3"
+            | "wav"
+            | "aac"
+            | "m4a"
+            | "flac"
+            | "ogg"
+            | "opus"
+            | "wma"
+            | "png"
+            | "jpg"
+            | "jpeg"
+            | "webp"
+            | "gif"
+            | "bmp"
+            | "tiff"
+            | "tif"
     )
 }
 
@@ -135,11 +168,7 @@ fn row_to_asset(r: &rusqlite::Row) -> rusqlite::Result<AssetSummary> {
 /// Import a single file: dedup by path → content hash → ffprobe → thumbnail →
 /// catalog row. Returns the asset summary; per-file errors are strings so the
 /// job can report them individually without aborting the batch.
-pub fn import_one(
-    thumbs_dir: &Path,
-    db: &Db,
-    path: &Path,
-) -> Result<AssetSummary, String> {
+pub fn import_one(thumbs_dir: &Path, db: &Db, path: &Path) -> Result<AssetSummary, String> {
     if !path.is_file() {
         return Err("file not found".into());
     }
@@ -165,15 +194,23 @@ pub fn import_one(
     let kind = info
         .as_ref()
         .map(|i| probe::classify(i, path))
-        .unwrap_or_else(|| probe::classify(
-            &probe::MediaInfo {
-                width: None, height: None, duration_ms: None,
-                fps_num: None, fps_den: None, codec: None, audio_codec: None,
-                has_video: false, has_audio: false,
-                raw: serde_json::Value::Null,
-            },
-            path,
-        ))
+        .unwrap_or_else(|| {
+            probe::classify(
+                &probe::MediaInfo {
+                    width: None,
+                    height: None,
+                    duration_ms: None,
+                    fps_num: None,
+                    fps_den: None,
+                    codec: None,
+                    audio_codec: None,
+                    has_video: false,
+                    has_audio: false,
+                    raw: serde_json::Value::Null,
+                },
+                path,
+            )
+        })
         .to_string();
 
     let id = uuid::Uuid::new_v4().to_string();
@@ -205,8 +242,15 @@ pub fn import_one(
               duration_ms, fps_num, fps_den, codec, audio_codec, thumbnail_path, metadata_json)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
             rusqlite::params![
-                id, kind, path.to_string_lossy().to_string(), hash, size, name,
-                w, h, dur,
+                id,
+                kind,
+                path.to_string_lossy().to_string(),
+                hash,
+                size,
+                name,
+                w,
+                h,
+                dur,
                 info.as_ref().and_then(|i| i.fps_num.map(|v| v as i64)),
                 info.as_ref().and_then(|i| i.fps_den.map(|v| v as i64)),
                 codec,
@@ -257,10 +301,7 @@ pub fn import_media(
                 break;
             }
             let path = PathBuf::from(p);
-            ctx.progress(
-                i as f32 / total,
-                path.file_name().and_then(|n| n.to_str()),
-            );
+            ctx.progress(i as f32 / total, path.file_name().and_then(|n| n.to_str()));
             match import_one(&thumbs_dir, &db, &path) {
                 Ok(a) => imported.push(a),
                 Err(e) => errors.push((p.clone(), e)),
@@ -309,7 +350,10 @@ pub fn list_assets(
         }
         if let Some(q) = &query {
             if !q.is_empty() {
-                sql.push_str(&format!(" AND a.name LIKE {}", next(Box::new(format!("%{q}%")))));
+                sql.push_str(&format!(
+                    " AND a.name LIKE {}",
+                    next(Box::new(format!("%{q}%")))
+                ));
             }
         }
         if favorites_only == Some(true) {
@@ -403,11 +447,7 @@ pub fn delete_asset(db: State<'_, Arc<Db>>, id: String) -> CmdResult<()> {
 }
 
 #[tauri::command]
-pub fn set_asset_favorite(
-    db: State<'_, Arc<Db>>,
-    id: String,
-    favorite: bool,
-) -> CmdResult<()> {
+pub fn set_asset_favorite(db: State<'_, Arc<Db>>, id: String, favorite: bool) -> CmdResult<()> {
     db.with(|c| {
         c.execute(
             "UPDATE media_assets SET is_favorite = ?1 WHERE id = ?2",

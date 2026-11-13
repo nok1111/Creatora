@@ -55,13 +55,11 @@ pub fn resolve_sources(
             .flatten()
         });
         let info = match from_db {
-            Some((kind, file_path, audio_codec)) if Path::new(&file_path).is_file() => {
-                SourceInfo {
-                    path: PathBuf::from(file_path),
-                    has_audio: audio_codec.is_some() || kind == "audio",
-                    kind,
-                }
-            }
+            Some((kind, file_path, audio_codec)) if Path::new(&file_path).is_file() => SourceInfo {
+                path: PathBuf::from(file_path),
+                has_audio: audio_codec.is_some() || kind == "audio",
+                kind,
+            },
             _ => {
                 let p = PathBuf::from(&m.path);
                 if !p.is_file() {

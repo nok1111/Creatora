@@ -41,9 +41,35 @@ export interface Track {
   kind: TrackKind;
   name: string;
   clips: Clip[];
+  transitions: Transition[];
   locked: boolean;
   visible: boolean;
   muted: boolean;
+}
+
+export interface Transition {
+  id: string;
+  /** "crossfade" | "dipToBlack" | "dipToWhite" | future kinds */
+  type: string;
+  durationMs: number;
+  /** Outgoing → incoming clip ids on the same track. */
+  clipA: string;
+  clipB: string;
+}
+
+export interface Effect {
+  id: string;
+  /** Registry key — see lib/effects.ts + render/effects.rs */
+  type: string;
+  enabled: boolean;
+  params: Record<string, number>;
+}
+
+export interface Keyframe {
+  /** ms relative to clip start. */
+  tMs: number;
+  v: number;
+  ease: string;
 }
 
 export interface Clip {
@@ -54,11 +80,12 @@ export interface Clip {
   sourceInMs: number;
   sourceOutMs?: number | null;
   transform: Transform;
-  effects: unknown[];
+  effects: Effect[];
   volume: number;
   speed: number;
   text?: string | null;
-  keyframes: Record<string, unknown>;
+  /** property path ("transform.x", "volume", …) → samples, clip-relative ms. */
+  keyframes: Record<string, Keyframe[]>;
 }
 
 export interface Transform {

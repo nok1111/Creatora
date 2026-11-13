@@ -77,12 +77,29 @@ pub struct Track {
     pub name: String,
     #[serde(default)]
     pub clips: Vec<Clip>,
+    /// Blends between adjacent clips (crossfade etc.). A transition consumes
+    /// overlap: `clip_b.start_ms` sits inside clip_a's tail by `duration_ms`.
+    #[serde(default)]
+    pub transitions: Vec<Transition>,
     #[serde(default)]
     pub locked: bool,
     #[serde(default)]
     pub visible: bool,
     #[serde(default)]
     pub muted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Transition {
+    pub id: String,
+    /// "crossfade" | "dipToBlack" — extensible; unknown kinds render as cuts.
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub duration_ms: i64,
+    /// Outgoing → incoming clip ids on this track.
+    pub clip_a: String,
+    pub clip_b: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -112,8 +129,10 @@ pub struct Clip {
     pub source_out_ms: Option<i64>,
     #[serde(default)]
     pub transform: Transform,
+    /// Ordered effect stack — each entry applies in sequence (preview and
+    /// render use the same canonical params; see render/effects.rs).
     #[serde(default)]
-    pub effects: Vec<serde_json::Value>,
+    pub effects: Vec<Effect>,
     #[serde(default)]
     pub volume: f32,
     #[serde(default)]
@@ -121,9 +140,43 @@ pub struct Clip {
     /// Text content for text clips.
     #[serde(default)]
     pub text: Option<String>,
-    /// Keyframes: property path → animated values. Phase 3.
+    /// Keyframed properties: path ("transform.x", "volume", …) → samples.
+    /// Times are ms relative to the clip's start.
     #[serde(default)]
-    pub keyframes: serde_json::Map<String, serde_json::Value>,
+    pub keyframes: std::collections::BTreeMap<String, Vec<Keyframe>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Effect {
+    pub id: String,
+    /// Registry key: brightness|contrast|saturation|exposure|temperature|blur
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Canonical params; units defined per effect kind (see EFFECTS registry).
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, f64>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Keyframe {
+    /// ms relative to clip start (0..duration_ms).
+    pub t_ms: i64,
+    pub v: f64,
+    /// "linear" (v1) | future easings.
+    #[serde(default = "default_linear")]
+    pub ease: String,
+}
+
+fn default_linear() -> String {
+    "linear".into()
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -250,10 +303,6 @@ impl ProjectDoc {
 fn migrate(mut doc: serde_json::Value, mut version: u32) -> Result<serde_json::Value, AppError> {
     while version < FORMAT_VERSION {
         version += 1;
-        match version {
-            // example: 2 => { /* transform v1 -> v2 */ }
-            _ => {}
-        }
         doc["format_version"] = serde_json::json!(version);
     }
     Ok(doc)

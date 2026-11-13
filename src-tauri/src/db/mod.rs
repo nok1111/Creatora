@@ -28,7 +28,10 @@ impl Db {
     }
 
     /// Run `f` with the connection. Callers must not hold the lock across await.
-    pub fn with<T>(&self, f: impl FnOnce(&Connection) -> Result<T, AppError>) -> Result<T, AppError> {
+    pub fn with<T>(
+        &self,
+        f: impl FnOnce(&Connection) -> Result<T, AppError>,
+    ) -> Result<T, AppError> {
         let conn = self.conn.lock();
         f(&conn)
     }

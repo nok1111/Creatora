@@ -19,9 +19,8 @@ pub fn migrate(conn: &Connection) -> Result<(), AppError> {
             continue;
         }
         let tx = conn.unchecked_transaction()?;
-        tx.execute_batch(sql).map_err(|e| {
-            AppError::Db(format!("migration {name} failed: {e}"))
-        })?;
+        tx.execute_batch(sql)
+            .map_err(|e| AppError::Db(format!("migration {name} failed: {e}")))?;
         tx.pragma_update(None, "user_version", idx as i64 + 1)?;
         tx.commit()?;
         log::info!("applied migration {name} (user_version={})", idx + 1);

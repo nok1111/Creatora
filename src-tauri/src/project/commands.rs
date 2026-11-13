@@ -122,7 +122,10 @@ const SUMMARY_COLS: &str =
     "id, name, file_path, thumbnail_path, width, height, is_favorite, is_archived, modified_at, last_opened_at";
 
 #[tauri::command]
-pub fn list_projects(db: State<'_, Arc<Db>>, include_archived: Option<bool>) -> CmdResult<Vec<ProjectSummary>> {
+pub fn list_projects(
+    db: State<'_, Arc<Db>>,
+    include_archived: Option<bool>,
+) -> CmdResult<Vec<ProjectSummary>> {
     let include_archived = include_archived.unwrap_or(false);
     db.with(|c| {
         let sql = format!(
@@ -199,7 +202,9 @@ pub fn open_project(
 /// stored absolute path vanished get rewritten to the bundled copy.
 /// Skipped refs stay as-is so the missing-media UI reports them honestly.
 fn resolve_media_paths(doc: &mut document::ProjectDoc, project_file: &Path) {
-    let Some(dir) = project_file.parent() else { return };
+    let Some(dir) = project_file.parent() else {
+        return;
+    };
     let bundle_media = dir.join("media");
     if !bundle_media.is_dir() {
         return;
@@ -208,7 +213,9 @@ fn resolve_media_paths(doc: &mut document::ProjectDoc, project_file: &Path) {
         if Path::new(&m.path).is_file() {
             continue;
         }
-        let Some(name) = Path::new(&m.path).file_name() else { continue };
+        let Some(name) = Path::new(&m.path).file_name() else {
+            continue;
+        };
         let candidate = bundle_media.join(name);
         if candidate.is_file() {
             m.path = candidate.to_string_lossy().into_owned();
@@ -257,7 +264,10 @@ pub fn autosave_project(app: tauri::AppHandle, doc: document::ProjectDoc) -> Cmd
 
 /// Open the autosave copy (user accepted recovery) without touching the file.
 #[tauri::command]
-pub fn recover_project(app: tauri::AppHandle, project_id: String) -> CmdResult<document::ProjectDoc> {
+pub fn recover_project(
+    app: tauri::AppHandle,
+    project_id: String,
+) -> CmdResult<document::ProjectDoc> {
     let auto = store::autosave_path(&data_dir(&app)?, &project_id);
     store::open(&auto)
 }
@@ -302,10 +312,7 @@ pub fn set_project_flag(
 }
 
 #[tauri::command]
-pub fn duplicate_project(
-    db: State<'_, Arc<Db>>,
-    id: String,
-) -> CmdResult<OpenProjectResult> {
+pub fn duplicate_project(db: State<'_, Arc<Db>>, id: String) -> CmdResult<OpenProjectResult> {
     let (name, file_path) = db.with(|c| {
         c.query_row(
             "SELECT name, file_path FROM projects WHERE id = ?1",
@@ -339,11 +346,9 @@ pub fn delete_project(
     delete_file: bool,
 ) -> CmdResult<()> {
     let file_path = db.with(|c| {
-        c.query_row(
-            "SELECT file_path FROM projects WHERE id = ?1",
-            [&id],
-            |r| r.get::<_, String>(0),
-        )
+        c.query_row("SELECT file_path FROM projects WHERE id = ?1", [&id], |r| {
+            r.get::<_, String>(0)
+        })
         .map_err(AppError::from)
     })?;
     db.with(|c| {
@@ -410,7 +415,11 @@ pub fn export_project_bundle(
         copied += 1;
     }
 
-    let project_file = bundle_dir.join(format!("{}.{}", store::sanitize_filename(&name), store::PROJECT_EXT));
+    let project_file = bundle_dir.join(format!(
+        "{}.{}",
+        store::sanitize_filename(&name),
+        store::PROJECT_EXT
+    ));
     store::save(&project_file, &new_doc)?;
 
     let manifest = serde_json::json!({
@@ -438,8 +447,15 @@ fn unique_media_name(dir: &Path, name: &str) -> PathBuf {
     if !p.exists() {
         return p;
     }
-    let stem = p.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-    let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let stem = p
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let ext = p
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
     for i in 1..10_000 {
         let c = dir.join(format!("{stem}-{i}{ext}"));
         if !c.exists() {

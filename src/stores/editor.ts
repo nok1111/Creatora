@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { useProject } from "@/stores/project";
-import type { ProjectDoc } from "@/lib/project-types";
+import type { Clip, ProjectDoc, TrackKind } from "@/lib/project-types";
 
 /**
  * Editor session state + undo/redo (ADR-014).
@@ -23,6 +23,10 @@ interface EditorState {
   selection: string[];
   /** Timeline zoom: pixels per second. */
   pxPerSec: number;
+  /** Snap toggles (frame snapping is always on; this gates edge/playhead snapping). */
+  snapEnabled: boolean;
+  /** Clipboard of copied/cut clips (with origin track kind). */
+  clipboard: { kind: TrackKind; clip: Clip }[];
 
   past: ProjectDoc[];
   future: ProjectDoc[];
@@ -32,7 +36,10 @@ interface EditorState {
   setPlayhead: (ms: number) => void;
   setPlaying: (p: boolean) => void;
   select: (ids: string[]) => void;
+  toggleSelect: (id: string) => void;
   setZoom: (pxPerSec: number) => void;
+  setSnapEnabled: (v: boolean) => void;
+  setClipboard: (entries: { kind: TrackKind; clip: Clip }[]) => void;
 
   /** Apply an edit: fn receives a doc draft and returns the new doc. */
   mutate: (fn: (doc: ProjectDoc) => ProjectDoc) => void;
@@ -60,6 +67,8 @@ export const useEditor = create<EditorState>((set, get) => {
     playing: false,
     selection: [],
     pxPerSec: 120,
+    snapEnabled: true,
+    clipboard: [],
     past: [],
     future: [],
     gestureBase: null,
@@ -67,7 +76,15 @@ export const useEditor = create<EditorState>((set, get) => {
     setPlayhead: (ms) => set({ playheadMs: Math.max(0, ms) }),
     setPlaying: (p) => set({ playing: p }),
     select: (ids) => set({ selection: ids }),
+    toggleSelect: (id) =>
+      set((s) => ({
+        selection: s.selection.includes(id)
+          ? s.selection.filter((x) => x !== id)
+          : [...s.selection, id],
+      })),
     setZoom: (px) => set({ pxPerSec: Math.min(600, Math.max(20, px)) }),
+    setSnapEnabled: (v) => set({ snapEnabled: v }),
+    setClipboard: (entries) => set({ clipboard: entries }),
 
     mutate: (fn) => {
       const doc = useProject.getState().doc;

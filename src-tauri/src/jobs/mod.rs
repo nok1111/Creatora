@@ -98,9 +98,12 @@ impl JobManager {
     {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = Arc::new(AtomicBool::new(false));
-        self.jobs
-            .lock()
-            .insert(id.clone(), JobEntry { cancel: cancel.clone() });
+        self.jobs.lock().insert(
+            id.clone(),
+            JobEntry {
+                cancel: cancel.clone(),
+            },
+        );
         self.record_start(&id, kind);
 
         let ctx = JobCtx {

@@ -34,7 +34,10 @@ fn ffprobe_reads_video_metadata() {
     assert_eq!(info.height, Some(720));
     assert!(info.duration_ms.unwrap() > 5000 && info.duration_ms.unwrap() < 7000);
     assert_eq!(info.codec.as_deref(), Some("h264"));
-    assert_eq!(probe::classify(&info, &corpus("short_h264_720p.mp4")), "video");
+    assert_eq!(
+        probe::classify(&info, &corpus("short_h264_720p.mp4")),
+        "video"
+    );
 }
 
 #[test]
@@ -63,21 +66,21 @@ fn import_end_to_end() {
     let db = Db::open(&dir).expect("open db");
     let thumbs = dir.join("thumbs");
 
-    let asset = commands::import_one(&thumbs, &db, &corpus("short_h264_720p.mp4"))
-        .expect("import video");
+    let asset =
+        commands::import_one(&thumbs, &db, &corpus("short_h264_720p.mp4")).expect("import video");
     assert_eq!(asset.kind, "video");
     assert_eq!(asset.width, Some(1280));
     assert!(asset.thumbnail_path.is_some(), "video gets a thumbnail");
     assert!(PathBuf::from(asset.thumbnail_path.unwrap()).is_file());
 
     // Re-import same path → returns existing row, no duplicate.
-    let again = commands::import_one(&thumbs, &db, &corpus("short_h264_720p.mp4"))
-        .expect("re-import");
+    let again =
+        commands::import_one(&thumbs, &db, &corpus("short_h264_720p.mp4")).expect("re-import");
     assert_eq!(again.id, asset.id, "same path reuses existing asset");
 
     // Audio file imports without thumbnail but correct kind.
-    let audio = commands::import_one(&thumbs, &db, &corpus("audio_only.mp3"))
-        .expect("import audio");
+    let audio =
+        commands::import_one(&thumbs, &db, &corpus("audio_only.mp3")).expect("import audio");
     assert_eq!(audio.kind, "audio");
 
     // Missing file → per-file error, not a panic.

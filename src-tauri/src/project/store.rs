@@ -159,7 +159,10 @@ mod tests {
 
     #[test]
     fn sanitizes_windows_illegal_chars() {
-        assert_eq!(sanitize_filename("a/b\\c:d*e?f\"g<h>i|j"), "a b c d e f g h i j");
+        assert_eq!(
+            sanitize_filename("a/b\\c:d*e?f\"g<h>i|j"),
+            "a b c d e f g h i j"
+        );
         assert_eq!(sanitize_filename("  .  "), "untitled");
         assert_eq!(sanitize_filename(""), "untitled");
     }

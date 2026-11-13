@@ -35,10 +35,25 @@ fn make_clip(dir: &Path, name: &str, color: &str, freq: u32, secs: f64) -> PathB
     }
     let status = Command::new(ffmpeg().unwrap())
         .args([
-            "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", &format!("color=c={color}:s=320x240:d={secs}:r=30"),
-            "-f", "lavfi", "-i", &format!("sine=frequency={freq}:duration={secs}"),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("color=c={color}:s=320x240:d={secs}:r=30"),
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("sine=frequency={freq}:duration={secs}"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
         ])
         .arg(&out)
         .status()
@@ -91,6 +106,7 @@ fn video_track(clips: Vec<Clip>) -> Track {
         kind: TrackKind::Video,
         name: "V1".into(),
         clips,
+        transitions: vec![],
         locked: false,
         visible: true,
         muted: false,
@@ -106,7 +122,15 @@ fn add_media(doc: &mut ProjectDoc, asset: &str, path: &Path) {
 }
 
 /// Mean pixel value of a channel (0=R,1=G,2=B) in a rect of a raw rgb24 frame.
-fn mean_channel(rgb: &[u8], w: usize, x: usize, y: usize, cw: usize, ch: usize, ch_i: usize) -> f64 {
+fn mean_channel(
+    rgb: &[u8],
+    w: usize,
+    x: usize,
+    y: usize,
+    cw: usize,
+    ch: usize,
+    ch_i: usize,
+) -> f64 {
     let mut sum = 0u64;
     let mut n = 0u64;
     for row in y..(y + ch) {
@@ -122,9 +146,21 @@ fn mean_channel(rgb: &[u8], w: usize, x: usize, y: usize, cw: usize, ch: usize, 
 fn grab_frame(video: &Path, t_s: f64, w: usize, h: usize) -> Vec<u8> {
     let out = Command::new(ffmpeg().unwrap())
         .args([
-            "-hide_banner", "-loglevel", "error", "-y",
-            "-ss", &format!("{t_s}"), "-i", &*video.to_string_lossy(),
-            "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            &format!("{t_s}"),
+            "-i",
+            &*video.to_string_lossy(),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-",
         ])
         .output()
         .unwrap();
@@ -141,9 +177,19 @@ fn duration_s(path: &Path) -> f64 {
 fn audio_rms(path: &Path, from_s: f64, to_s: f64) -> f64 {
     let out = Command::new(ffmpeg().unwrap())
         .args([
-            "-hide_banner", "-loglevel", "error", "-y",
-            "-i", &*path.to_string_lossy(),
-            "-f", "s16le", "-ac", "1", "-ar", "8000", "-",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            &*path.to_string_lossy(),
+            "-f",
+            "s16le",
+            "-ac",
+            "1",
+            "-ar",
+            "8000",
+            "-",
         ])
         .output()
         .unwrap();
@@ -175,7 +221,9 @@ fn export_trimmed_clip_has_trimmed_duration() {
     let mut doc = base_doc();
     add_media(&mut doc, "a1", &src);
     // 4 s source trimmed to 2 s starting at 0.5 s in.
-    doc.timeline.tracks.push(video_track(vec![clip("c1", "a1", 0, 2000, 500)]));
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "a1", 0, 2000, 500)]));
 
     let out = render(&dir, &doc, "out.mp4");
     let d = duration_s(&out);
@@ -215,16 +263,34 @@ fn reordered_clips_render_in_new_order() {
     // Frame at t=1.0 of A = red; of B = blue. Check channel dominance.
     let fa = grab_frame(&out_a, 1.0, w, h);
     let fb = grab_frame(&out_b, 1.0, w, h);
-    let (ar, ab) = (mean_channel(&fa, w, 100, 60, 120, 120, 0), mean_channel(&fa, w, 100, 60, 120, 120, 2));
-    let (br, bb) = (mean_channel(&fb, w, 100, 60, 120, 120, 0), mean_channel(&fb, w, 100, 60, 120, 120, 2));
-    assert!(ar > ab + 40.0, "A@1s should be red-dominant (r={ar} b={ab})");
-    assert!(bb > br + 40.0, "B@1s should be blue-dominant (r={br} b={bb})");
+    let (ar, ab) = (
+        mean_channel(&fa, w, 100, 60, 120, 120, 0),
+        mean_channel(&fa, w, 100, 60, 120, 120, 2),
+    );
+    let (br, bb) = (
+        mean_channel(&fb, w, 100, 60, 120, 120, 0),
+        mean_channel(&fb, w, 100, 60, 120, 120, 2),
+    );
+    assert!(
+        ar > ab + 40.0,
+        "A@1s should be red-dominant (r={ar} b={ab})"
+    );
+    assert!(
+        bb > br + 40.0,
+        "B@1s should be blue-dominant (r={br} b={bb})"
+    );
 
     // And symmetric: t=3.0 of A = blue, of B = red.
     let ga = grab_frame(&out_a, 3.0, w, h);
     let gb = grab_frame(&out_b, 3.0, w, h);
-    assert!(mean_channel(&ga, w, 100, 60, 120, 120, 2) > mean_channel(&ga, w, 100, 60, 120, 120, 0) + 40.0);
-    assert!(mean_channel(&gb, w, 100, 60, 120, 120, 0) > mean_channel(&gb, w, 100, 60, 120, 120, 2) + 40.0);
+    assert!(
+        mean_channel(&ga, w, 100, 60, 120, 120, 2)
+            > mean_channel(&ga, w, 100, 60, 120, 120, 0) + 40.0
+    );
+    assert!(
+        mean_channel(&gb, w, 100, 60, 120, 120, 0)
+            > mean_channel(&gb, w, 100, 60, 120, 120, 2) + 40.0
+    );
 }
 
 #[test]
@@ -262,7 +328,9 @@ fn audio_follows_clip_timeline_position() {
     let mut doc = base_doc();
     add_media(&mut doc, "a1", &src);
     // Clip placed at t=1s → output must be silent for ~1s then have tone.
-    doc.timeline.tracks.push(video_track(vec![clip("c1", "a1", 1000, 2000, 0)]));
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "a1", 1000, 2000, 0)]));
 
     let out = render(&dir, &doc, "out.mp4");
     let early = audio_rms(&out, 0.1, 0.8);
@@ -282,9 +350,16 @@ fn image_clip_renders_for_its_duration() {
     let img = dir.join("green.png");
     let st = Command::new(ffmpeg().unwrap())
         .args([
-            "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "color=c=green:s=320x240:d=0.1:r=1",
-            "-frames:v", "1",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=green:s=320x240:d=0.1:r=1",
+            "-frames:v",
+            "1",
         ])
         .arg(&img)
         .status()
@@ -299,9 +374,15 @@ fn image_clip_renders_for_its_duration() {
     let mut sources: HashMap<String, SourceInfo> = HashMap::new();
     sources.insert(
         "img1".into(),
-        SourceInfo { path: img.clone(), kind: "image".into(), has_audio: false },
+        SourceInfo {
+            path: img.clone(),
+            kind: "image".into(),
+            has_audio: false,
+        },
     );
-    doc.timeline.tracks.push(video_track(vec![clip("c1", "img1", 0, 1500, 0)]));
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "img1", 0, 1500, 0)]));
     let plan = plan::build_plan(&doc, &sources).unwrap();
     let out = dir.join("out.mp4");
     run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
@@ -351,11 +432,185 @@ fn cancelled_render_leaves_no_output() {
     let src = make_clip(&dir, "red.mp4", "red", 440, 4.0);
     let mut doc = base_doc();
     add_media(&mut doc, "a1", &src);
-    doc.timeline.tracks.push(video_track(vec![clip("c1", "a1", 0, 4000, 0)]));
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "a1", 0, 4000, 0)]));
     let sources = resolve_sources(&doc, None);
     let plan = plan::build_plan(&doc, &sources).unwrap();
     let out = dir.join("out.mp4");
     let r = run_ffmpeg(&plan, &out, |_| {}, || true);
     assert_eq!(r.unwrap_err(), "cancelled");
     assert!(!out.exists());
+}
+
+// ---------- Phase 3B: effects / keyframes / transitions parity ----------
+
+fn fx(kind: &str, params: &[(&str, f64)]) -> Effect {
+    Effect {
+        id: format!("fx-{kind}"),
+        kind: kind.into(),
+        enabled: true,
+        params: params
+            .iter()
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect::<std::collections::BTreeMap<_, _>>(),
+    }
+}
+
+fn kfs(pairs: &[(i64, f64)]) -> Vec<Keyframe> {
+    pairs
+        .iter()
+        .map(|&(t_ms, v)| Keyframe {
+            t_ms,
+            v,
+            ease: "linear".into(),
+        })
+        .collect()
+}
+
+/// Whole-frame mean of one channel.
+fn frame_mean(rgb: &[u8], w: usize, h: usize, ch_i: usize) -> f64 {
+    mean_channel(rgb, w, 0, 0, w, h, ch_i)
+}
+
+#[test]
+fn brightness_effect_brightens_rendered_pixels() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fx_bright");
+    let gray = make_clip(&dir, "gray.mp4", "0x606060", 440, 1.0);
+
+    let mut plain = base_doc();
+    plain
+        .timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "g", 0, 800, 0)]));
+    add_media(&mut plain, "g", &gray);
+    let base_out = render(&dir, &plain, "plain.mp4");
+
+    let mut bright = base_doc();
+    let mut c = clip("c1", "g", 0, 800, 0);
+    c.effects = vec![fx("brightness", &[("amount", 0.5)])];
+    bright.timeline.tracks.push(video_track(vec![c]));
+    add_media(&mut bright, "g", &gray);
+    let fx_out = render(&dir, &bright, "bright.mp4");
+
+    let a = grab_frame(&base_out, 0.4, 320, 240);
+    let b = grab_frame(&fx_out, 0.4, 320, 240);
+    let (ma, mb) = (frame_mean(&a, 320, 240, 0), frame_mean(&b, 320, 240, 0));
+    // 1.5x multiply on ~0x60 luma: expect a large, positive delta.
+    assert!(mb - ma > 30.0, "brightness delta too small: {ma} -> {mb}");
+    assert!(mb < 255.0 && mb > ma, "unexpected mean {mb}");
+}
+
+#[test]
+fn saturation_minus_one_desaturates() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fx_sat");
+    let red = make_clip(&dir, "red.mp4", "red", 440, 1.0);
+
+    let mut doc = base_doc();
+    let mut c = clip("c1", "r", 0, 800, 0);
+    c.effects = vec![fx("saturation", &[("amount", -1.0)])];
+    doc.timeline.tracks.push(video_track(vec![c]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "gray.mp4");
+
+    let f = grab_frame(&out, 0.4, 320, 240);
+    let (r, g, b) = (
+        frame_mean(&f, 320, 240, 0),
+        frame_mean(&f, 320, 240, 1),
+        frame_mean(&f, 320, 240, 2),
+    );
+    // Full desaturation → all channels converge to luma.
+    assert!((r - g).abs() < 12.0, "r={r} g={g}");
+    assert!((g - b).abs() < 12.0, "g={g} b={b}");
+}
+
+#[test]
+fn crossfade_blends_midpoint_between_clips() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("xfade");
+    let red = make_clip(&dir, "red.mp4", "red", 440, 4.0);
+    let blue = make_clip(&dir, "blue.mp4", "blue", 440, 4.0);
+
+    // A red 0..2000ms, B blue 1500..3500ms, 1s crossfade over the overlap.
+    let mut doc = base_doc();
+    let mut track = video_track(vec![
+        clip("a", "r", 0, 2000, 0),
+        clip("b", "b", 1500, 2000, 0),
+    ]);
+    track.transitions.push(Transition {
+        id: "t1".into(),
+        kind: "crossfade".into(),
+        duration_ms: 500,
+        clip_a: "a".into(),
+        clip_b: "b".into(),
+    });
+    doc.timeline.tracks.push(track);
+    add_media(&mut doc, "r", &red);
+    add_media(&mut doc, "b", &blue);
+    let out = render(&dir, &doc, "xfade.mp4");
+
+    // Before overlap: pure red.
+    let f1 = grab_frame(&out, 1.0, 320, 240);
+    assert!(frame_mean(&f1, 320, 240, 0) > 120.0 && frame_mean(&f1, 320, 240, 2) < 40.0);
+    // Mid-fade (t=1.75): red and blue both present (blend).
+    let fm = grab_frame(&out, 1.75, 320, 240);
+    let (r, b) = (frame_mean(&fm, 320, 240, 0), frame_mean(&fm, 320, 240, 2));
+    assert!(r > 50.0 && b > 50.0 && r < 200.0, "mid blend r={r} b={b}");
+    // After overlap: pure blue.
+    let f2 = grab_frame(&out, 3.0, 320, 240);
+    assert!(frame_mean(&f2, 320, 240, 2) > 120.0 && frame_mean(&f2, 320, 240, 0) < 40.0);
+}
+
+#[test]
+fn opacity_keyframe_ramps_over_clip() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("kf_opacity");
+    let gray = make_clip(&dir, "gray.mp4", "0x909090", 440, 2.0);
+
+    // opacity 0→1 over the 1s clip on black canvas.
+    let mut doc = base_doc();
+    let mut c = clip("c1", "g", 0, 1000, 0);
+    c.keyframes
+        .insert("transform.opacity".into(), kfs(&[(0, 0.0), (1000, 1.0)]));
+    doc.timeline.tracks.push(video_track(vec![c]));
+    add_media(&mut doc, "g", &gray);
+    let out = render(&dir, &doc, "fadein.mp4");
+
+    let m25 = frame_mean(&grab_frame(&out, 0.25, 320, 240), 320, 240, 0);
+    let m75 = frame_mean(&grab_frame(&out, 0.75, 320, 240), 320, 240, 0);
+    // Monotonic ramp; quarter-time ≈ 25% of ~0x90 luma.
+    assert!(m25 < m75 - 20.0, "no ramp: {m25} vs {m75}");
+    assert!(m25 > 10.0 && m25 < 80.0, "m25={m25}");
+    assert!(m75 > 90.0, "m75={m75}");
+}
+
+#[test]
+fn volume_keyframe_ramps_audio() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("kf_vol");
+    let tone = make_clip(&dir, "tone.mp4", "black", 440, 2.0);
+
+    let mut doc = base_doc();
+    let mut c = clip("c1", "t", 0, 2000, 0);
+    c.keyframes
+        .insert("volume".into(), kfs(&[(0, 0.0), (2000, 1.0)]));
+    doc.timeline.tracks.push(video_track(vec![c]));
+    add_media(&mut doc, "t", &tone);
+    let out = render(&dir, &doc, "vol.mp4");
+
+    let early = audio_rms(&out, 0.1, 0.4);
+    let late = audio_rms(&out, 1.6, 1.9);
+    assert!(late > early * 2.0, "volume ramp missing: {early} vs {late}");
 }

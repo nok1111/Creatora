@@ -29,8 +29,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = Arc::new(
-                db::Db::open(&data_dir)
-                    .map_err(|e| format!("open catalog database: {e}"))?,
+                db::Db::open(&data_dir).map_err(|e| format!("open catalog database: {e}"))?,
             );
             log::info!("catalog ready at {}", data_dir.display());
             let jobs = jobs::JobManager::default();
