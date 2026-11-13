@@ -214,3 +214,22 @@ legacy table because its `account_id NOT NULL` cannot represent local drafts.
 NOTE: `migrations/0003_proxy_path.sql` exists but is deliberately NOT
 registered — `proxy_path` already ships inside the current 0001 CREATE TABLE
 (registering it would fail on every existing DB with duplicate column).
+
+## Migration 0005_analytics
+
+- `metric_snapshots(id, target_id FK->social_post_targets, remote_id,
+  platform, fetched_at, period, source CHECK IN ('api','import','local'),
+  source_label, metrics_json)` - append-only time series; dedupe on
+  (target_id, period, source, fetched_at bucket). Indexes on
+  (target_id, fetched_at) and remote_id.
+- `analytics_sync_runs(id, started_at, finished_at, trigger_kind, status,
+  targets_ok, targets_failed)` - one row per engine run.
+- `analytics_sync_errors(id, run_id FK, target_id, message)` - verbatim
+  provider error per failed target.
+- `import_batches(id, filename, source_label, created_at, rows_seen,
+  rows_imported, rows_skipped, errors_json)` - audit of every import.
+- `publish_packets(id, target_id FK, dir_path, files_json, created_at)`.
+
+Notes: snapshots never overwrite - history is preserved; a disconnected
+account stops future syncs but deletes nothing. `source` distinguishes
+api/import/local everywhere; UI surfaces it on every metric.

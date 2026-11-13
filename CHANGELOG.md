@@ -120,3 +120,25 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
   ducking drop+release, waveform peaks, silence/loudness parse) +
   4 engine vitest (track flags, duck rules, silence-cut splits).
   Totals: 90 rust + 52 vitest green; clippy/fmt/tsc/build clean.
+
+## Phase 9 — Analytics, Insights & Performance Tracking (ADR-030)
+
+- metric_snapshots + sync_runs/errors + import_batches + publish_packets
+  (migration 0005); source-aware: api|import|local, never mixed silently.
+- Independent stats adapters for all four platforms with per-metric
+  availability + explicit unavailability reasons.
+- Typed HttpError + endpoint overrides → 17 mocked-HTTP adapter tests
+  (Phase 8 debt closed): 4xx/5xx matrix, Retry-After, malformed/incomplete
+  bodies, duplicates, retries, token expiry, failed refresh, timeouts,
+  broken connections — all offline.
+- Sync engine: manual+auto interval, freshness cooldown, 401 refresh,
+  429 backoff, per-run audit; failures are recorded, never claimed.
+- Dashboard/Detail/Compare/Insights/Sync/Import/Packets UI; SVG charts,
+  no new deps; incompatible metrics are never aggregated cross-platform.
+- Publish packets: hardlink→copy video + thumbnail + metadata.txt +
+  publication.json, batch, regenerable.
+- CSV/JSON import: 10 MiB cap, preview/validate/match-by-remote-id,
+  dedupe, source label, audit batch.
+- Local insights: top posts/platforms/durations/times/hashtags with
+  sample sizes and correlation-not-causation caveats; works offline.
+- Totals: 141 rust + 70 vitest green; clippy 0 warnings, fmt/tsc/build clean.

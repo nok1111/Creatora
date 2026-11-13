@@ -32,3 +32,14 @@ How credentials, tokens and user data are handled. Local-first: nothing leaves t
 ## Legacy note
 
 The early `publications` table (migration 0001, `account_id NOT NULL`) is unused — the Phase 8 model (`social_posts`/`social_post_targets`) separates creative content from credentials by design.
+
+## Phase 9 additions
+
+- Imported files: 10 MiB hard cap, strict CSV/JSON parsing, rows are
+  data only - nothing eval'd, rendered as HTML, or used to build shell
+  commands; values bound via rusqlite parameters.
+- Endpoint overrides (ep()): test-only hook, never exposed over IPC.
+- Provider error bodies are surfaced verbatim for debugging; access
+  tokens travel only in Authorization headers, never in URLs/messages.
+- Disconnecting an account stops sync but does not delete stored
+  snapshots - user data stays under user control.

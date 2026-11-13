@@ -106,3 +106,22 @@ Phase 1:
 Adapter HTTP calls are **not** unit-tested against live APIs (no credentials
 in CI); platform flows are exercised end-to-end only with real user apps.
 Mocked-HTTP adapter tests are a pending Phase 9 item.
+
+## Phase 9 - Analytics & adapter HTTP tests
+
+- platforms/mock_tests.rs - 17 tests against a raw-TcpListener mock
+  server (zero new deps, offline, no credentials): success, invalid
+  JSON, HTTP 400/401/403/429(+Retry-After)/500, incomplete body,
+  duplicate publication, retry path, timeout, broken connection,
+  expired token, failed refresh. Mutex-guarded endpoint overrides;
+  poisoned-lock recovery via into_inner.
+- tests/analytics_db.rs - 6 SQLite integration tests: snapshot
+  roundtrip+dedupe, compare returns only mutually-served metrics,
+  insights report insufficient sample, sync-run audit rows, publish
+  packet writes folder, CSV import preview+commit.
+- src/lib/analytics-types.test.ts - 3 vitest: metricValue returns null
+  (not 0) for unserved keys; real 0 stays distinct from missing.
+
+Manual matrix before release (real credentials needed): connect ->
+publish test video -> wait -> analytics sync -> verify snapshots match
+the platform's own dashboard numbers.

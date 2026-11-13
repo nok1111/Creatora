@@ -145,3 +145,32 @@ Open a project, then:
 - **Missing media**: Library flags moved/deleted files; use Relink.
 - **Crash recovery**: autosaves restore on next launch.
 - **Logs**: `%APPDATA%\Creatora\logs\` — attach when reporting issues.
+
+## Analytics (Phase 9)
+
+Open **Analytics** in the sidebar. Tabs:
+
+- **Dashboard** - totals per platform, time-series charts, best and
+  worst posts. Filters: last 7/30/90/365 days + platform. Metrics from
+  different platforms are not summed together - a TikTok "view" and a
+  YouTube "view" mean different things.
+- **Compare** - tick 2-20 posts; only metrics every selected post
+  actually served are shown; gaps display "-", never a fake 0.
+- **Insights** - local, offline analysis (top posts, best platform /
+  duration / publish time / hashtags). Each card shows its sample size;
+  correlation is never presented as cause.
+- **Sync** - manual "Sync now" or automatic interval (off / hourly /
+  6h / 12h / daily / weekly). Shows last run, per-target errors
+  verbatim, and what each platform can report. Rate limits and expired
+  tokens are handled and logged - a failed sync never shows as success.
+- **Import** - CSV/JSON stats exported elsewhere (e.g. YouTube Studio).
+  Preview first: rows match published posts by remote id; unmatched rows
+  are listed and skipped. Imported data is tagged `import` with your
+  source label and never overwrites API data. Max 10 MiB.
+- **Packets** - self-contained folder per target (video + thumbnail +
+  metadata.txt + publication.json) for manual publishing where APIs are
+  unavailable. Files are hardlinked when possible, not duplicated.
+
+Post detail shows the latest metrics, metrics the platform cannot
+provide (with reason), snapshot history, sync runs and errors, and
+charts once enough snapshots exist.

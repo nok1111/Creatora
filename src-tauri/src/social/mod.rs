@@ -6,12 +6,16 @@
 //! `vault` OS-credential token store, `platforms` API adapters,
 //! `publish` job + attempt log, `scheduler` local due-post ticker.
 
+pub mod analytics;
+pub mod import;
 pub mod model;
 pub mod oauth;
+pub mod packets;
 pub mod platforms;
 pub mod posts;
 pub mod publish;
 pub mod rules;
 pub mod scheduler;
+pub mod stats;
 pub mod validate;
 pub mod vault;

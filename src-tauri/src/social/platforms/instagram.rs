@@ -12,14 +12,18 @@
 //! Otherwise publish() returns a structured error explaining precisely
 //! what's missing — never a fake success.
 
-use super::{meta_str, post_json, PublishInput, PublishOutcome};
+use super::http::{ep, post_json};
+use super::{meta_str, PublishInput, PublishOutcome};
 
-const GRAPH: &str = "https://graph.facebook.com/v21.0";
+fn graph() -> String {
+    ep("fb.graph", "https://graph.facebook.com/v21.0")
+}
 
 /// /me → (user id, name). IG professional identity is resolved via
 /// the linked Page at publish time.
 pub fn identity(access_token: &str) -> Result<(String, Option<String>), String> {
-    let body = super::get_json(&format!("{GRAPH}/me?fields=id,name"), access_token)?;
+    let body = super::http::get_json(&format!("{}/me?fields=id,name", graph()), access_token)
+        .map_err(|e| e.to_message())?;
     Ok((
         body["id"].as_str().unwrap_or("ig").to_string(),
         body["name"].as_str().map(str::to_string),
@@ -28,10 +32,11 @@ pub fn identity(access_token: &str) -> Result<(String, Option<String>), String> 
 
 /// Resolve the IG Business/Creator user id linked to meta.pageId.
 fn ig_user_id(token: &str, page_id: &str) -> Result<String, String> {
-    let body = super::get_json(
-        &format!("{GRAPH}/{page_id}?fields=instagram_business_account"),
+    let body = super::http::get_json(
+        &format!("{}/{page_id}?fields=instagram_business_account", graph()),
         token,
-    )?;
+    )
+    .map_err(|e| e.to_message())?;
     body["instagram_business_account"]["id"]
         .as_str()
         .map(str::to_string)
@@ -83,7 +88,8 @@ pub fn publish(
         create["video_url"] = serde_json::json!(url);
         create["media_type"] = serde_json::json!(meta_str(input, "mediaType").unwrap_or("REELS"));
     }
-    let cont = post_json(&format!("{GRAPH}/{ig_id}/media"), token, &create)?;
+    let cont = post_json(&format!("{}/{ig_id}/media", graph()), token, &create)
+        .map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&cont) {
         return Err(format!("container create: {e}"));
     }
@@ -98,10 +104,11 @@ pub fn publish(
         if std::time::Instant::now() > deadline {
             return Err("container processing timed out".into());
         }
-        let st = super::get_json(
-            &format!("{GRAPH}/{creation}?fields=status_code,status"),
+        let st = super::http::get_json(
+            &format!("{}/{creation}?fields=status_code,status", graph()),
             token,
-        )?;
+        )
+        .map_err(|e| e.to_message())?;
         match st["status_code"].as_str().unwrap_or("") {
             "FINISHED" | "PUBLISHED" => break,
             "ERROR" | "EXPIRED" => {
@@ -114,13 +121,14 @@ pub fn publish(
 
     // 3) Publish the container.
     let pub_resp = post_json(
-        &format!("{GRAPH}/{ig_id}/media_publish"),
+        &format!("{}/{ig_id}/media_publish", graph()),
         token,
         &serde_json::json!({
             "creation_id": creation,
             "access_token": token,
         }),
-    )?;
+    )
+    .map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&pub_resp) {
         return Err(format!("media_publish: {e}"));
     }

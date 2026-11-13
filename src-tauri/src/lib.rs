@@ -125,6 +125,21 @@ pub fn run() {
             social::publish::platform_ruleset,
             social::publish::save_oauth_client,
             social::publish::oauth_client_status,
+            social::analytics::analytics_sync,
+            social::analytics::analytics_sync_runs,
+            social::analytics::analytics_sync_status,
+            social::analytics::analytics_set_sync_interval,
+            social::analytics::analytics_target_history,
+            social::analytics::analytics_dashboard,
+            social::analytics::analytics_compare,
+            social::analytics::analytics_insights,
+            social::analytics::analytics_platform_stats_info,
+            social::import::analytics_import_preview,
+            social::import::analytics_import_commit,
+            social::import::analytics_import_batches,
+            social::packets::export_publish_packet,
+            social::packets::export_publish_packets,
+            social::packets::list_publish_packets,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

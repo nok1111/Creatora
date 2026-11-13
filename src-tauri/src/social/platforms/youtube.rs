@@ -3,14 +3,19 @@
 //! channels identity. Requires the user's Google OAuth client with
 //! youtube.upload + youtube.readonly scopes.
 
+use super::http::ep;
 use super::{api_err, meta_bool, meta_str, PublishInput, PublishOutcome};
 
 /// channels.list mine=true → (channel id, channel title).
 pub fn identity(access_token: &str) -> Result<(String, Option<String>), String> {
-    let body = super::get_json(
-        "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+    let body = super::http::get_json(
+        &format!(
+            "{}/youtube/v3/channels?part=snippet&mine=true",
+            ep("youtube.api", "https://www.googleapis.com")
+        ),
         access_token,
-    )?;
+    )
+    .map_err(|e| e.to_message())?;
     let item = body["items"].get(0).ok_or("no channel on account")?;
     let id = item["id"].as_str().unwrap_or("yt").to_string();
     let name = item["snippet"]["title"].as_str().map(str::to_string);
@@ -44,10 +49,10 @@ pub fn publish(
     });
 
     // 1) Initiate resumable session — POST metadata, get Location.
-    let resp = ureq::post(
-        "https://upload.youtube.com/upload/youtube/v3/videos\
-         ?uploadType=resumable&part=snippet,status",
-    )
+    let resp = ureq::post(&format!(
+        "{}/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        ep("youtube.upload", "https://upload.youtube.com")
+    ))
     .header("Authorization", &format!("Bearer {token}"))
     .header("X-Upload-Content-Length", &size.to_string())
     .header("X-Upload-Content-Type", "video/*")
@@ -112,11 +117,12 @@ pub fn publish(
 
 /// videos.list status — is processing done / did the upload fail?
 pub fn status(token: &str, video_id: &str) -> Result<serde_json::Value, String> {
-    super::get_json(
+    super::http::get_json(
         &format!(
-            "https://www.googleapis.com/youtube/v3/videos\
-             ?part=status,processingDetails&id={video_id}"
+            "{}/youtube/v3/videos?part=status,processingDetails&id={video_id}",
+            ep("youtube.api", "https://www.googleapis.com")
         ),
         token,
     )
+    .map_err(|e| e.to_message())
 }

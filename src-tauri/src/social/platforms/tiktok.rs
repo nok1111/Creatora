@@ -9,14 +9,19 @@
 //! meta.mode: "inbox" (default, works for unapproved apps) | "direct"
 //! (needs video.publish grant — API decides, we surface real errors).
 
-use super::{meta_bool, meta_str, post_json, PublishInput, PublishOutcome};
+use super::http::{ep, post_json};
+use super::{meta_bool, meta_str, PublishInput, PublishOutcome};
 
 /// user/info → (open_id, display_name).
 pub fn identity(access_token: &str) -> Result<(String, Option<String>), String> {
-    let body = super::get_json(
-        "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name",
+    let body = super::http::get_json(
+        &format!(
+            "{}/v2/user/info/?fields=open_id,display_name",
+            ep("tiktok.api", "https://open.tiktokapis.com")
+        ),
         access_token,
-    )?;
+    )
+    .map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&body) {
         return Err(format!("tiktok user info: {e}"));
     }
@@ -41,10 +46,11 @@ pub fn publish(
     let direct = mode == "direct";
 
     // 1) Init upload session. Inbox = drafts flow; direct = post.
+    let base = ep("tiktok.api", "https://open.tiktokapis.com");
     let init_url = if direct {
-        "https://open.tiktokapis.com/v2/post/publish/video/init/"
+        format!("{base}/v2/post/publish/video/init/")
     } else {
-        "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/"
+        format!("{base}/v2/post/publish/inbox/video/init/")
     };
     let chunk = CHUNK as u64;
     let chunk_count = size.div_ceil(chunk);
@@ -66,7 +72,7 @@ pub fn publish(
             "disable_stitch": meta_bool(input, "disableStitch"),
         });
     }
-    let body = post_json(init_url, token, &init_body)?;
+    let body = post_json(&init_url, token, &init_body).map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&body) {
         return Err(format!("tiktok init: {e}"));
     }
@@ -120,10 +126,11 @@ pub fn publish(
             });
         }
         let st = post_json(
-            "https://open.tiktokapis.com/v2/post/publish/status/fetch/",
+            &format!("{base}/v2/post/publish/status/fetch/"),
             token,
             &serde_json::json!({"publish_id": publish_id}),
-        )?;
+        )
+        .map_err(|e| e.to_message())?;
         let status = st["data"]["status"].as_str().unwrap_or("");
         match status {
             "PUBLISH_COMPLETE" => {

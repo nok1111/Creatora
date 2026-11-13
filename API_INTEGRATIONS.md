@@ -85,3 +85,26 @@ Platform limits and API contracts change. `platform_rules` is versioned (`platfo
 - Google: `developers.google.com/youtube/v3`, `developers.google.com/youtube/analytics`
 - TikTok: `developers.tiktok.com/doc/content-posting-api-*`
 - Meta: `developers.facebook.com/docs/instagram-platform`, `/docs/graph-api` (video/reels publishing)
+
+## Analytics / statistics endpoints (Phase 9)
+
+| Platform | Endpoint | Scope required | Metrics served |
+|---|---|---|---|
+| YouTube | youtube/v3/videos?part=statistics | yt-analytics.readonly (owner) or youtube.readonly | viewCount, likeCount, commentCount |
+| YouTube | youtubeanalytics/v2/reports | yt-analytics.readonly | views, estimatedMinutesWatched, averageViewDuration, subscribersGained - channel-owner only |
+| TikTok | video/query/?fields=... | video.list | like_count, comment_count, share_count, view_count - requires approved video.list scope |
+| Instagram | {media-id}/insights?metric=... | instagram_manage_insights + professional account | reach, likes, comments, shares, saved, views (metric set differs by media_type) |
+| Facebook | {video-id}/video_insights | pages_read_engagement + page role | total_video_views, total_video_impressions, reactions, comments, shares - names vary per Graph version |
+
+**Not available / caveats**
+- YouTube watch-time & retention: Analytics API only, channel-owner only.
+- TikTok granular analytics still largely require Research API or in-app
+  Creator tools; video.list gives counts only.
+- Instagram followers_gained is an account metric, not per-media;
+  insights require Business/Creator.
+- Facebook video_insights returns 400/empty for non-page-owned media;
+  metric deprecations happen per Graph version - re-verify per release.
+- No platform exposes per-viewer data - all metrics are aggregates.
+
+Ruleset: platform_rules.v1.json now lists analytics scopes per platform
+so OAuth requests them up front.

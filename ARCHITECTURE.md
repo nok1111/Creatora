@@ -173,3 +173,33 @@ Status machine (target-level): draft → ready → scheduled → publishing →
 published | failed. `scheduled` means "time set"; only auto_publish+account
 +file make a publish job actually run — otherwise `social://due` fires and
 the UI shows a reminder. Export sets `ready`, never `published`.
+
+## Analytics subsystem (Phase 9)
+
+```
+src/social/
+  platforms/http.rs      typed HttpError{status,retry_after} + ep() endpoint
+                         overrides (Mutex<Vec>, test-only mutation)
+  platforms/mock_tests.rs raw-TcpListener mock server (no deps) - 17 tests
+  stats/{mod,youtube,tiktok,instagram,facebook}.rs
+                         per-platform StatsAdapter -> {metrics[] w/ unit+source,
+                         unavailable[] w/ reason}
+  analytics.rs           sync engine (freshness cooldown, 401 refresh,
+                         429 Retry-After, run/error audit), snapshot queries,
+                         compare (only mutually-served metrics), local insights
+  import.rs              CSV/JSON parse->preview->match->dedupe->commit (10 MiB cap)
+  packets.rs             publish packet builder (hardlink->copy, no dupes)
+migrations/0005_analytics.sql
+src/modules/analytics/   AnalyticsPage shell + Dashboard, PostStatsDetail,
+                         ComparePanel, InsightsPanel, SyncPanel, ImportPanel,
+                         PacketsPanel, charts.tsx (SVG, zero deps)
+```
+
+Data flow: platform API -> StatsAdapter -> metric_snapshots(source=api)
+-> dashboard/compare/insights queries (SQLite, indexed, paginated).
+Imported files -> import_batches + snapshots(source=import). Insights read
+snapshots + media_assets metadata - fully offline.
+
+Job plumbing: analytics_sync runs through the existing JobManager; the
+60 s scheduler tick also checks the auto-sync interval (settings key
+`analytics.sync_interval_minutes`, 0=off).

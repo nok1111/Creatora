@@ -333,3 +333,27 @@ publish.
 **Migration note.** `0003_proxy_path.sql` is intentionally NOT
 registered — `proxy_path` already ships inside 0001's CREATE TABLE, so
 running it would break every existing DB (duplicate column).
+
+## ADR-030 - Source-aware metric snapshots (Phase 9)
+
+**Decision.** Analytics are stored as append-only `metric_snapshots`
+rows carrying `source` in {api, import, local}, `period`, and a
+normalized `metrics_json` - never as mutable per-post counters.
+Comparison only exposes metrics served by every selected target;
+missing values render as "-", not 0.
+
+**Why.** Platform metrics disagree in semantics (a TikTok "view" is not
+a YouTube "view"). Summing them would fabricate data. Snapshot rows
+preserve history for charts and make provenance queryable; dedupe on
+(target, period, source, bucket) prevents import pollution.
+
+**Alternatives rejected.** A single stats column on targets (loses
+history), per-platform metric tables (duplicated schema), normalizing
+to "engagement" scores (false equivalence - banned by requirements).
+
+**Endpoint overrides.** All adapter URLs go through `ep(key, default)`
+backed by a `Mutex<Vec>` test hook - enables the offline mock-HTTP
+suite without dependency-injection plumbing or new crates.
+
+**MSRV.** EP_OVERRIDES uses `Mutex<Vec>` (const-stable in 1.77) instead
+of `LazyLock` (1.80) to keep the declared `rust-version` honest.

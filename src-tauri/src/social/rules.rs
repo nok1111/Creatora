@@ -175,7 +175,7 @@ pub const RULES_JSON: &str = r##"{
       "oauth": {
         "authUrl": "https://accounts.google.com/o/oauth2/v2/auth",
         "tokenUrl": "https://oauth2.googleapis.com/token",
-        "scopes": ["https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/youtube.readonly"],
+        "scopes": ["https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/youtube.readonly","https://www.googleapis.com/auth/yt-analytics.readonly"],
         "pkce": true,
         "extraAuthParams": [["access_type","offline"],["prompt","consent"]]
       }
@@ -211,7 +211,7 @@ pub const RULES_JSON: &str = r##"{
       "oauth": {
         "authUrl": "https://www.tiktok.com/v2/auth/authorize/",
         "tokenUrl": "https://open.tiktokapis.com/v2/oauth/token/",
-        "scopes": ["user.info.basic","video.upload","video.publish"],
+        "scopes": ["user.info.basic","video.upload","video.publish","video.list"],
         "pkce": true,
         "clientIdParam": "client_key",
         "extraAuthParams": []
@@ -248,7 +248,7 @@ pub const RULES_JSON: &str = r##"{
       "oauth": {
         "authUrl": "https://www.facebook.com/dialog/oauth",
         "tokenUrl": "https://graph.facebook.com/v21.0/oauth/access_token",
-        "scopes": ["instagram_basic","instagram_content_publish","pages_show_list","pages_read_engagement","business_management"],
+        "scopes": ["instagram_basic","instagram_content_publish","instagram_manage_insights","pages_show_list","pages_read_engagement","read_insights","business_management"],
         "pkce": false,
         "extraAuthParams": [["response_type","code"]]
       }
@@ -285,7 +285,7 @@ pub const RULES_JSON: &str = r##"{
       "oauth": {
         "authUrl": "https://www.facebook.com/dialog/oauth",
         "tokenUrl": "https://graph.facebook.com/v21.0/oauth/access_token",
-        "scopes": ["pages_manage_posts","pages_read_engagement","pages_show_list","publish_video"],
+        "scopes": ["pages_manage_posts","pages_read_engagement","pages_show_list","publish_video","read_insights"],
         "pkce": false,
         "extraAuthParams": [["response_type","code"]]
       }

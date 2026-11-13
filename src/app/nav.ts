@@ -42,7 +42,7 @@ export const MODULES: ModuleDef[] = [
   { key: "brand", path: "/brand", icon: Palette, phase: 6, implemented: false },
   { key: "social", path: "/social", icon: Share2, phase: 8, implemented: true },
   { key: "planner", path: "/planner", icon: CalendarDays, phase: 9, implemented: false },
-  { key: "analytics", path: "/analytics", icon: BarChart3, phase: 9, implemented: false },
+  { key: "analytics", path: "/analytics", icon: BarChart3, phase: 9, implemented: true },
   { key: "export", path: "/export", icon: Rocket, phase: 7, implemented: false },
   { key: "settings", path: "/settings", icon: Settings, phase: 1, implemented: true },
 ];

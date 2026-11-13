@@ -128,5 +128,8 @@ fn tick(app: &AppHandle, db: &Arc<Db>) -> Result<(), crate::error::AppError> {
             );
         }
     }
+    // Phase 9: due analytics sync (no-op when interval = 0).
+    let jobs_state = tauri::Manager::state::<JobManager>(app);
+    super::analytics::maybe_run_due(app, &jobs_state, db);
     Ok(())
 }

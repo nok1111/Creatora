@@ -11,6 +11,7 @@ import { LibraryPage } from "@/modules/library/LibraryPage";
 import { EditorPage } from "@/modules/editor/EditorPage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { SocialPage } from "@/modules/social/SocialPage";
+import { AnalyticsPage } from "@/modules/analytics/AnalyticsPage";
 import { useSettings } from "@/stores/settings";
 import { autosave } from "@/services/autosave";
 
@@ -30,6 +31,8 @@ function pageFor(key: string) {
       return <EditorPage />;
     case "social":
       return <SocialPage />;
+    case "analytics":
+      return <AnalyticsPage />;
     case "settings":
       return <SettingsPage />;
     default:

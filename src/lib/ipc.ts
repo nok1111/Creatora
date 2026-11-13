@@ -235,6 +235,38 @@ export const api = {
     cmd<Record<string, boolean>>("oauth_client_status"),
   revealPath: (path: string) => cmd<void>("reveal_path", { path }),
 
+  // ---------- analytics (Phase 9, ADR-029) ----------
+  analyticsSync: (targetId?: string) =>
+    cmd<string>("analytics_sync", { targetId }),
+  analyticsSyncRuns: (limit?: number) =>
+    cmd<import("./analytics-types").SyncRun[]>("analytics_sync_runs", { limit }),
+  analyticsSyncStatus: () =>
+    cmd<import("./analytics-types").SyncStatus>("analytics_sync_status"),
+  analyticsSetSyncInterval: (minutes: number) =>
+    cmd<void>("analytics_set_sync_interval", { minutes }),
+  analyticsTargetHistory: (targetId: string) =>
+    cmd<import("./analytics-types").Snapshot[]>("analytics_target_history", { targetId }),
+  analyticsDashboard: (windowDays?: number, platform?: string) =>
+    cmd<import("./analytics-types").Dashboard>("analytics_dashboard", { windowDays, platform }),
+  analyticsCompare: (targetIds: string[]) =>
+    cmd<import("./analytics-types").CompareResult>("analytics_compare", { targetIds }),
+  analyticsInsights: (windowDays?: number) =>
+    cmd<import("./analytics-types").Insight[]>("analytics_insights", { windowDays }),
+  analyticsPlatformStatsInfo: () =>
+    cmd<Record<string, string>>("analytics_platform_stats_info"),
+  analyticsImportPreview: (path: string) =>
+    cmd<import("./analytics-types").ImportPreview>("analytics_import_preview", { path }),
+  analyticsImportCommit: (path: string, sourceLabel: string) =>
+    cmd<Record<string, unknown>>("analytics_import_commit", { path, sourceLabel }),
+  analyticsImportBatches: () =>
+    cmd<import("./analytics-types").ImportBatch[]>("analytics_import_batches"),
+  exportPublishPacket: (targetId: string, destDir: string) =>
+    cmd<import("./analytics-types").PublishPacket>("export_publish_packet", { targetId, destDir }),
+  exportPublishPackets: (targetIds: string[], destDir: string) =>
+    cmd<{ exported: string[]; errors: string[] }>("export_publish_packets", { targetIds, destDir }),
+  listPublishPackets: (targetId?: string) =>
+    cmd<import("./analytics-types").PublishPacket[]>("list_publish_packets", { targetId }),
+
   generateProxies: (assetIds: string[]) =>
     cmd<string>("generate_proxies", { assetIds }),
   deleteProxy: (assetId: string) =>

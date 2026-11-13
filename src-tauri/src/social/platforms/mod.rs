@@ -4,7 +4,10 @@
 //! rules.rs so limitations travel with the ruleset, not the UI.
 
 pub mod facebook;
+pub mod http;
 pub mod instagram;
+#[cfg(test)]
+mod mock_tests;
 pub mod tiktok;
 pub mod youtube;
 
@@ -75,32 +78,6 @@ pub fn publish(
         "facebook" => facebook::publish(access_token, input, progress, cancelled),
         _ => Err(format!("no publish adapter for {platform}")),
     }
-}
-
-/// Shared: GET JSON with bearer token → serde_json::Value.
-pub fn get_json(url: &str, token: &str) -> Result<serde_json::Value, String> {
-    let resp = ureq::get(url)
-        .header("Authorization", &format!("Bearer {token}"))
-        .call()
-        .map_err(|e| format!("GET {url}: {e}"))?;
-    resp.into_body()
-        .read_json()
-        .map_err(|e| format!("GET {url} body: {e}"))
-}
-
-/// Shared: POST JSON with bearer token.
-pub fn post_json(
-    url: &str,
-    token: &str,
-    body: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let resp = ureq::post(url)
-        .header("Authorization", &format!("Bearer {token}"))
-        .send_json(body)
-        .map_err(|e| format!("POST {url}: {e}"))?;
-    resp.into_body()
-        .read_json()
-        .map_err(|e| format!("POST {url} body: {e}"))
 }
 
 /// Pull `error.message` out of a provider body, if any.

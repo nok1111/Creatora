@@ -6,14 +6,20 @@
 //! meta.pageAccessToken (optional): resolved automatically via
 //! /me/accounts when absent.
 
+use super::http::ep;
 use super::{meta_str, PublishInput, PublishOutcome};
 
-const GRAPH: &str = "https://graph.facebook.com/v21.0";
-const GRAPH_VIDEO: &str = "https://graph-video.facebook.com/v21.0";
+fn graph() -> String {
+    ep("fb.graph", "https://graph.facebook.com/v21.0")
+}
+fn graph_video() -> String {
+    ep("fb.graph_video", "https://graph-video.facebook.com/v21.0")
+}
 
 /// /me → (user id, name).
 pub fn identity(access_token: &str) -> Result<(String, Option<String>), String> {
-    let body = super::get_json(&format!("{GRAPH}/me?fields=id,name"), access_token)?;
+    let body = super::http::get_json(&format!("{}/me?fields=id,name", graph()), access_token)
+        .map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&body) {
         return Err(format!("facebook identity: {e}"));
     }
@@ -25,10 +31,14 @@ pub fn identity(access_token: &str) -> Result<(String, Option<String>), String> 
 
 /// Resolve the Page access token for meta.pageId via /me/accounts.
 fn page_token(user_token: &str, page_id: &str) -> Result<String, String> {
-    let body = super::get_json(
-        &format!("{GRAPH}/me/accounts?fields=id,name,access_token&limit=100"),
+    let body = super::http::get_json(
+        &format!(
+            "{}/me/accounts?fields=id,name,access_token&limit=100",
+            graph()
+        ),
         user_token,
-    )?;
+    )
+    .map_err(|e| e.to_message())?;
     for p in body["data"].as_array().into_iter().flatten() {
         if p["id"].as_str() == Some(page_id) {
             return p["access_token"]
@@ -59,14 +69,15 @@ pub fn publish(
         return Err(format!("could not resolve access token for page {page_id}"));
     }
 
-    let base = format!("{GRAPH_VIDEO}/{page_id}/videos");
+    let base = format!("{}/{page_id}/videos", graph_video());
 
     // 1) upload_phase=start → session id + first offset window.
-    let start = super::post_json(
+    let start = super::http::post_json(
         &base,
         &ptoken,
         &serde_json::json!({"upload_phase": "start", "file_size": size}),
-    )?;
+    )
+    .map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&start) {
         return Err(format!("upload start: {e}"));
     }
@@ -146,7 +157,7 @@ pub fn publish(
     if !input.description.is_empty() {
         finish["description"] = serde_json::json!(input.description);
     }
-    let fin = super::post_json(&base, &ptoken, &finish)?;
+    let fin = super::http::post_json(&base, &ptoken, &finish).map_err(|e| e.to_message())?;
     if let Some(e) = super::api_err(&fin) {
         return Err(format!("upload finish: {e}"));
     }

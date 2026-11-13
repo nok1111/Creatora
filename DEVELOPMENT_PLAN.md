@@ -151,3 +151,14 @@ Sub-phased per product review — vertical slice first, then depth, then perform
   platform stats where scopes allow), publish-packet export fallback,
   mocked-HTTP adapter tests, or a perf sprint (bundle code-splitting,
   WebGL compositor).
+
+## Execution status update (post Phase 9)
+
+- Phase 9 (Analytics) — **DONE**: source-aware metric snapshots, four
+  stats adapters (honest capability gating), robust sync engine,
+  dashboard/detail/compare/insights UI, publish packets, CSV/JSON
+  import, 17 mocked-HTTP adapter tests (Phase 8 debt closed).
+  141 rust + 70 vitest green.
+- Phase 10 candidates: perf sprint (bundle code-splitting, WebGL
+  compositor), packaging/installer (MSIX/NSIS), auto-update, license
+  activation, public beta hardening.
