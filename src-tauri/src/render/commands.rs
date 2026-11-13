@@ -198,7 +198,19 @@ pub fn export_project(
             out_path.set_extension(&want_ext);
         }
         let sources = resolve_sources(&doc, Some(&db2));
-        let plan = plan::build_plan_with(&doc, &sources, &export).map_err(|e| e.to_string())?;
+        let mut plan = plan::build_plan_with(&doc, &sources, &export).map_err(|e| e.to_string())?;
+        // Subtitle burn-in via libass — cues are timeline-absolute ms which
+        // maps 1:1 to output time (ADR-025). Temp file lives for the job.
+        let _ass_tmp = if !doc.subtitles.is_empty() {
+            let ass = crate::subtitles::to_ass(&doc, &doc.subtitles, &doc.subtitle_style);
+            let tmp =
+                std::env::temp_dir().join(format!("creatora_subs_{}.ass", std::process::id()));
+            std::fs::write(&tmp, ass).map_err(|e| e.to_string())?;
+            plan.with_ass(tmp.clone());
+            Some(tmp)
+        } else {
+            None
+        };
         let clip_count = doc
             .timeline
             .tracks
@@ -211,6 +223,9 @@ pub fn export_project(
             |f| ctx.progress(f, Some("Rendering")),
             || ctx.is_cancelled(),
         )?;
+        if let Some(t) = &_ass_tmp {
+            let _ = std::fs::remove_file(t);
+        }
         let bytes = std::fs::metadata(&out_path).map(|m| m.len()).unwrap_or(0);
         serde_json::to_value(ExportResult {
             output_path: out_path.to_string_lossy().into_owned(),

@@ -192,7 +192,7 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 
 **e2e**: square cover reframe (blue window), vertical center window (green), keyframed pan (red→blue over time), text in vertical, multi-format export dims, version persistence, real motion tracking on generated moving-subject video.
 
-## Phase 4.1 — Multi-Format completion (2026-11-13)
+## Phase 5 done (Subtitle Studio: whisper.cpp transcription, cue editor, ASS/libass burn-in, SRT/VTT/ASS export, per-version styles, karaoke/pop from real word timing). Prior phase: Phase 4.1 — Multi-Format completion (2026-11-13)
 
 **Export settings real**: per-version codec/preset/CRF|bitrate/audio/container validated (reject-not-ignore) and emitted by `ffmpeg_args`; extension corrected to container. e2e: same project → hevc/mkv + h264/mp4 verified via ffprobe codec_name.
 

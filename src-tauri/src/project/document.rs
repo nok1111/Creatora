@@ -20,9 +20,12 @@ pub struct ProjectDoc {
     /// reframe overrides over the shared timeline (ADR-021). v2+.
     #[serde(default)]
     pub versions: Vec<FormatVersion>,
-    /// Subtitle cues. Phase 5 — schema defined now so v1 files round-trip.
+    /// Subtitle cues — shared across versions (timing = same audio). Phase 5.
     #[serde(default)]
     pub subtitles: Vec<SubtitleCue>,
+    /// Master subtitle presentation; versions override via their own.
+    #[serde(default)]
+    pub subtitle_style: SubtitleStyle,
     #[serde(default)]
     pub brand_kit_id: Option<String>,
     #[serde(default)]
@@ -305,6 +308,9 @@ pub struct FormatVersion {
     pub clip_overrides: std::collections::BTreeMap<String, ClipOverride>,
     #[serde(default)]
     pub export: ExportSettings,
+    /// Per-version subtitle presentation — None inherits doc.subtitle_style.
+    #[serde(default)]
+    pub subtitle_style: Option<SubtitleStyle>,
 }
 
 /// Whitelisted per-clip fields a version may override — present = replace.
@@ -418,6 +424,52 @@ pub struct Marker {
     pub color: Option<String>,
 }
 
+/// Canonical subtitle presentation — shared by ASS burn-in, preview and
+/// external export (ADR-025). Reuses TextStyle for glyphs; adds karaoke and
+/// layout fields specific to cues.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleStyle {
+    #[serde(default)]
+    pub text: TextStyle,
+    /// Word-highlight color for karaoke mode ("#00FFFF").
+    #[serde(default = "default_highlight")]
+    pub highlight_color: String,
+    /// "none" | "karaoke" (\k per-word fill) | "pop" (active word only).
+    #[serde(default = "default_sub_mode")]
+    pub mode: String,
+    /// Bottom margin in canvas px (cue sits marginV above bottom unless align).
+    #[serde(default = "default_margin_v")]
+    pub margin_v_px: f64,
+    #[serde(default = "default_margin_h")]
+    pub margin_h_px: f64,
+}
+
+fn default_highlight() -> String {
+    "#00E5FF".into()
+}
+fn default_sub_mode() -> String {
+    "none".into()
+}
+fn default_margin_v() -> f64 {
+    48.0
+}
+fn default_margin_h() -> f64 {
+    40.0
+}
+
+impl Default for SubtitleStyle {
+    fn default() -> Self {
+        SubtitleStyle {
+            text: TextStyle::default(),
+            highlight_color: default_highlight(),
+            mode: default_sub_mode(),
+            margin_v_px: default_margin_v(),
+            margin_h_px: default_margin_h(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubtitleCue {
@@ -469,6 +521,7 @@ impl ProjectDoc {
             timeline: Timeline::default(),
             versions: Vec::new(),
             subtitles: Vec::new(),
+            subtitle_style: SubtitleStyle::default(),
             brand_kit_id: None,
             export_profiles: Vec::new(),
             media_refs: Vec::new(),
@@ -483,6 +536,9 @@ impl ProjectDoc {
         let v = self.versions.iter().find(|v| v.id == version_id)?.clone();
         let mut d = self.clone();
         d.canvas = v.canvas;
+        if let Some(ss) = v.subtitle_style {
+            d.subtitle_style = ss;
+        }
         d.versions.clear(); // a merged doc has no nested versions
         for track in d.timeline.tracks.iter_mut() {
             for clip in track.clips.iter_mut() {

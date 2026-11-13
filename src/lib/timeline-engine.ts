@@ -18,6 +18,8 @@ import type {
   TrackKind,
   ClipOverride,
   FormatVersion,
+  SubtitleCue,
+  SubtitleStyle,
   TextStyle,
   Transform,
   Transition,
@@ -765,6 +767,7 @@ export function applyVersion(doc: ProjectDoc, versionId: string): ProjectDoc | n
   const d = cloneDoc(doc);
   d.canvas = { ...v.canvas };
   d.versions = [];
+  if (v.subtitleStyle) d.subtitleStyle = { ...v.subtitleStyle };
   for (const track of d.timeline.tracks) {
     for (const clip of track.clips) {
       const ov = v.clipOverrides[clip.id];
@@ -857,6 +860,147 @@ export function setVersionClipOverride(
 
 export function getVersion(doc: ProjectDoc, versionId: string): FormatVersion | undefined {
   return doc.versions.find((v) => v.id === versionId);
+}
+
+
+// ---------- subtitle cues (ADR-025) ----------
+
+export function updateCue(doc: ProjectDoc, cueId: string, patch: Partial<SubtitleCue>): ProjectDoc {
+  const next = cloneDoc(doc);
+  const c = next.subtitles.find((x) => x.id === cueId);
+  if (!c) return next;
+  Object.assign(c, patch);
+  if (c.endMs <= c.startMs) c.endMs = c.startMs + 1;
+  return next;
+}
+
+export function addCue(doc: ProjectDoc, cue: Omit<SubtitleCue, "id">): { doc: ProjectDoc; cueId: string } {
+  const next = cloneDoc(doc);
+  const c: SubtitleCue = { ...cue, id: uid(), words: cue.words ?? [] };
+  next.subtitles.push(c);
+  next.subtitles.sort((a, b) => a.startMs - b.startMs);
+  return { doc: next, cueId: c.id };
+}
+
+export function removeCue(doc: ProjectDoc, cueId: string): ProjectDoc {
+  const next = cloneDoc(doc);
+  next.subtitles = next.subtitles.filter((c) => c.id !== cueId);
+  return next;
+}
+
+export function duplicateCue(doc: ProjectDoc, cueId: string): { doc: ProjectDoc; cueId: string } | null {
+  const c = doc.subtitles.find((x) => x.id === cueId);
+  if (!c) return null;
+  const dur = c.endMs - c.startMs;
+  return addCue(doc, { ...c, startMs: c.endMs, endMs: c.endMs + dur, words: c.words.map((w) => ({ ...w })) });
+}
+
+/** Split at atMs (cue-relative text split at nearest word boundary or midpoint). */
+export function splitCue(doc: ProjectDoc, cueId: string, atMs: number): { doc: ProjectDoc; left: string; right: string } | null {
+  const c = doc.subtitles.find((x) => x.id === cueId);
+  if (!c || atMs <= c.startMs || atMs >= c.endMs) return null;
+  const next = cloneDoc(doc);
+  const i = next.subtitles.findIndex((x) => x.id === cueId);
+  const leftW = c.words.filter((w) => w.startMs < atMs);
+  const rightW = c.words.filter((w) => w.startMs >= atMs);
+  // text split: word boundary when word timings exist, else char midpoint
+  const textAt = leftW.length ? leftW.map((w) => w.word).join("").length : Math.floor(c.text.length / 2);
+  const l: SubtitleCue = { ...c, id: uid(), endMs: atMs, text: c.text.slice(0, textAt).trim(), words: leftW };
+  const r: SubtitleCue = { ...c, id: uid(), startMs: atMs, text: c.text.slice(textAt).trim(), words: rightW };
+  next.subtitles.splice(i, 1, l, r);
+  next.subtitles.sort((a, b) => a.startMs - b.startMs);
+  return { doc: next, left: l.id, right: r.id };
+}
+
+/** Merge cueId with the FOLLOWING cue (gap collapses). */
+export function mergeCueWithNext(doc: ProjectDoc, cueId: string): { doc: ProjectDoc; mergedId: string } | null {
+  const i = doc.subtitles.findIndex((x) => x.id === cueId);
+  if (i < 0 || i + 1 >= doc.subtitles.length) return null;
+  const a = doc.subtitles[i], b = doc.subtitles[i + 1];
+  const next = cloneDoc(doc);
+  const merged: SubtitleCue = {
+    id: uid(),
+    startMs: a.startMs,
+    endMs: Math.max(a.endMs, b.endMs),
+    text: `${a.text} ${b.text}`.trim(),
+    styleId: a.styleId ?? b.styleId ?? null,
+    words: [...a.words, ...b.words],
+  };
+  next.subtitles.splice(i, 2, merged);
+  return { doc: next, mergedId: merged.id };
+}
+
+/** Shift every cue (and word times) by deltaMs — negative shifts clamp at 0. */
+export function shiftAllCues(doc: ProjectDoc, deltaMs: number): ProjectDoc {
+  const next = cloneDoc(doc);
+  for (const c of next.subtitles) {
+    const shift = Math.max(-c.startMs, deltaMs);
+    c.startMs += shift; c.endMs += shift;
+    for (const w of c.words) { w.startMs += shift; w.endMs += shift; }
+  }
+  return next;
+}
+
+/** Scale cue timings (reading speed) around anchor 0 — factor>1 slower. */
+export function scaleCueTimes(doc: ProjectDoc, factor: number): ProjectDoc {
+  const next = cloneDoc(doc);
+  for (const c of next.subtitles) {
+    c.startMs = Math.round(c.startMs * factor);
+    c.endMs = Math.max(c.startMs + 1, Math.round(c.endMs * factor));
+    for (const w of c.words) { w.startMs = Math.round(w.startMs * factor); w.endMs = Math.round(w.endMs * factor); }
+  }
+  return next;
+}
+
+/** Resolve overlaps: earlier cue's end clamps to next cue's start. */
+export function fixOverlaps(doc: ProjectDoc): ProjectDoc {
+  const next = cloneDoc(doc);
+  next.subtitles.sort((a, b) => a.startMs - b.startMs);
+  for (let i = 0; i + 1 < next.subtitles.length; i++) {
+    const a = next.subtitles[i], b = next.subtitles[i + 1];
+    if (a.endMs > b.startMs) a.endMs = Math.max(a.startMs + 1, b.startMs);
+  }
+  return next;
+}
+
+export function findReplaceCues(doc: ProjectDoc, find: string, replace: string): { doc: ProjectDoc; count: number } {
+  const next = cloneDoc(doc);
+  let count = 0;
+  for (const c of next.subtitles) {
+    const hits = c.text.split(find).length - 1;
+    if (hits > 0) { c.text = c.text.split(find).join(replace); count += hits; }
+  }
+  return { doc: next, count };
+}
+
+export interface CueIssue { cueId: string; kind: "overlap" | "tooShort" | "tooLong" | "longLine" | "unnatural"; detail: string; }
+/** Diagnostics — never mutates; user reviews then applies a fix op. */
+export function diagnoseCues(doc: ProjectDoc): CueIssue[] {
+  const issues: CueIssue[] = [];
+  const cues = [...doc.subtitles].sort((a, b) => a.startMs - b.startMs);
+  for (let i = 0; i < cues.length; i++) {
+    const c = cues[i];
+    const dur = c.endMs - c.startMs;
+    if (dur < 800) issues.push({ cueId: c.id, kind: "tooShort", detail: `${dur}ms` });
+    if (dur > 8000) issues.push({ cueId: c.id, kind: "tooLong", detail: `${dur}ms` });
+    if (c.text.split("\n").some((l) => l.length > 42)) issues.push({ cueId: c.id, kind: "longLine", detail: ">42 chars" });
+    const cps = c.text.length / (dur / 1000);
+    if (dur > 0 && (cps > 25 || cps < 2)) issues.push({ cueId: c.id, kind: "unnatural", detail: `${cps.toFixed(0)} cps` });
+    if (i + 1 < cues.length && c.endMs > cues[i + 1].startMs) issues.push({ cueId: c.id, kind: "overlap", detail: `+${c.endMs - cues[i + 1].startMs}ms` });
+  }
+  return issues;
+}
+
+export function activeCueAt(doc: ProjectDoc, tMs: number): SubtitleCue | null {
+  return doc.subtitles.find((c) => tMs >= c.startMs && tMs < c.endMs) ?? null;
+}
+
+export function setVersionSubtitleStyle(doc: ProjectDoc, versionId: string, style: SubtitleStyle): ProjectDoc {
+  const next = cloneDoc(doc);
+  const v = next.versions.find((x) => x.id === versionId);
+  if (!v) return next;
+  v.subtitleStyle = { ...style };
+  return next;
 }
 
 import type { Canvas, SafeZones } from "@/lib/project-types";

@@ -309,6 +309,64 @@ export function Preview({
             );
           })}
 
+        {/* Subtitle cues — same model as ASS burn-in: margins anchor the
+            block, karaoke/pop use real word timings (ADR-025). */}
+        {(() => {
+          const cue = viewDoc.subtitles.find(
+            (c) => playheadMs >= c.startMs && playheadMs < c.endMs,
+          );
+          if (!cue) return null;
+          const ss = viewDoc.subtitleStyle;
+          const st = ss.text;
+          const justify =
+            st.alignH === "left" ? "flex-start" : st.alignH === "right" ? "flex-end" : "center";
+          const align =
+            st.alignV === "top" ? "flex-start" : st.alignV === "bottom" ? "flex-end" : "center";
+          const mV = `${(ss.marginVPx / viewDoc.canvas.height) * 100}%`;
+          const mH = `${(ss.marginHPx / viewDoc.canvas.width) * 100}%`;
+          const wordSpan = (w: { word: string; startMs: number; endMs: number }, i: number) => {
+            const spoken = playheadMs >= w.endMs;
+            const active = playheadMs >= w.startMs && playheadMs < w.endMs;
+            const color = active ? ss.highlightColor : st.color;
+            if (ss.mode === "pop") return active ? <span key={i} style={{ color }}>{w.word.trim()}</span> : null;
+            return (
+              <span key={i} style={{ color, opacity: spoken || active ? 1 : 0.55 }}>
+                {w.word}
+              </span>
+            );
+          };
+          return (
+            <div
+              className="pointer-events-none absolute flex"
+              style={{
+                justifyContent: justify,
+                alignItems: align,
+                inset: `${mV} ${mH} ${mV} ${mH}`,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
+                  color: st.color,
+                  WebkitTextStroke:
+                    st.outlineWidth > 0 && st.outlineColor
+                      ? `${(st.outlineWidth / viewDoc.canvas.height) * 100}cqh ${st.outlineColor}`
+                      : undefined,
+                  background: st.backgroundColor ?? undefined,
+                  padding: st.backgroundColor
+                    ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`
+                    : undefined,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {ss.mode !== "none" && cue.words.length > 0
+                  ? cue.words.map(wordSpan)
+                  : cue.text}
+              </span>
+            </div>
+          );
+        })()}
+
         {/* Safe-zone guides for the active version (ADR-021: guides only,
             never burned into render). */}
         {activeVersion &&

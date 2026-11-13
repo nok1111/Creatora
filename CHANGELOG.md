@@ -27,3 +27,20 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
 - Phase 3E: editor hardening — audit-found fixes (split keyframe remap, orphan transitions, source-bound trim, cross-track transition cleanup, drop-target track, empty-clipboard guard); text tracks (canonical TextStyle + drawtext + DOM preview, pixel-verified); shared keyframe parity vectors TS↔Rust; `delete_proxy` + partial-proxy cleanup; auto preview-quality degradation on sustained over-budget rAF; stress measurements (20×100 plan, 50-clip render).
 - Phase 4: multi-format versions (ADR-021/022/023) — canonical FormatVersion model + migration v1→v2, whitelisted per-clip overrides merged for preview AND render identically; preset catalog (16:9/9:16/4:5/1:1 + platform hints + safe zones); cover-fit reframe math matching clipRect; local motion-centroid auto-reframe → editable keyframes; VersionsPanel UI (create/switch/rename/duplicate/reset/delete, compare mode, auto-reframe, batch export); export_versions job batch; e2e: square/vertical pixel-verified reframes, keyframed pan, text-in-vertical, multi-format export, persistence, real motion tracking.
 - Phase 4.1: export settings wired end-to-end — validated matrix (codec/preset/container/audio), no silent ignores, per-version encoder choice verified via ffprobe (x264/mp4 vs x265/mkv), extension auto-correct, effective-settings UI row. Per-version text copy + style overrides (Inspector section, undo-safe). Reframe stabilization: EMA smoothing, scene-cut reset, hold-on-exit; fallback semantics documented. Tests: dual-encoder, invalid-combo rejection, text override, static/exit-reentry reframe — 40/40 e2e, 41/41 vitest.
+
+## Phase 5 — Subtitle Studio (ADR-025)
+- Local whisper.cpp transcription (job-based, progress+cancel, auto/manual
+  language, model picker tiny/base/small with explicit user-gated download).
+- Subtitle Studio panel: cue list synced to playhead, inline edit, timecode
+  fields, split/merge/duplicate/delete/add, search+replace.
+- Timing tools: shift all, speed scale, fix-overlaps, diagnostics
+  (short/long/longline/unnatural cps) — review-then-apply, undo-safe.
+- Styles: canonical SubtitleStyle (TextStyle + highlight + mode + margins),
+  6 presets (Classic/Modern/Bold Social/Minimal/Cinematic/Creator Highlight),
+  per-version override; karaoke (\k) + pop modes from real whisper tokens.
+- Export: SRT/VTT/ASS (unicode/line-breaks preserved) + libass burn-in in
+  the same render plan; independent jobs.
+- Preview parity: DOM renders margins/align/word-highlight per same model.
+- Tests: 3 new render e2e (pixel-verified burn-in window + karaoke fill +
+  serializers), 2 subtitle e2e (JSON parse + real whisper-cli run), 7 cue-ops
+  vitest. 80 rust + 48 vitest total green.

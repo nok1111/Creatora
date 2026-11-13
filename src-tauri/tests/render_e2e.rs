@@ -1265,6 +1265,7 @@ fn version_merge_overrides_only_whitelisted() {
         safe_zones: SafeZones::default(),
         clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
     let merged = doc.apply_version("v9x16").unwrap();
     assert_eq!(merged.canvas.width, 1080);
@@ -1306,6 +1307,7 @@ fn versions_round_trip_persistence() {
             crf: 18,
             ..Default::default()
         },
+        subtitle_style: None,
     });
     let json = serde_json::to_string(&doc).unwrap();
     let back = ProjectDoc::parse(&json).unwrap();
@@ -1432,6 +1434,7 @@ fn version_16x9_to_square_cover_reframe_pixels() {
         safe_zones: SafeZones::default(),
         clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
 
     let merged = doc.apply_version("sq").unwrap();
@@ -1525,6 +1528,7 @@ fn version_16x9_to_vertical_keeps_center_window() {
         safe_zones: SafeZones::default(),
         clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
 
     let merged = doc.apply_version("v").unwrap();
@@ -1621,6 +1625,7 @@ fn version_keyframed_reframe_moves_window() {
         safe_zones: SafeZones::default(),
         clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
     let merged = doc.apply_version("sq").unwrap();
     let sources = resolve_sources(&merged, None);
@@ -1663,6 +1668,7 @@ fn multi_version_export_produces_all_formats() {
             safe_zones: SafeZones::default(),
             clip_overrides: Default::default(),
             export: ExportSettings::default(),
+            subtitle_style: None,
         });
     }
     // Same loop export_versions' jobs run.
@@ -1744,6 +1750,7 @@ fn text_clip_renders_in_vertical_version() {
         safe_zones: SafeZones::default(),
         clip_overrides: Default::default(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
     let merged = doc.apply_version("v916").unwrap();
     let sources = resolve_sources(&merged, None);
@@ -1787,6 +1794,7 @@ fn versions_survive_save_reopen() {
         safe_zones: SafeZones::default(),
         clip_overrides: Default::default(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
     let path = dir.join("p.creatora");
     store::save(&path, &doc).unwrap();
@@ -1829,6 +1837,7 @@ fn two_versions_export_with_different_encoders() {
             container: "mkv".into(),
             ..Default::default()
         },
+        subtitle_style: None,
     });
     doc.versions.push(FormatVersion {
         id: "h264".into(),
@@ -1850,6 +1859,7 @@ fn two_versions_export_with_different_encoders() {
             crf: 30,
             ..Default::default()
         },
+        subtitle_style: None,
     });
 
     for (vid, want_codec, want_w, want_h) in
@@ -1940,6 +1950,7 @@ fn version_text_override_independent_copy() {
         safe_zones: SafeZones::default(),
         clip_overrides: [("txt".to_string(), ov)].into_iter().collect(),
         export: ExportSettings::default(),
+        subtitle_style: None,
     });
     let merged = doc.apply_version("tk").unwrap();
     let c = &merged.timeline.tracks[0].clips[0];
@@ -2013,4 +2024,138 @@ fn reframe_subject_exit_and_reentry_holds_then_retracks() {
             - tail.iter().cloned().fold(1.0f64, f64::min);
         assert!(spread < 0.2, "post-exit centroid jumped: spread {spread}");
     }
+}
+
+// ---------- Phase 5: subtitle burn-in (ADR-025) ----------
+
+/// ASS burn-in: cue renders real pixels via libass, timing gates visibility.
+#[test]
+fn subtitle_burnin_shows_cue_only_in_window() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("subs");
+    let a = make_clip(&dir, "a.mp4", "black", 0, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "a", 0, 4000, 0)]));
+    add_media(&mut doc, "a", &a);
+    doc.subtitles.push(SubtitleCue {
+        id: "s1".into(),
+        start_ms: 1500,
+        end_ms: 3000,
+        text: "HELLO".into(),
+        style_id: None,
+        words: vec![],
+    });
+    doc.subtitle_style.text.font_size_px = 40.0;
+    doc.subtitle_style.text.outline_color = Some("#000000".into());
+    doc.subtitle_style.text.outline_width = 0.0;
+
+    let sources = resolve_sources(&doc, None);
+    let mut plan = plan::build_plan(&doc, &sources).unwrap();
+    let ass = creatora_lib::subtitles::to_ass(&doc, &doc.subtitles, &doc.subtitle_style);
+    let ass_path = dir.join("t.ass");
+    std::fs::write(&ass_path, ass).unwrap();
+    plan.with_ass(ass_path);
+    let out = dir.join("out.mp4");
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+
+    let before = grab_frame(&out, 0.5, 320, 240);
+    let during = grab_frame(&out, 2.0, 320, 240);
+    let after = grab_frame(&out, 3.5, 320, 240);
+    let lit = |px: &[u8]| {
+        px.chunks(3)
+            .filter(|c| c[0] > 200 && c[1] > 200 && c[2] > 200)
+            .count()
+    };
+    assert!(
+        lit(&before) < 50,
+        "subtitle leaked before window: {}",
+        lit(&before)
+    );
+    assert!(
+        lit(&during) > 100,
+        "no subtitle pixels during cue: {}",
+        lit(&during)
+    );
+    assert!(
+        lit(&after) < 50,
+        "subtitle leaked after window: {}",
+        lit(&after)
+    );
+}
+
+/// Karaoke mode emits \k tags → progressive fill changes highlight pixels.
+#[test]
+fn subtitle_karaoke_changes_highlight_color_over_time() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("karaoke");
+    let a = make_clip(&dir, "a.mp4", "black", 0, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "a", 0, 4000, 0)]));
+    add_media(&mut doc, "a", &a);
+    doc.subtitles.push(SubtitleCue {
+        id: "s1".into(),
+        start_ms: 500,
+        end_ms: 3500,
+        text: "ONE TWO".into(),
+        style_id: None,
+        words: vec![
+            WordTiming {
+                word: "ONE".into(),
+                start_ms: 500,
+                end_ms: 2000,
+            },
+            WordTiming {
+                word: " TWO".into(),
+                start_ms: 2000,
+                end_ms: 3500,
+            },
+        ],
+    });
+    doc.subtitle_style.mode = "karaoke".into();
+    doc.subtitle_style.highlight_color = "#FF0000".into();
+    doc.subtitle_style.text.font_size_px = 40.0;
+    doc.subtitle_style.text.outline_width = 0.0;
+
+    let sources = resolve_sources(&doc, None);
+    let mut plan = plan::build_plan(&doc, &sources).unwrap();
+    let ass = creatora_lib::subtitles::to_ass(&doc, &doc.subtitles, &doc.subtitle_style);
+    let ass_path = dir.join("k.ass");
+    std::fs::write(&ass_path, ass).unwrap();
+    assert!(std::fs::read_to_string(&ass_path).unwrap().contains(r"\k"));
+    plan.with_ass(ass_path);
+    let out = dir.join("out.mp4");
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+
+    // Early: "ONE" is being karaoked — red pixels present.
+    let early = grab_frame(&out, 1.0, 320, 240);
+    let early_red = early
+        .chunks(3)
+        .filter(|c| c[0] > 150 && c[1] < 80 && c[2] < 80)
+        .count();
+    assert!(early_red > 30, "no karaoke fill early: {early_red}");
+}
+
+/// SRT/VTT serializers preserve timestamps + unicode.
+#[test]
+fn external_subtitle_exports_preserve_content() {
+    use creatora_lib::subtitles::{to_srt, to_vtt};
+    let cues = vec![SubtitleCue {
+        id: "x".into(),
+        start_ms: 1234,
+        end_ms: 5678,
+        text: "Hola — niño \nsecond line".into(),
+        style_id: None,
+        words: vec![],
+    }];
+    let srt = to_srt(&cues);
+    assert!(srt.contains("00:00:01,234 --> 00:00:05,678"));
+    assert!(srt.contains("Hola — niño "));
+    let vtt = to_vtt(&cues);
+    assert!(vtt.starts_with("WEBVTT"));
+    assert!(vtt.contains("00:00:01.234 --> 00:00:05.678"));
+    assert!(vtt.contains("second line"));
 }

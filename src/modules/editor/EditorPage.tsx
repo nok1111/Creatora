@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Preview } from "./Preview";
 import { VersionsPanel } from "./VersionsPanel";
 import { TimelinePanel } from "./TimelinePanel";
+import { SubtitlesPanel } from "./SubtitlesPanel";
 import { MediaBin } from "./MediaBin";
 import { Inspector } from "./Inspector";
 
@@ -57,6 +58,7 @@ export function EditorPage() {
   const setPreviewQuality = useEditor((s) => s.setPreviewQuality);
 
   const [exporting, setExporting] = useState<{ jobId: string; progress: number } | null>(null);
+  const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">("timeline");
 
   const assetsQ = useQuery({
     queryKey: ["assets"],
@@ -278,9 +280,28 @@ export function EditorPage() {
       {/* Multi-format versions */}
       <VersionsPanel assets={assetMap} />
 
-      {/* Timeline */}
-      <div className="h-64 shrink-0">
-        <TimelinePanel assets={assetMap} />
+      {/* Timeline / Subtitle Studio */}
+      <div className="flex h-64 shrink-0 flex-col border-t border-border">
+        <div className="flex gap-1 border-b border-border px-2 py-0.5">
+          {(["timeline", "subtitles"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setBottomTab(tab)}
+              className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                bottomTab === tab ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab === "timeline" ? "Timeline" : "Subtitles"}
+            </button>
+          ))}
+        </div>
+        <div className="min-h-0 flex-1">
+          {bottomTab === "timeline" ? (
+            <TimelinePanel assets={assetMap} />
+          ) : (
+            <SubtitlesPanel assets={assetMap} />
+          )}
+        </div>
       </div>
     </div>
   );

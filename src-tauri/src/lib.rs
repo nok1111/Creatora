@@ -5,6 +5,7 @@ pub mod jobs;
 pub mod media;
 pub mod project;
 pub mod render;
+pub mod subtitles;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -73,6 +74,9 @@ pub fn run() {
             render::commands::export_project,
             render::commands::export_versions,
             render::commands::analyze_subject,
+            subtitles::commands::list_models,
+            subtitles::commands::transcribe_media,
+            subtitles::commands::export_subtitles,
             render::commands::preview_render_plan,
         ])
         .run(tauri::generate_context!())

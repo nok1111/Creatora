@@ -82,6 +82,9 @@ pub struct RenderPlan {
     pub text_segments: Vec<TextSeg>,
     /// Validated encoder settings — what ffmpeg_args actually emits.
     pub export: crate::project::document::ExportSettings,
+    /// Optional ASS file burned via libass at the end of the video chain
+    /// (subtitle cues; ADR-025). Written by the caller to a temp path.
+    pub ass_path: Option<std::path::PathBuf>,
 }
 
 fn ms_to_s(ms: i64) -> String {
@@ -474,6 +477,7 @@ pub fn build_plan_with(
     export: &crate::project::document::ExportSettings,
 ) -> Result<RenderPlan, AppError> {
     let export = validate_export(export)?;
+    let ass_path: Option<std::path::PathBuf> = None;
     let mut segments = collect_segments(doc, sources)?;
     let text_segments = collect_text_segments(doc);
     if segments.is_empty() && text_segments.is_empty() {
@@ -682,6 +686,17 @@ pub fn build_plan_with(
         overlay_idx += 1;
     }
 
+    // Subtitle burn-in last — after all visual layers (ADR-025).
+    if let Some(ap) = &ass_path {
+        let escaped = ap
+            .to_string_lossy()
+            .replace('\\', "/")
+            .replace(':', "\\:")
+            .replace('\'', "\\'");
+        let next = lbl("o", overlay_idx + 1);
+        filters.push(format!("{cur}subtitles='{escaped}'{next}"));
+        cur = next;
+    }
     filters.push(format!("{cur}format=yuv420p[vout]"));
     let has_audio = !audio_labels.is_empty();
     if has_audio {
@@ -704,7 +719,26 @@ pub fn build_plan_with(
         has_audio,
         text_segments,
         export,
+        ass_path,
     })
+}
+
+impl RenderPlan {
+    /// Attach an ASS burn-in path after plan construction — rewrites the
+    /// tail of the filter graph (called by export with a temp file).
+    pub fn with_ass(&mut self, path: std::path::PathBuf) {
+        // Rebuild tail: replace final format=yuv420p[vout] link.
+        let escaped = path
+            .to_string_lossy()
+            .replace('\\', "/")
+            .replace(':', "\\:")
+            .replace('\'', "\\'");
+        self.filter_complex = self.filter_complex.replace(
+            "format=yuv420p[vout]",
+            &format!("subtitles='{escaped}',format=yuv420p[vout]"),
+        );
+        self.ass_path = Some(path);
+    }
 }
 
 /// Public so commands/tests can reuse it.

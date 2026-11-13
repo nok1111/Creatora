@@ -105,6 +105,17 @@ export const api = {
       { projectPath },
     ),
 
+  // Subtitles (ADR-025)
+  listModels: () =>
+    cmd<{ name: string; sizeBytes: number; present: boolean; tier: string; url: string }[]>(
+      "list_models",
+    ),
+  downloadModel: (name: string) => cmd<string>("download_model", { name }),
+  transcribeMedia: (projectPath: string, mediaPath: string, model: string, language?: string) =>
+    cmd<string>("transcribe_media", { projectPath, mediaPath, model, language }),
+  exportSubtitles: (projectPath: string, outPath: string, format: string, versionId?: string) =>
+    cmd<void>("export_subtitles", { projectPath, outPath, format, versionId }),
+
   // Media
   importMedia: (paths: string[]) => cmd<string>("import_media", { paths }),
   cancelJob: (jobId: string) => cmd<boolean>("cancel_job", { jobId }),

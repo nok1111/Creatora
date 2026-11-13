@@ -10,6 +10,8 @@ src-tauri/gen/
 # Provisioned tool binaries (ffmpeg, whisper) — never commit
 tools/bin/
 tools/models/
+tools/whisper.cpp-src/
+tools/whisper.cpp-build/
 
 # Test media corpus (large files)
 tools/test-media/

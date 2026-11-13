@@ -82,3 +82,18 @@ H.264/H.265/AAC decoding+encoding in distributed software may implicate patent p
 - Copyleft-compatible? No. Avoid SSPL (MongoDB), CC-BY-NC, Commons Clause — anything non-commercial.
 - Fonts/media shipped in-app must be commercially redistributable (OFL fonts OK; record each).
 - Third-party notices shipped in-app (About → Licenses) and in installer.
+
+## Phase 5 additions
+- **whisper.cpp** — MIT. Built from source (CPU/AVX2); `whisper-cli.exe`
+  provisioned to `tools/bin/` (gitignored like ffmpeg).
+- **ggml whisper models** (tiny/base/small, from huggingface.co/ggerganov/
+  whisper.cpp) — MIT per upstream model cards; ~75MB/142MB/466MB. Downloaded
+  ONLY on explicit user action (`download_model`); never bundled.
+- **ureq 3.x** — MIT/Apache-2.0. Blocking HTTP for model download (replaces
+  heavier reqwest; rustls TLS).
+- **libass** — bundled inside the provisioned ffmpeg build (already licensed
+  there); used via `subtitles` filter for burn-in.
+
+Model size/hardware guidance: tiny ≈75MB RAM-light ~realtime on modern CPU;
+small ≈466MB slower-but-accurate. No GPU build shipped yet (whisper.cpp CUDA
+is a future optional build); CPU AVX2 is the baseline.

@@ -161,3 +161,34 @@
 ## ADR-023 addendum — Reframe stabilization (Phase 4.1)
 
 Motion centroid output now passes a stabilization pass: EMA smoothing (α=0.35) against jitter, scene-cut reset on change-spikes (no glide across cuts), and hold-last-position on unreliable frames (subjects exiting/re-entering don't snap back to center). Remaining known limits: tracks *the* moving mass — two simultaneous subjects produce a midpoint, not a choice; fast cuts may yield a few re-anchor frames; no semantic understanding (a waving flag in background competes with a static speaker). Semantic detection (ONNX face/person models, ~5–25 MB, MIT/Apache licensed typically, CPU-usable) stays a documented extension point — the current centroid is the baseline mode.
+
+## ADR-025 — Subtitle pipeline: whisper.cpp → cues → ASS/libass burn-in
+
+**Context.** Phase 5 needs local transcription, word-level highlighting,
+external exports and burn-in — reusing the canonical model, not a second engine.
+
+**Decision.**
+- `doc.subtitles: Vec<SubtitleCue>` (existing field, now real) — cues are
+  timeline-absolute ms, shared across versions. `SubtitleStyle` wraps the
+  canonical `TextStyle` (glyphs) + `highlightColor`, `mode`
+  (none|karaoke|pop), `marginVPx/Hpx`. `FormatVersion.subtitle_style: Option`
+  overrides presentation per version; cue CONTENT stays shared (documented
+  scope — a `cues` override field is the extension point if needed).
+- Transcription: bundled `tools/bin/whisper-cli.exe` (whisper.cpp, MIT,
+  CPU/AVX2). `-ojf` JSON gives real token offsets → `WordTiming` merged at
+  space boundaries. No invented/uniform word times — when whisper emits no
+  tokens, karaoke simply degrades to plain cues.
+- Burn-in: cues → ASS → libass `subtitles` filter appended at the END of
+  the video chain (`RenderPlan::with_ass`). ASS handles wrapping, outline,
+  box, margins and `\k` karaoke — drawtext can't do karaoke cleanly.
+  Preview mirrors the same model in DOM (margins, align, word color).
+- Exports: SRT/VTT/ASS writers in `subtitles/mod.rs`; per-version via
+  `apply_version` before serializing; each export is an independent job.
+- Model download: `download_model` (ureq → `.part` → rename) only on
+  explicit user action; `list_models` reports presence/tier/size so the UI
+  can state when a download is required. Models under `tools/models/` or
+  app-data; never bundled silently.
+
+**Alternatives rejected.** drawtext for burn-in (no karaoke/wrapping);
+whisper server/API (violates local-first + adds token cost); distributing
+models in-repo (size + licensing clarity).

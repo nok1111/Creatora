@@ -8,6 +8,8 @@ export interface ProjectDoc {
   /** Derived format versions — ADR-021. v2+. */
   versions: FormatVersion[];
   subtitles: SubtitleCue[];
+  /** Master subtitle presentation — versions may override. */
+  subtitleStyle: SubtitleStyle;
   brandKitId: string | null;
   exportProfiles: unknown[];
   mediaRefs: MediaRef[];
@@ -156,6 +158,21 @@ export interface FormatVersion {
   safeZones: SafeZones;
   clipOverrides: Record<string, ClipOverride>;
   export: ExportSettings;
+  /** Per-version subtitle presentation — null inherits doc.subtitleStyle. */
+  subtitleStyle?: SubtitleStyle | null;
+}
+
+/** Canonical subtitle presentation — mirrors SubtitleStyle (ADR-025).
+ * Reuses TextStyle for glyphs; adds karaoke + cue layout. */
+export interface SubtitleStyle {
+  text: TextStyle;
+  /** Karaoke word-highlight color. */
+  highlightColor: string;
+  /** "none" | "karaoke" (\k fill) | "pop" (active word only). */
+  mode: string;
+  /** Bottom margin in canvas px. */
+  marginVPx: number;
+  marginHPx: number;
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
@@ -168,6 +185,14 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
   backgroundPadPx: 8,
   alignH: "center",
   alignV: "middle",
+};
+
+export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
+  text: { ...DEFAULT_TEXT_STYLE, alignV: "bottom", outlineColor: "#000000", outlineWidth: 2 },
+  highlightColor: "#00E5FF",
+  mode: "none",
+  marginVPx: 48,
+  marginHPx: 40,
 };
 
 export interface Keyframe {

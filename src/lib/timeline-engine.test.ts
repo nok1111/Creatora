@@ -6,6 +6,13 @@ import {
   addTrack,
   addTransition,
   clipRect,
+  diagnoseCues,
+  findReplaceCues,
+  fixOverlaps,
+  mergeCueWithNext,
+  setVersionSubtitleStyle,
+  shiftAllCues,
+  splitCue,
   duplicateClips,
   extractClips,
   findClip,
@@ -43,6 +50,7 @@ import {
 } from "@/lib/timeline-engine";
 import { evalKeyframes } from "@/lib/effects";
 import type { ProjectDoc } from "@/lib/project-types";
+import { DEFAULT_SUBTITLE_STYLE } from "@/lib/project-types";
 
 function doc(): ProjectDoc {
   return {
@@ -58,6 +66,7 @@ function doc(): ProjectDoc {
     timeline: { tracks: [], markers: [] },
     versions: [],
     subtitles: [],
+    subtitleStyle: DEFAULT_SUBTITLE_STYLE,
     brandKitId: null,
     exportProfiles: [],
     mediaRefs: [{ assetId: "a1", path: "/m/a.mp4", hash: null }],
@@ -512,5 +521,67 @@ describe("per-version text overrides (Phase 4.1)", () => {
     expect(c.text).toBe("TK Title");
     expect(c.textStyle!.color).toBe("#FF0000");
     expect(d2.timeline.tracks[0].clips[0].text).toBe("YT Title");
+  });
+});
+
+describe("subtitle cues (ADR-025)", () => {
+  const withCues = () => {
+    const d = doc();
+    d.subtitles = [
+      { id: "a", startMs: 1000, endMs: 3000, text: "Hello world", styleId: null,
+        words: [{ word: "Hello", startMs: 1000, endMs: 1800 }, { word: " world", startMs: 1800, endMs: 2800 }] },
+      { id: "b", startMs: 2800, endMs: 5000, text: "Second cue", styleId: null, words: [] },
+    ];
+    return d;
+  };
+
+  it("splitCue splits at word boundary preserving timing", () => {
+    const r = splitCue(withCues(), "a", 1800)!;
+    const [l, rr] = r.doc.subtitles;
+    expect(l.text).toBe("Hello");
+    expect(rr.startMs).toBe(1800);
+    expect(rr.words[0].word).toBe(" world");
+  });
+
+  it("mergeCueWithNext joins text + span + words", () => {
+    const r = mergeCueWithNext(withCues(), "a")!;
+    const m = r.doc.subtitles[0];
+    expect(m.text).toBe("Hello world Second cue");
+    expect(m.startMs).toBe(1000);
+    expect(m.endMs).toBe(5000);
+    expect(m.words).toHaveLength(2);
+  });
+
+  it("shiftAllCues shifts words too and clamps at 0", () => {
+    const d = shiftAllCues(withCues(), -2000);
+    expect(d.subtitles[0].startMs).toBe(0);
+    expect(d.subtitles[0].words[0].startMs).toBe(0);
+  });
+
+  it("fixOverlaps clamps earlier end to next start", () => {
+    const d = fixOverlaps(withCues()); // a ends 3000 > b starts 2800
+    expect(d.subtitles[0].endMs).toBe(2800);
+  });
+
+  it("diagnoseCues flags overlap + short cue without mutating", () => {
+    const d = withCues();
+    const issues = diagnoseCues(d);
+    expect(issues.some((i) => i.kind === "overlap")).toBe(true);
+    expect(d.subtitles[0].endMs).toBe(3000); // unchanged
+  });
+
+  it("findReplaceCues replaces all occurrences", () => {
+    const r = findReplaceCues(withCues(), "world", "earth");
+    expect(r.count).toBe(1);
+    expect(r.doc.subtitles[0].text).toBe("Hello earth");
+  });
+
+  it("applyVersion merges per-version subtitleStyle", () => {
+    const d = withCues();
+    const v = addVersion(d, { name: "v", canvas: { width: 9, height: 16, fpsNum: 30, fpsDen: 1, background: "#000" } }).doc;
+    const styled = setVersionSubtitleStyle(v, v.versions[0].id, { ...v.subtitleStyle, mode: "karaoke", marginVPx: 200 });
+    const merged = applyVersion(styled, styled.versions[0].id)!;
+    expect(merged.subtitleStyle.mode).toBe("karaoke");
+    expect(styled.subtitleStyle.mode).toBe("none"); // master untouched
   });
 });
