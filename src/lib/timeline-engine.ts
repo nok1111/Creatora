@@ -378,7 +378,7 @@ export function removeClip(doc: ProjectDoc, clipId: string): ProjectDoc {
 export function updateClip(
   doc: ProjectDoc,
   clipId: string,
-  patch: Partial<Pick<Clip, "volume" | "speed" | "text">> & {
+  patch: Partial<Pick<Clip, "volume" | "speed" | "text" | "textStyle">> & {
     transform?: Partial<Transform>;
   },
 ): ProjectDoc {
@@ -776,6 +776,7 @@ export function applyVersion(doc: ProjectDoc, versionId: string): ProjectDoc | n
         }
       }
       if (ov.textStyle) clip.textStyle = { ...ov.textStyle };
+      if (ov.text !== undefined) clip.text = ov.text;
     }
   }
   return d;

@@ -318,6 +318,9 @@ pub struct ClipOverride {
     pub keyframes: std::collections::BTreeMap<String, Vec<Keyframe>>,
     #[serde(default)]
     pub text_style: Option<TextStyle>,
+    /// Independent copy per version ("YouTube title" vs "TikTok title").
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
@@ -334,18 +337,34 @@ pub struct SafeZones {
     pub right: f32,
 }
 
-/// Per-version export settings — overrides base encoder defaults.
+/// Per-version export settings — wired to the encoder, never silently
+/// ignored (validation in render/plan.rs::validate_export). Container is
+/// implied by `container`; resolution/fps come from the version's canvas.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportSettings {
+    /// "libx264" | "libx265" | "libvpx-vp9"
     #[serde(default = "default_codec")]
     pub codec: String,
+    /// Encoder preset ("veryfast" …); validated per codec.
     #[serde(default = "default_preset")]
     pub preset: String,
+    /// Quality — ignored when `video_bitrate` is set.
     #[serde(default = "default_crf")]
     pub crf: u32,
+    /// Optional rate-control override ("8M", "2500k"…) — when set, wins over crf.
+    #[serde(default)]
+    pub video_bitrate: Option<String>,
+    /// "aac" | "libopus" | "libmp3lame" | "pcm_s16le" | "none"
+    #[serde(default = "default_acodec")]
+    pub audio_codec: String,
     #[serde(default = "default_abitrate")]
     pub audio_bitrate: String,
+    #[serde(default = "default_arate")]
+    pub audio_rate: u32,
+    /// "mp4" | "mov" | "mkv" | "webm"
+    #[serde(default = "default_container")]
+    pub container: String,
     /// Max duration cap (platform limit, e.g. Shorts 60s) — 0 = uncapped.
     /// Metadata for UI warnings; render does NOT truncate.
     #[serde(default)]
@@ -358,13 +377,26 @@ impl Default for ExportSettings {
             codec: default_codec(),
             preset: default_preset(),
             crf: default_crf(),
+            video_bitrate: None,
+            audio_codec: default_acodec(),
             audio_bitrate: default_abitrate(),
+            audio_rate: default_arate(),
+            container: default_container(),
             max_duration_ms: 0,
         }
     }
 }
 fn default_codec() -> String {
     "libx264".into()
+}
+fn default_acodec() -> String {
+    "aac".into()
+}
+fn default_arate() -> u32 {
+    48_000
+}
+fn default_container() -> String {
+    "mp4".into()
 }
 fn default_preset() -> String {
     "veryfast".into()
@@ -463,6 +495,9 @@ impl ProjectDoc {
                     }
                     if let Some(ts) = &ov.text_style {
                         clip.text_style = Some(ts.clone());
+                    }
+                    if let Some(txt) = &ov.text {
+                        clip.text = Some(txt.clone());
                     }
                 }
             }

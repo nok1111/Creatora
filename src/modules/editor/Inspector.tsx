@@ -88,6 +88,27 @@ export function Inspector() {
     }
   };
 
+  const clipText = clip.text ?? "";
+  const clipStyle = clip.textStyle;
+
+  /** Text content — version override when active, else shared clip. */
+  const patchText = (v: string) => {
+    if (version) {
+      mutate((d) => setVersionClipOverride(d, version.id, clipId, { text: v }));
+    } else {
+      mutate((d) => updateClip(d, clipId, { text: v }));
+    }
+  };
+
+  const patchStyle = (k: string, v: unknown) => {
+    const next = { ...(clipStyle ?? {}), [k]: v };
+    if (version) {
+      mutate((d) => setVersionClipOverride(d, version.id, clipId, { textStyle: next as never }));
+    } else {
+      mutate((d) => updateClip(d, clipId, { textStyle: next as Clip["textStyle"] }));
+    }
+  };
+
   const num = (
     label: string,
     value: number,
@@ -255,6 +276,61 @@ export function Inspector() {
           <p className="text-[10px] text-muted-foreground">{t("editor.noKeyframes")}</p>
         )}
       </section>
+
+      {clipText !== "" || clip.text != null ? (
+        <section className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {t("editor.sectionText")}
+            {version && <span className="ml-1 text-cyan-400/80">({t("versions.editingVersionShort")})</span>}
+          </div>
+          <textarea
+            className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs"
+            rows={2}
+            value={clipText}
+            onChange={(e) => patchText(e.target.value)}
+          />
+          {clipStyle && (
+            <div className="space-y-1">
+              {num("Font px", clipStyle.fontSizePx, (v) => patchStyle("fontSizePx", Math.max(1, v)))}
+              <div className="flex items-center gap-1">
+                <span className="w-14 text-[10px] text-muted-foreground">Color</span>
+                <input type="color" className="h-5 w-10" value={clipStyle.color.slice(0, 7)}
+                  onChange={(e) => patchStyle("color", e.target.value)} />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-14 text-[10px] text-muted-foreground">Align</span>
+                <select className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
+                  value={clipStyle.alignH} onChange={(e) => patchStyle("alignH", e.target.value)}>
+                  <option value="left">←</option><option value="center">↔</option><option value="right">→</option>
+                </select>
+                <select className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
+                  value={clipStyle.alignV} onChange={(e) => patchStyle("alignV", e.target.value)}>
+                  <option value="top">↑</option><option value="middle">↕</option><option value="bottom">↓</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-14 text-[10px] text-muted-foreground">Outline</span>
+                <input type="color" className="h-5 w-10"
+                  value={(clipStyle.outlineColor ?? "#000000").slice(0, 7)}
+                  onChange={(e) => patchStyle("outlineColor", e.target.value)} />
+                <input type="number" className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs"
+                  min={0} step={0.5} value={clipStyle.outlineWidth}
+                  onChange={(e) => patchStyle("outlineWidth", Math.max(0, Number(e.target.value)))} />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-14 text-[10px] text-muted-foreground">Box</span>
+                <input type="checkbox" checked={!!clipStyle.backgroundColor}
+                  onChange={(e) => patchStyle("backgroundColor", e.target.checked ? "#000000AA" : null)} />
+                {clipStyle.backgroundColor && (
+                  <input type="color" className="h-5 w-10"
+                    value={clipStyle.backgroundColor.slice(0, 7)}
+                    onChange={(e) => patchStyle("backgroundColor", e.target.value + "AA")} />
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="space-y-1.5">
         <div className="flex items-center justify-between">

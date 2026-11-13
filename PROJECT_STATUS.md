@@ -192,11 +192,19 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 
 **e2e**: square cover reframe (blue window), vertical center window (green), keyframed pan (red→blue over time), text in vertical, multi-format export dims, version persistence, real motion tracking on generated moving-subject video.
 
+## Phase 4.1 — Multi-Format completion (2026-11-13)
+
+**Export settings real**: per-version codec/preset/CRF|bitrate/audio/container validated (reject-not-ignore) and emitted by `ffmpeg_args`; extension corrected to container. e2e: same project → hevc/mkv + h264/mp4 verified via ffprobe codec_name.
+
+**Per-version text**: `ClipOverride.text` + full style override; Inspector text section (content, size, color, align, outline, box) writes to version overrides when active — undo-safe, preview/render identical.
+
+**Reframe audit (ADR-023 addendum)**: EMA smoothing, scene-cut reset, hold-on-exit. Verified: moving subject tracks, static → centered fallback, exit/re-entry holds position (no snap-back). Documented limits: multi-subject → midpoint; no semantics; ONNX extension point recorded.
+
 ## Latest test results (2026-11-13)
 
 - `cargo test --lib`: **27/27**
-- `cargo test --test render_e2e`: **35/35** (+version merge, persistence, 1:1/9:16 pixel reframes, keyframed pan, batch export, text-in-vertical, motion tracking)
-- `npm test`: **40/40** (+version ops: isolation, applyVersion, dup/reset) (prev 16 → +text pixels, keyframe parity vectors, fps matrix 23.976/29.97/59.94, VFR→CFR, long A/V sync, boundaries, multi-audio, mixed-res, z-order, long projects, 720p, stress 20×100 plan + 50-clip render)
+- `cargo test --test render_e2e`: **40/40** (+version merge, persistence, 1:1/9:16 pixel reframes, keyframed pan, batch export, text-in-vertical, motion tracking)
+- `npm test`: **41/41** (+version ops: isolation, applyVersion, dup/reset) (prev 16 → +text pixels, keyframe parity vectors, fps matrix 23.976/29.97/59.94, VFR→CFR, long A/V sync, boundaries, multi-audio, mixed-res, z-order, long projects, 720p, stress 20×100 plan + 50-clip render)
 - `npm test`: **37/37** (incl. 7 shared parity vectors mirroring Rust eval_at)
 - `cargo clippy --all-targets`: 0 warnings. `cargo fmt --check` clean. `vite build` clean.
 

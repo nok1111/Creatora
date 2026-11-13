@@ -177,14 +177,28 @@ pub fn export_project(
     let db2 = (*db).clone();
     let job_id = jobs.spawn(app.clone(), "render.export", move |ctx: &JobCtx| {
         let doc = store::open(&project_path).map_err(|e| e.to_string())?;
+        let export = version_id
+            .as_deref()
+            .and_then(|id| doc.version(id))
+            .map(|v| v.export.clone())
+            .unwrap_or_default();
         let doc = match &version_id {
             Some(id) => doc
                 .apply_version(id)
                 .ok_or_else(|| format!("unknown version: {id}"))?,
             None => doc,
         };
+        // Container-correct extension — settings never silently ignored.
+        let mut out_path = out_path.clone();
+        let want_ext = export.container.clone();
+        if out_path
+            .extension()
+            .map_or(true, |x| x != want_ext.as_str())
+        {
+            out_path.set_extension(&want_ext);
+        }
         let sources = resolve_sources(&doc, Some(&db2));
-        let plan = plan::build_plan(&doc, &sources).map_err(|e| e.to_string())?;
+        let plan = plan::build_plan_with(&doc, &sources, &export).map_err(|e| e.to_string())?;
         let clip_count = doc
             .timeline
             .tracks

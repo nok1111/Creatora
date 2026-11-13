@@ -111,6 +111,7 @@ export const es: typeof en = {
     noEffects: "Sin efectos aplicados.",
     sectionKeyframes: "Keyframes",
     noKeyframes: "Sin keyframes. Usa ◇ junto a una propiedad en el playhead.",
+    sectionText: "Texto",
     sectionTransitions: "Transiciones",
     addTransition: "Crossfade →",
     noTransitions: "Sin transiciones en este clip.",
@@ -204,6 +205,10 @@ export const es: typeof en = {
     rename: "Renombrar",
     renamePrompt: "Nombre de la versión",
     delete: "Eliminar versión",
+    exportSettings: "Ajustes de exportación",
+    exportFor: "Exportar — {{name}}",
+    bitratePh: "p. ej. 8M",
+    editingVersionShort: "por versión",
     editingVersion: "Editando versión: {{name}}",
   },
 };

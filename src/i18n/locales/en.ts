@@ -108,6 +108,7 @@ export const en = {
     noEffects: "No effects applied.",
     sectionKeyframes: "Keyframes",
     noKeyframes: "No keyframes. Use ◇ next to a property at the playhead.",
+    sectionText: "Text",
     sectionTransitions: "Transitions",
     addTransition: "Crossfade →",
     noTransitions: "No transitions on this clip.",
@@ -201,6 +202,10 @@ export const en = {
     rename: "Rename",
     renamePrompt: "Version name",
     delete: "Delete version",
+    exportSettings: "Export settings",
+    exportFor: "Export — {{name}}",
+    bitratePh: "e.g. 8M",
+    editingVersionShort: "per-version",
     editingVersion: "Editing version: {{name}}",
   },
 };

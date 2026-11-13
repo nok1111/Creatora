@@ -1795,3 +1795,222 @@ fn versions_survive_save_reopen() {
     assert_eq!(back.versions[0].canvas.width, 640);
     assert!(back.apply_version("v1").is_some());
 }
+
+// ---------- Phase 4.1: export settings + per-version text + reframe audit ----------
+
+#[test]
+fn two_versions_export_with_different_encoders() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("enc_dual");
+    let red = make_clip(&dir, "r.mp4", "red", 220, 1.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 1000, 0)]));
+    add_media(&mut doc, "r", &red);
+    doc.versions.push(FormatVersion {
+        id: "h265".into(),
+        name: "h265".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 320,
+            height: 240,
+            fps_num: 24,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: Default::default(),
+        export: ExportSettings {
+            codec: "libx265".into(),
+            preset: "ultrafast".into(),
+            container: "mkv".into(),
+            ..Default::default()
+        },
+    });
+    doc.versions.push(FormatVersion {
+        id: "h264".into(),
+        name: "h264".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 160,
+            height: 120,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: Default::default(),
+        export: ExportSettings {
+            codec: "libx264".into(),
+            preset: "ultrafast".into(),
+            container: "mp4".into(),
+            crf: 30,
+            ..Default::default()
+        },
+    });
+
+    for (vid, want_codec, want_w, want_h) in
+        [("h265", "hevc", 320u32, 240u32), ("h264", "h264", 160, 120)]
+    {
+        let v = doc.version(vid).unwrap();
+        let merged = doc.apply_version(vid).unwrap();
+        let sources = resolve_sources(&merged, None);
+        let plan = plan::build_plan_with(&merged, &sources, &v.export).unwrap();
+        let out = dir.join(format!("{vid}.{}", v.export.container));
+        run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+        // codec verified via ffprobe
+        let meta = probe::probe(&out).unwrap();
+        let (w, h, _) = probe_meta(&out);
+        assert_eq!((w, h), (want_w, want_h), "{vid} dims");
+        assert_eq!(meta.codec.as_deref(), Some(want_codec), "{vid} codec");
+        // real file written with right container extension
+        assert!(out.extension().unwrap() == v.export.container.as_str());
+    }
+}
+
+#[test]
+fn invalid_export_combo_rejected_not_ignored() {
+    let s = ExportSettings {
+        codec: "libx264".into(),
+        container: "webm".into(),
+        ..Default::default()
+    };
+    assert!(plan::validate_export(&s).is_err());
+    let s2 = ExportSettings {
+        codec: "libvpx-vp9".into(),
+        container: "mp4".into(),
+        ..Default::default()
+    };
+    assert!(plan::validate_export(&s2).is_err());
+    let ok = ExportSettings::default();
+    assert!(plan::validate_export(&ok).is_ok());
+}
+
+#[test]
+fn version_text_override_independent_copy() {
+    let mut doc = base_doc();
+    doc.timeline.tracks.push(Track {
+        id: "t".into(),
+        kind: TrackKind::Text,
+        name: "T1".into(),
+        clips: vec![Clip {
+            id: "txt".into(),
+            media_ref: None,
+            start_ms: 0,
+            duration_ms: 1000,
+            source_in_ms: 0,
+            source_out_ms: None,
+            source_duration_ms: None,
+            transform: Transform::default(),
+            effects: vec![],
+            volume: 1.0,
+            speed: 1.0,
+            text: Some("YouTube Title".into()),
+            text_style: Some(TextStyle::default()),
+            keyframes: Default::default(),
+        }],
+        transitions: vec![],
+        locked: false,
+        visible: true,
+        muted: false,
+    });
+    let ov = ClipOverride {
+        text: Some("TikTok Title".into()),
+        text_style: Some(TextStyle {
+            color: "#FF0000".into(),
+            font_size_px: 90.0,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    doc.versions.push(FormatVersion {
+        id: "tk".into(),
+        name: "tk".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 240,
+            height: 426,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: [("txt".to_string(), ov)].into_iter().collect(),
+        export: ExportSettings::default(),
+    });
+    let merged = doc.apply_version("tk").unwrap();
+    let c = &merged.timeline.tracks[0].clips[0];
+    assert_eq!(c.text.as_deref(), Some("TikTok Title"));
+    assert_eq!(c.text_style.as_ref().unwrap().color, "#FF0000");
+    // base untouched
+    assert_eq!(
+        doc.timeline.tracks[0].clips[0].text.as_deref(),
+        Some("YouTube Title")
+    );
+}
+
+#[test]
+fn reframe_static_scene_uses_centered_fallback() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("rf_static");
+    let src = make_clip(&dir, "still.mp4", "blue", 220, 1.5);
+    let samples = creatora_lib::render::reframe::analyze_motion(&src, 0, 1500, 8).unwrap();
+    // Solid color → no motion; centroid should be ~center, flagged non-motion.
+    assert!(samples.iter().all(|s| !s.motion || s.energy < 0.01));
+    for s in &samples {
+        assert!((s.cx - 0.5).abs() < 0.15, "static drifted: {}", s.cx);
+    }
+}
+
+#[test]
+fn reframe_subject_exit_and_reentry_holds_then_retracks() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("rf_exit");
+    // Box visible only mid-window: enters ~1s, leaves ~3s.
+    let src = dir.join("exit.mp4");
+    let ok = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=black:size=320x240:rate=30:d=4",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=white:size=40x40:rate=30:d=4",
+            "-filter_complex",
+            "[0:v][1:v]overlay=x=t*60:y=100:enable='between(t,1,3)'",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+    let samples = creatora_lib::render::reframe::analyze_motion(&src, 0, 4000, 16).unwrap();
+    assert!(samples.len() >= 8);
+    // After exit (t>3s ≈ sample 12+): holds last position, doesn't snap to center.
+    let tail: Vec<f64> = samples
+        .iter()
+        .filter(|s| s.t_ms > 3300)
+        .map(|s| s.cx)
+        .collect();
+    if tail.len() >= 2 {
+        let spread = tail.iter().cloned().fold(0.0f64, f64::max)
+            - tail.iter().cloned().fold(1.0f64, f64::min);
+        assert!(spread < 0.2, "post-exit centroid jumped: spread {spread}");
+    }
+}

@@ -80,6 +80,8 @@ pub struct RenderPlan {
     pub has_audio: bool,
     /// Text-track clips rendered via drawtext (no file input).
     pub text_segments: Vec<TextSeg>,
+    /// Validated encoder settings — what ffmpeg_args actually emits.
+    pub export: crate::project::document::ExportSettings,
 }
 
 fn ms_to_s(ms: i64) -> String {
@@ -411,6 +413,67 @@ pub fn build_plan(
     doc: &ProjectDoc,
     sources: &HashMap<String, SourceInfo>,
 ) -> Result<RenderPlan, AppError> {
+    build_plan_with(
+        doc,
+        sources,
+        &crate::project::document::ExportSettings::default(),
+    )
+}
+
+/// Validate export settings — REJECTS incompatible combos loudly instead of
+/// silently ignoring fields (Phase 4.1). Supported matrix only.
+pub fn validate_export(
+    s: &crate::project::document::ExportSettings,
+) -> Result<crate::project::document::ExportSettings, AppError> {
+    let bad = |m: &str| AppError::InvalidInput(m.into());
+    let vcodecs = ["libx264", "libx265", "libvpx-vp9"];
+    if !vcodecs.contains(&s.codec.as_str()) {
+        return Err(bad(&format!("unsupported video codec: {}", s.codec)));
+    }
+    let presets = [
+        "ultrafast",
+        "superfast",
+        "veryfast",
+        "faster",
+        "fast",
+        "medium",
+        "slow",
+        "slower",
+        "veryslow",
+    ];
+    if !presets.contains(&s.preset.as_str()) {
+        return Err(bad(&format!("unsupported preset: {}", s.preset)));
+    }
+    let acodecs = ["aac", "libopus", "libmp3lame", "pcm_s16le", "none"];
+    if !acodecs.contains(&s.audio_codec.as_str()) {
+        return Err(bad(&format!("unsupported audio codec: {}", s.audio_codec)));
+    }
+    let containers = ["mp4", "mov", "mkv", "webm"];
+    if !containers.contains(&s.container.as_str()) {
+        return Err(bad(&format!("unsupported container: {}", s.container)));
+    }
+    // Hard compat rules — fail, don't silently change.
+    if s.container == "webm" && s.codec != "libvpx-vp9" {
+        return Err(bad("webm requires libvpx-vp9 video"));
+    }
+    if s.container == "webm" && !["libopus", "none"].contains(&s.audio_codec.as_str()) {
+        return Err(bad("webm requires libopus audio (or none)"));
+    }
+    if (s.container == "mp4" || s.container == "mov") && s.codec == "libvpx-vp9" {
+        return Err(bad("mp4/mov cannot carry VP9 in this build — use mkv/webm"));
+    }
+    if s.crf > 51 {
+        return Err(bad("crf out of range (0..51)"));
+    }
+    Ok(s.clone())
+}
+
+pub fn build_plan_with(
+    doc: &ProjectDoc,
+    sources: &HashMap<String, SourceInfo>,
+    export: &crate::project::document::ExportSettings,
+) -> Result<RenderPlan, AppError> {
+    let export = validate_export(export)?;
     let mut segments = collect_segments(doc, sources)?;
     let text_segments = collect_text_segments(doc);
     if segments.is_empty() && text_segments.is_empty() {
@@ -640,6 +703,7 @@ pub fn build_plan(
         filter_complex: filters.join(";"),
         has_audio,
         text_segments,
+        export,
     })
 }
 
@@ -690,28 +754,45 @@ impl RenderPlan {
         if self.has_audio {
             args.extend(["-map".into(), "[aout]".into()]);
         }
+        args.extend(["-r".into(), self.fps.clone()]);
+        let e = &self.export;
         args.extend([
-            "-r".into(),
-            self.fps.clone(),
             "-c:v".into(),
-            "libx264".into(),
+            e.codec.clone(),
             "-preset".into(),
-            "veryfast".into(),
-            "-crf".into(),
-            "18".into(),
-            "-pix_fmt".into(),
-            "yuv420p".into(),
+            e.preset.clone(),
         ]);
-        if self.has_audio {
-            args.extend(["-c:a".into(), "aac".into(), "-b:a".into(), "192k".into()]);
+        match &e.video_bitrate {
+            Some(b) if !b.is_empty() => {
+                args.extend(["-b:v".into(), b.clone()]);
+            }
+            _ => {
+                args.extend(["-crf".into(), e.crf.to_string()]);
+            }
         }
-        args.extend([
-            "-t".into(),
-            dur_s,
-            "-movflags".into(),
-            "+faststart".into(),
-            out.to_string_lossy().into_owned(),
-        ]);
+        args.extend(["-pix_fmt".into(), "yuv420p".into()]);
+        if self.has_audio && e.audio_codec != "none" {
+            args.extend([
+                "-c:a".into(),
+                e.audio_codec.clone(),
+                "-b:a".into(),
+                e.audio_bitrate.clone(),
+                "-ar".into(),
+                e.audio_rate.to_string(),
+            ]);
+        } else if e.audio_codec == "none" {
+            args.push("-an".into());
+        }
+        args.extend(["-t".into(), dur_s]);
+        if e.container == "mp4" || e.container == "mov" {
+            args.extend(["-movflags".into(), "+faststart".into()]);
+        }
+        if e.container != "mp4" && out.extension().map_or(true, |x| x != e.container.as_str()) {
+            // Caller chose a mismatched extension — force container so the
+            // settings are never silently ignored.
+            args.extend(["-f".into(), e.container.clone()]);
+        }
+        args.push(out.to_string_lossy().into_owned());
         args
     }
 }

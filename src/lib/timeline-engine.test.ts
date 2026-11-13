@@ -34,6 +34,7 @@ import {
   updateClip,
   updateEffect,
   applyVersion,
+  addTextClip,
   addVersion,
   setVersionClipOverride,
   duplicateVersion,
@@ -490,5 +491,26 @@ describe("format versions (ADR-021)", () => {
     const d4 = resetVersion(d3, versionId);
     expect(d4.versions.find((v) => v.id === versionId)!.clipOverrides).toEqual({});
     expect(removeVersion(d4, dup!).versions).toHaveLength(1);
+  });
+});
+
+describe("per-version text overrides (Phase 4.1)", () => {
+  it("applyVersion replaces text + style only in the version", () => {
+    let d = doc();
+    const t = addTextClip(d, { text: "YT Title", startMs: 0, durationMs: 1000 });
+    d = t.doc;
+    const { doc: d1, versionId } = addVersion(d, {
+      name: "TK",
+      canvas: { width: 240, height: 426, fpsNum: 30, fpsDen: 1, background: "#000" },
+    });
+    const d2 = setVersionClipOverride(d1, versionId, t.clipId, {
+      text: "TK Title",
+      textStyle: { ...d1.timeline.tracks[0].clips[0].textStyle!, color: "#FF0000" },
+    });
+    const m = applyVersion(d2, versionId)!;
+    const c = m.timeline.tracks[0].clips[0];
+    expect(c.text).toBe("TK Title");
+    expect(c.textStyle!.color).toBe("#FF0000");
+    expect(d2.timeline.tracks[0].clips[0].text).toBe("YT Title");
   });
 });

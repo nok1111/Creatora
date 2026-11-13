@@ -90,10 +90,18 @@ export interface SafeZones {
 }
 
 export interface ExportSettings {
+  /** "libx264" | "libx265" | "libvpx-vp9" — validated, never ignored. */
   codec: string;
   preset: string;
   crf: number;
+  /** Rate-control override — wins over crf when set. */
+  videoBitrate?: string | null;
+  /** "aac" | "libopus" | "libmp3lame" | "pcm_s16le" | "none" */
+  audioCodec: string;
   audioBitrate: string;
+  audioRate: number;
+  /** "mp4" | "mov" | "mkv" | "webm" */
+  container: string;
   /** Platform cap metadata — render does NOT truncate. 0 = none. */
   maxDurationMs: number;
 }
@@ -102,9 +110,33 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   codec: "libx264",
   preset: "veryfast",
   crf: 20,
+  videoBitrate: null,
+  audioCodec: "aac",
   audioBitrate: "192k",
+  audioRate: 48000,
+  container: "mp4",
   maxDurationMs: 0,
 };
+
+/** Validated combos — mirror of plan.rs::validate_export. */
+export const EXPORT_MATRIX = {
+  videoCodecs: ["libx264", "libx265", "libvpx-vp9"] as const,
+  presets: ["ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow"] as const,
+  audioCodecs: ["aac", "libopus", "libmp3lame", "pcm_s16le", "none"] as const,
+  containers: ["mp4", "mov", "mkv", "webm"] as const,
+};
+
+export function validateExportSettings(s: ExportSettings): string | null {
+  if (!EXPORT_MATRIX.videoCodecs.includes(s.codec as never)) return `unsupported video codec: ${s.codec}`;
+  if (!EXPORT_MATRIX.presets.includes(s.preset as never)) return `unsupported preset: ${s.preset}`;
+  if (!EXPORT_MATRIX.audioCodecs.includes(s.audioCodec as never)) return `unsupported audio codec: ${s.audioCodec}`;
+  if (!EXPORT_MATRIX.containers.includes(s.container as never)) return `unsupported container: ${s.container}`;
+  if (s.container === "webm" && s.codec !== "libvpx-vp9") return "webm requires libvpx-vp9 video";
+  if (s.container === "webm" && !["libopus", "none"].includes(s.audioCodec)) return "webm requires libopus audio (or none)";
+  if ((s.container === "mp4" || s.container === "mov") && s.codec === "libvpx-vp9") return "mp4/mov cannot carry VP9 — use mkv/webm";
+  if (s.crf > 51) return "crf out of range (0..51)";
+  return null;
+}
 
 /** Whitelisted per-clip fields a version may override (present = replace). */
 export interface ClipOverride {
@@ -112,6 +144,8 @@ export interface ClipOverride {
   /** Replaces ONLY listed keyframe paths. */
   keyframes?: Record<string, Keyframe[]>;
   textStyle?: TextStyle;
+  /** Independent copy per version. */
+  text?: string;
 }
 
 export interface FormatVersion {

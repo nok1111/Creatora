@@ -103,19 +103,27 @@ pub fn analyze_motion(
         }]);
     }
 
-    let mut out = Vec::with_capacity(nframes);
+    // Pass 1 — raw per-frame measurements: motion centroid, global change
+    // mean (scene-cut signal), luma fallback.
+    struct Raw {
+        t_ms: i64,
+        motion: Option<(f64, f64)>,
+        luma: (f64, f64),
+        change: f64,
+        energy: f64,
+    }
+    let mut raws = Vec::with_capacity(nframes);
     let frame_ms = out_ms - in_ms;
     for i in 0..nframes {
         let f = &raw[i * fsz..(i + 1) * fsz];
-        // Motion centroid vs previous frame.
-        let (mut mx, mut my, mut wsum) = (0.0f64, 0.0f64, 0.0f64);
+        let (mut mx, mut my, mut wsum, mut dsum) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
         if i > 0 {
             let p = &raw[(i - 1) * fsz..i * fsz];
             for y in 0..oh {
                 for x in 0..ow {
                     let d = (f[y * ow + x] as i32 - p[y * ow + x] as i32).abs();
+                    dsum += d as f64;
                     if d > 24 {
-                        // ignore noise
                         mx += x as f64 * d as f64;
                         my += y as f64 * d as f64;
                         wsum += d as f64;
@@ -123,31 +131,68 @@ pub fn analyze_motion(
                 }
             }
         }
-        let energy = wsum / (fsz as f64 * 255.0);
-        let (cx, cy, motion) = if wsum > fsz as f64 * 2.0 {
-            (mx / wsum, my / wsum, true)
-        } else {
-            // Luma-centroid fallback (static scene saliency).
-            let (mut lx, mut ly, mut lw) = (0.0f64, 0.0f64, 0.0f64);
-            for y in 0..oh {
-                for x in 0..ow {
-                    let v = f[y * ow + x] as f64;
-                    lx += x as f64 * v;
-                    ly += y as f64 * v;
-                    lw += v;
-                }
+        let (mut lx, mut ly, mut lw) = (0.0f64, 0.0f64, 0.0f64);
+        for y in 0..oh {
+            for x in 0..ow {
+                let v = f[y * ow + x] as f64;
+                lx += x as f64 * v;
+                ly += y as f64 * v;
+                lw += v;
             }
-            if lw > 1.0 {
-                (lx / lw, ly / lw, false)
+        }
+        raws.push(Raw {
+            t_ms: (i as f64 / fps * 1000.0).min(frame_ms as f64) as i64,
+            motion: if wsum > fsz as f64 * 2.0 {
+                Some((mx / wsum, my / wsum))
             } else {
-                (0.5, 0.5, false)
+                None
+            },
+            luma: if lw > 1.0 {
+                (lx / lw, ly / lw)
+            } else {
+                (0.5, 0.5)
+            },
+            change: dsum / (fsz as f64 * 255.0),
+            energy: wsum / (fsz as f64 * 255.0),
+        });
+    }
+
+    // Pass 2 — stabilization (ADR-023): EMA smoothing (α=0.35) kills jitter;
+    // scene cuts (mean change spike) reset the smoother instead of gliding
+    // through the cut; unreliable frames HOLD the last position (subjects
+    // leaving/re-entering stay put) before falling back to luma.
+    let mut out = Vec::with_capacity(raws.len());
+    let mut sm: Option<(f64, f64)> = None;
+    let mut prev_change = 0.0;
+    for (i, r) in raws.iter().enumerate() {
+        let is_cut = i > 0 && r.change > 0.35 && r.change > prev_change * 3.0;
+        if is_cut {
+            sm = None; // re-anchor after the cut
+        }
+        prev_change = r.change;
+        let (x, y, motion) = match r.motion {
+            Some((mx, my)) => {
+                let v = match sm {
+                    Some((sx, sy)) => (sx + 0.35 * (mx - sx), sy + 0.35 * (my - sy)),
+                    None => (mx, my),
+                };
+                sm = Some(v);
+                (v.0, v.1, true)
             }
+            None => match sm {
+                // hold last confident position — better than a luma jump
+                Some((sx, sy)) => (sx, sy, false),
+                None => {
+                    sm = Some(r.luma);
+                    (r.luma.0, r.luma.1, false)
+                }
+            },
         };
         out.push(MotionSample {
-            t_ms: (i as f64 / fps * 1000.0).min(frame_ms as f64) as i64,
-            cx: (cx / ow as f64).clamp(0.0, 1.0),
-            cy: (cy / oh as f64).clamp(0.0, 1.0),
-            energy,
+            t_ms: r.t_ms,
+            cx: (x / ow as f64).clamp(0.0, 1.0),
+            cy: (y / oh as f64).clamp(0.0, 1.0),
+            energy: r.energy,
             motion,
         });
     }

@@ -16,6 +16,7 @@ import { useEditor } from "@/stores/editor";
 import { api } from "@/lib/ipc";
 import { awaitJob } from "@/services/jobs";
 import { FORMAT_PRESETS, defaultReframe, presetById } from "@/lib/format-presets";
+import { EXPORT_MATRIX, validateExportSettings } from "@/lib/project-types";
 import {
   addVersion,
   duplicateVersion,
@@ -25,6 +26,7 @@ import {
   resetVersion,
   setVersionClipOverride,
 } from "@/lib/timeline-engine";
+import type { ExportSettings } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import type { FormatVersion, Keyframe } from "@/lib/project-types";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
   const setCompare = useEditor((s) => s.setCompareMode);
   const [reframing, setReframing] = useState<string | null>(null);
   const [batching, setBatching] = useState(false);
+  const [showExportCfg, setShowExportCfg] = useState(false);
 
   if (!doc) return null;
   const versions = doc.versions;
@@ -176,8 +179,20 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
 
   const active = activeId ? getVersion(doc, activeId) : undefined;
 
+  const patchExport = (v: FormatVersion, patch: Partial<ExportSettings>) => {
+    mutate((d) => {
+      const n = structuredClone(d);
+      const vv = n.versions.find((x) => x.id === v.id);
+      if (vv) vv.export = { ...vv.export, ...patch };
+      return n;
+    });
+  };
+
+  const exportError = active ? validateExportSettings(active.export) : null;
+
   return (
-    <div className="flex items-center gap-2 overflow-x-auto border-t border-border bg-card/60 px-3 py-1.5">
+    <div className="border-t border-border bg-card/60">
+    <div className="flex items-center gap-2 overflow-x-auto px-3 py-1.5">
       <Layers className="size-3.5 shrink-0 text-muted-foreground" />
       {/* Master */}
       <button
@@ -275,6 +290,17 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
       {active && (
         <button
           className={`flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-[10px] ${
+            showExportCfg ? "border-primary text-foreground" : "border-border text-muted-foreground"
+          }`}
+          title={t("versions.exportSettings")}
+          onClick={() => setShowExportCfg(!showExportCfg)}
+        >
+          ⚙ {active.export.codec} · CRF {active.export.crf} · {active.export.container}
+        </button>
+      )}
+      {active && (
+        <button
+          className={`flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-[10px] ${
             compare ? "border-primary text-foreground" : "border-border text-muted-foreground"
           }`}
           title={t("versions.compareHint")}
@@ -295,6 +321,51 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
           {batching ? t("versions.batching") : t("versions.exportAll")}
         </Button>
       )}
+    </div>
+
+    {/* Effective export settings for the active version — always shown
+        before export (no silently-ignored fields). */}
+    {active && showExportCfg && (
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-3 py-1.5 text-[10px]">
+        <span className="text-muted-foreground">{t("versions.exportFor", { name: active.name })}</span>
+        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.codec}
+          onChange={(e) => patchExport(active, { codec: e.target.value })}>
+          {EXPORT_MATRIX.videoCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.preset}
+          onChange={(e) => patchExport(active, { preset: e.target.value })}>
+          {EXPORT_MATRIX.presets.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <label className="flex items-center gap-1 text-muted-foreground">
+          CRF
+          <input type="number" min={0} max={51} className="w-12 rounded border border-border bg-background px-1 py-0.5"
+            value={active.export.crf}
+            onChange={(e) => patchExport(active, { crf: Math.min(51, Math.max(0, Number(e.target.value))) })} />
+        </label>
+        <label className="flex items-center gap-1 text-muted-foreground">
+          vb
+          <input placeholder={t("versions.bitratePh")} className="w-14 rounded border border-border bg-background px-1 py-0.5"
+            value={active.export.videoBitrate ?? ""}
+            onChange={(e) => patchExport(active, { videoBitrate: e.target.value || null })} />
+        </label>
+        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.audioCodec}
+          onChange={(e) => patchExport(active, { audioCodec: e.target.value })}>
+          {EXPORT_MATRIX.audioCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.audioBitrate}
+          onChange={(e) => patchExport(active, { audioBitrate: e.target.value })}>
+          {["96k", "128k", "192k", "256k", "320k"].map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.container}
+          onChange={(e) => patchExport(active, { container: e.target.value })}>
+          {EXPORT_MATRIX.containers.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <span className="text-muted-foreground">
+          {active.canvas.width}×{active.canvas.height} · {active.canvas.fpsNum}/{active.canvas.fpsDen}fps
+        </span>
+        {exportError && <span className="text-destructive">{exportError}</span>}
+      </div>
+    )}
     </div>
   );
 }

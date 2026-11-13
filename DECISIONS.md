@@ -147,3 +147,17 @@
 **Alternatives**: ONNX face detection (documented future option — model ~5-20 MB, license varies, hardware-dependent); static-center framing only (rejected — not detection).
 
 **Consequences**: Honest scope — tracks movement/salience, not semantics. License-clean, offline, deterministic; verified against synthetic moving-subject video.
+
+## ADR-024 — Export settings: validated, wired, never silently ignored
+
+**Status**: accepted · **Phase**: 4.1
+
+**Context**: Versions stored export settings but the encoder used hardcoded defaults — a silent-ignore failure mode.
+
+**Decision**: `ExportSettings` extended (codec/preset/crf | videoBitrate, audioCodec/bitrate/rate, container). `validate_export` enforces a hard matrix — unknown codec/preset/container or incompatible combos (vp9→mp4, h264→webm) are REJECTED, not adjusted. `build_plan_with` carries validated settings into `RenderPlan`; `ffmpeg_args` emits exactly those; `export_project` corrects the file extension to match the container. UI shows the effective settings line before export.
+
+**Consequences**: Two versions of one project provably export different encoders/containers (e2e-verified via ffprobe codec_name). Unsupported but valid ffmpeg codecs remain unavailable until added to the matrix — an explicit product decision, not a bug.
+
+## ADR-023 addendum — Reframe stabilization (Phase 4.1)
+
+Motion centroid output now passes a stabilization pass: EMA smoothing (α=0.35) against jitter, scene-cut reset on change-spikes (no glide across cuts), and hold-last-position on unreliable frames (subjects exiting/re-entering don't snap back to center). Remaining known limits: tracks *the* moving mass — two simultaneous subjects produce a midpoint, not a choice; fast cuts may yield a few re-anchor frames; no semantic understanding (a waving flag in background competes with a static speaker). Semantic detection (ONNX face/person models, ~5–25 MB, MIT/Apache licensed typically, CPU-usable) stays a documented extension point — the current centroid is the baseline mode.
