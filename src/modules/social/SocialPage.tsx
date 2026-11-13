@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
@@ -55,7 +56,12 @@ export function SocialPage() {
     refreshAll,
     refreshPosts,
   } = useSocial();
-  const [tab, setTab] = useState<Tab>("posts");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(
+    ["posts", "calendar", "accounts"].includes(params.get("tab") ?? "")
+      ? (params.get("tab") as Tab)
+      : "posts",
+  );
   const [composing, setComposing] = useState<null | { id?: string }>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 

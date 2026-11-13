@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from "react";
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -55,6 +55,19 @@ function pageFor(key: string) {
       return <AnalyticsPage />;
     case "settings":
       return <SettingsPage />;
+    // Scaffolded routes → deep-link into the module hosting the feature.
+    case "formats":
+    case "export":
+      return <Navigate to="/editor" replace />;
+    case "subtitles":
+      return <Navigate to="/editor?tab=subtitles" replace />;
+    case "audio":
+      return <Navigate to="/editor" replace />;
+    case "graphics":
+    case "brand":
+      return <Navigate to="/editor?left=graphics" replace />;
+    case "planner":
+      return <Navigate to="/social?tab=calendar" replace />;
     default:
       return null;
   }

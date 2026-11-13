@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -59,8 +60,14 @@ export function EditorPage() {
   const setPreviewQuality = useEditor((s) => s.setPreviewQuality);
 
   const [exporting, setExporting] = useState<{ jobId: string; progress: number } | null>(null);
-  const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">("timeline");
-  const [leftTab, setLeftTab] = useState<"media" | "graphics">("media");
+  // Deep-link params: /editor?tab=subtitles, /editor?left=graphics
+  const [params] = useSearchParams();
+  const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">(
+    params.get("tab") === "subtitles" ? "subtitles" : "timeline",
+  );
+  const [leftTab, setLeftTab] = useState<"media" | "graphics">(
+    params.get("left") === "graphics" ? "graphics" : "media",
+  );
 
   const assetsQ = useQuery({
     queryKey: ["assets"],
