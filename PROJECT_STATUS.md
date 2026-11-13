@@ -270,3 +270,12 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 - **Reliability**: startup sweep marks crashed 'running' jobs 'interrupted'.
 - **Tests**: +3 hardening (job sweep, oversized-project reject, 10k-snapshot dashboard query <100 ms asserted). Totals: 144 rust + 70 vitest green; clippy 0, fmt/tsc/build clean.
 - **Not measured** (honest): cold-start wall time, 4K/500-clip preview fps, heap profile — see PHASE_10_PERFORMANCE_REPORT.md.
+
+## UI/UX REDESIGN — Creative Pop (COMPLETE)
+
+- **Identidad**: graphite #17171D base, coral #FF795E primario, lavanda #B99AFF creativo, lima #B8F36B éxito, mantequilla #FFD477 avisos, crema #F4F0E8 texto, muted #A5A0AC. Tokens HSL en index.css; `pop.*` + `success`/`warning`/`topbar` en tailwind.config.
+- **Nav**: rail lateral eliminado → barra superior h-12, pills icono+label, activo = pill coral. Etiquetas: Home/Media/Create/Social/Analytics/Settings.
+- **Home**: hero "What can I make today?" + 6 tarjetas de creación con acciones reales (video/Reel→NewProject, subtítulos→editor tab, thumbnail→graphics bin, audio→editor, social→/social) + New Project/Import Media + recientes.
+- **Componentes**: variantes Button `creative`/`positive`; barrido de ~21 archivos de colores hardcodeados (amber/cyan/green/red → tokens warning/accent-foreground/success/destructive); radius 0.75rem.
+- **Docs**: UI_REDESIGN_PLAN.md, DESIGN_SYSTEM.md, UI_COMPONENT_GUIDE.md.
+- Gates: tsc/vitest(70)/build limpios. Sin cambios de backend/rutas/stores.

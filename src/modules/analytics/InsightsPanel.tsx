@@ -44,14 +44,14 @@ export function InsightsPanel() {
         {(q.data ?? []).map((i) => (
           <div key={i.kind} className="rounded-lg border border-border p-4">
             <div className="flex items-center gap-2">
-              <Lightbulb size={14} className="text-amber-400" />
+              <Lightbulb size={14} className="text-warning" />
               <div className="text-sm font-medium">{i.title}</div>
             </div>
             <p className="mt-2 text-xs">{i.detail}</p>
             <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
               <div>Evidence: {i.evidence}</div>
               <div>Sample: n={i.sampleSize}</div>
-              <div className="text-amber-400/80">{i.caveat}</div>
+              <div className="text-warning/80">{i.caveat}</div>
             </div>
           </div>
         ))}

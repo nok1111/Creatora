@@ -9,61 +9,81 @@
  */
 @layer base {
   :root {
-    /* Light theme — used for management/publishing areas */
-    --background: 220 20% 97%;
-    --foreground: 225 25% 12%;
+    /* Creative Pop — light theme (management/publishing surfaces) */
+    --background: 30 30% 95%;
+    --foreground: 250 14% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 225 25% 12%;
+    --card-foreground: 250 14% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 225 25% 12%;
-    --primary: 243 75% 59%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 92%;
-    --secondary-foreground: 225 25% 15%;
-    --muted: 220 14% 93%;
-    --muted-foreground: 222 10% 42%;
-    --accent: 243 60% 95%;
-    --accent-foreground: 243 60% 35%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 88%;
-    --input: 220 14% 84%;
-    --ring: 243 75% 59%;
-    --sidebar: 222 25% 11%;
-    --sidebar-foreground: 220 15% 80%;
-    --sidebar-accent: 222 20% 17%;
-    --sidebar-accent-foreground: 220 20% 92%;
-    --sidebar-border: 222 18% 20%;
-    --radius: 0.5rem;
+    --popover-foreground: 250 14% 11%;
+    --primary: 10 100% 62%;
+    --primary-foreground: 20 40% 10%;
+    --secondary: 30 16% 90%;
+    --secondary-foreground: 250 14% 14%;
+    --muted: 30 14% 91%;
+    --muted-foreground: 260 6% 42%;
+    --accent: 258 60% 94%;
+    --accent-foreground: 258 45% 40%;
+    --destructive: 5 75% 52%;
+    --destructive-foreground: 30 35% 97%;
+    --border: 30 12% 84%;
+    --input: 30 10% 78%;
+    --ring: 10 100% 62%;
+    --success: 86 85% 62%;
+    --success-foreground: 100 40% 12%;
+    --warning: 39 100% 68%;
+    --warning-foreground: 40 60% 14%;
+    --topbar: 30 20% 97%;
+    --topbar-foreground: 260 8% 45%;
+    --topbar-accent: 30 18% 90%;
+    --topbar-accent-foreground: 250 14% 14%;
+    --topbar-border: 30 12% 86%;
+    /* Legacy aliases */
+    --sidebar: var(--topbar);
+    --sidebar-foreground: var(--topbar-foreground);
+    --sidebar-accent: var(--topbar-accent);
+    --sidebar-accent-foreground: var(--topbar-accent-foreground);
+    --sidebar-border: var(--topbar-border);
+    --radius: 0.75rem;
   }
 
   .dark {
-    /* Dark theme — primary editing environment.
-       Deep navy-charcoal scale; accent is violet-indigo, used sparingly. */
-    --background: 224 30% 7%;
-    --foreground: 220 20% 90%;
-    --card: 224 26% 10%;
-    --card-foreground: 220 20% 90%;
-    --popover: 224 28% 9%;
-    --popover-foreground: 220 20% 90%;
-    --primary: 244 76% 66%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 223 20% 15%;
-    --secondary-foreground: 220 18% 85%;
-    --muted: 223 20% 14%;
-    --muted-foreground: 220 12% 58%;
-    --accent: 244 40% 22%;
-    --accent-foreground: 244 70% 85%;
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 223 20% 16%;
-    --input: 223 20% 20%;
-    --ring: 244 76% 66%;
-    --sidebar: 224 32% 6%;
-    --sidebar-foreground: 220 14% 72%;
-    --sidebar-accent: 223 24% 13%;
-    --sidebar-accent-foreground: 220 20% 90%;
-    --sidebar-border: 223 22% 14%;
+    /* Creative Pop — dark-first creative workspace.
+       Graphite foundation, coral primary, lavender creative accent,
+       lime success, butter warning. Cream ink for warmth. */
+    --background: 240 11% 10%;      /* #17171D graphite */
+    --foreground: 30 35% 93%;       /* #F4F0E8 cream */
+    --card: 245 11% 14%;            /* #201F27 elevated */
+    --card-foreground: 30 35% 93%;
+    --popover: 246 12% 11%;         /* #1B1A21 */
+    --popover-foreground: 30 35% 93%;
+    --primary: 10 100% 68%;         /* #FF795E coral */
+    --primary-foreground: 20 45% 11%;
+    --secondary: 246 10% 17%;       /* #292831 secondary surface */
+    --secondary-foreground: 30 30% 90%;
+    --muted: 246 10% 17%;
+    --muted-foreground: 265 7% 65%; /* #A5A0AC */
+    --accent: 258 20% 22%;          /* lavender-tinted surface */
+    --accent-foreground: 258 100% 80%; /* #B99AFF lavender */
+    --destructive: 5 75% 55%;
+    --destructive-foreground: 30 35% 97%;
+    --border: 250 10% 23%;          /* #34333E */
+    --input: 252 9% 25%;            /* #3B3A45 */
+    --ring: 10 100% 68%;
+    --success: 86 85% 69%;          /* #B8F36B lime */
+    --success-foreground: 100 45% 12%;
+    --warning: 39 100% 74%;         /* #FFD477 butter */
+    --warning-foreground: 40 65% 14%;
+    --topbar: 246 12% 11%;
+    --topbar-foreground: 265 7% 65%;
+    --topbar-accent: 246 10% 17%;
+    --topbar-accent-foreground: 30 35% 93%;
+    --topbar-border: 250 10% 20%;
+    --sidebar: var(--topbar);
+    --sidebar-foreground: var(--topbar-foreground);
+    --sidebar-accent: var(--topbar-accent);
+    --sidebar-accent-foreground: var(--topbar-accent-foreground);
+    --sidebar-border: var(--topbar-border);
   }
 }
 

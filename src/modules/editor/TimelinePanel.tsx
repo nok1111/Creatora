@@ -277,7 +277,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const trackActions = (track: Track) => (
     <div className="flex items-center gap-0.5">
       <button
-        className={`rounded p-0.5 hover:bg-accent ${track.locked ? "text-amber-400" : "text-muted-foreground"}`}
+        className={`rounded p-0.5 hover:bg-accent ${track.locked ? "text-warning" : "text-muted-foreground"}`}
         title={t("editor.trackLock")}
         onClick={(e) => {
           e.stopPropagation();
@@ -287,7 +287,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         {track.locked ? <Lock className="size-3.5" /> : <LockOpen className="size-3.5" />}
       </button>
       <button
-        className={`rounded p-0.5 hover:bg-accent ${!track.visible ? "text-amber-400" : "text-muted-foreground"}`}
+        className={`rounded p-0.5 hover:bg-accent ${!track.visible ? "text-warning" : "text-muted-foreground"}`}
         title={t("editor.trackVisible")}
         onClick={(e) => {
           e.stopPropagation();
@@ -297,7 +297,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         {track.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
       </button>
       <button
-        className={`rounded p-0.5 hover:bg-accent ${track.muted ? "text-amber-400" : "text-muted-foreground"}`}
+        className={`rounded p-0.5 hover:bg-accent ${track.muted ? "text-warning" : "text-muted-foreground"}`}
         title={t("editor.trackMute")}
         onClick={(e) => {
           e.stopPropagation();
@@ -307,7 +307,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
       </button>
       <button
-        className={`rounded px-0.5 py-0.5 text-[9px] font-bold hover:bg-accent ${track.solo ? "text-cyan-400" : "text-muted-foreground"}`}
+        className={`rounded px-0.5 py-0.5 text-[9px] font-bold hover:bg-accent ${track.solo ? "text-accent-foreground" : "text-muted-foreground"}`}
         title="Solo (mute other tracks)"
         onClick={(e) => {
           e.stopPropagation();
@@ -553,7 +553,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
             {/* Snap indicator */}
             {snapLine !== null && (
               <div
-                className="pointer-events-none absolute top-6 bottom-0 z-30 w-px bg-cyan-400"
+                className="pointer-events-none absolute top-6 bottom-0 z-30 w-px bg-accent-foreground"
                 style={{ left: msToPx(snapLine) }}
               />
             )}
@@ -572,10 +572,10 @@ function PlayheadOverlay({ msToPx }: { msToPx: (ms: number) => number }) {
   const playheadMs = useEditor((s) => s.playheadMs);
   return (
     <div
-      className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-red-500"
+      className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-destructive"
       style={{ left: msToPx(playheadMs) }}
     >
-      <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-red-500" />
+      <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-destructive" />
     </div>
   );
 }

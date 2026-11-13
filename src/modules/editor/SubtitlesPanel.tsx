@@ -150,7 +150,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         data-cue={cue.id}
         className={`group rounded border px-2 py-1 text-xs ${
           selected === cue.id
-            ? "border-cyan-500/60 bg-cyan-500/10"
+            ? "border-cyan-500/60 bg-accent"
             : isActive
               ? "border-emerald-500/50 bg-emerald-500/5"
               : "border-border/60 hover:border-border"
@@ -183,19 +183,19 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             }}
           />
           <span className="ml-auto flex opacity-0 transition group-hover:opacity-100">
-            <button title="Split at playhead" className="p-0.5 hover:text-cyan-300"
+            <button title="Split at playhead" className="p-0.5 hover:text-accent-foreground"
               onClick={(e) => { e.stopPropagation(); mutate((d) => splitCue(d, cue.id, playheadMs)?.doc ?? d); }}>
               <Scissors className="size-3" />
             </button>
-            <button title="Merge with next" className="p-0.5 hover:text-cyan-300"
+            <button title="Merge with next" className="p-0.5 hover:text-accent-foreground"
               onClick={(e) => { e.stopPropagation(); mutate((d) => mergeCueWithNext(d, cue.id)?.doc ?? d); }}>
               <Merge className="size-3" />
             </button>
-            <button title="Duplicate" className="p-0.5 hover:text-cyan-300"
+            <button title="Duplicate" className="p-0.5 hover:text-accent-foreground"
               onClick={(e) => { e.stopPropagation(); mutate((d) => duplicateCue(d, cue.id)?.doc ?? d); }}>
               <Plus className="size-3" />
             </button>
-            <button title="Delete" className="p-0.5 hover:text-red-400"
+            <button title="Delete" className="p-0.5 hover:text-destructive"
               onClick={(e) => { e.stopPropagation(); mutate((d) => removeCue(d, cue.id)); }}>
               <Trash2 className="size-3" />
             </button>
@@ -278,7 +278,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             {job ? `Transcribing… ${Math.round(job.p * 100)}%` : "Transcribe locally"}
           </Button>
           {modelsQ.data && !modelsQ.data.some((m) => m.present) && (
-            <p className="mt-1 text-[9px] text-amber-400">
+            <p className="mt-1 text-[9px] text-warning">
               No model installed — download one ({Math.round((modelsQ.data[0]?.sizeBytes ?? 0) / 1e6)} MB+) first.
             </p>
           )}
@@ -329,7 +329,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         {/* Style */}
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium">
-            <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-cyan-400">· version</span>}
+            <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-accent-foreground">· version</span>}
           </p>
           <select
             className="h-6 w-full rounded border border-border bg-transparent px-1 text-[10px]"

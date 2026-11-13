@@ -386,7 +386,7 @@ export function GraphicsBin() {
             {(kitsQ.data ?? []).map((k) => (
               <div key={k.id} className="flex items-center justify-between rounded px-1 py-0.5 hover:bg-accent">
                 <button
-                  className={`truncate text-left ${doc.brandKitId === k.id ? "text-cyan-400" : ""}`}
+                  className={`truncate text-left ${doc.brandKitId === k.id ? "text-accent-foreground" : ""}`}
                   onClick={() => mutate((d) => setDocBrandKit(d, doc.brandKitId === k.id ? null : k))}
                   title="Set active (embeds snapshot into project)"
                 >

@@ -141,7 +141,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
         </button>
       </div>
       {silence && (
-        <div className="space-y-1 rounded border border-amber-500/40 bg-amber-500/10 p-1.5 text-[10px]">
+        <div className="space-y-1 rounded border border-amber-500/40 bg-warning/15 p-1.5 text-[10px]">
           <div className="text-muted-foreground">
             {silence.length} silent region{silence.length === 1 ? "" : "s"} — review then apply
             (undoable)

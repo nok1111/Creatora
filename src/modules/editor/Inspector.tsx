@@ -129,7 +129,7 @@ export function Inspector() {
       />
       {kfPath && (
         <button
-          className={`rounded p-0.5 ${keyAt(kfPath) ? "text-cyan-400" : "text-muted-foreground hover:text-foreground"}`}
+          className={`rounded p-0.5 ${keyAt(kfPath) ? "text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}
           title={t("editor.keyframe")}
           onClick={() => toggleKey(kfPath, value)}
         >
@@ -157,7 +157,7 @@ export function Inspector() {
           {t("editor.sectionTransform")}
         </div>
         {version && (
-          <p className="text-[9px] italic text-cyan-400/80">
+          <p className="text-[9px] italic text-accent-foreground/80">
             {t("versions.editingVersion", { name: version.name })}
           </p>
         )}
@@ -280,7 +280,7 @@ export function Inspector() {
         {ANIMATABLE_PATHS.filter((pth) => kfCount(pth) > 0).map((pth) => (
           <div key={pth} className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">{pth}</span>
-            <span className="flex items-center gap-1 text-cyan-400">
+            <span className="flex items-center gap-1 text-accent-foreground">
               <Diamond className="size-2.5" /> {kfCount(pth)}
             </span>
           </div>
@@ -294,7 +294,7 @@ export function Inspector() {
         <section className="space-y-1.5">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
             {t("editor.sectionText")}
-            {version && <span className="ml-1 text-cyan-400/80">({t("versions.editingVersionShort")})</span>}
+            {version && <span className="ml-1 text-accent-foreground/80">({t("versions.editingVersionShort")})</span>}
           </div>
           <textarea
             className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs"

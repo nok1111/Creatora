@@ -35,10 +35,10 @@ type Tab = "posts" | "calendar" | "accounts";
 const STATUS_BADGE: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
   ready: "bg-blue-500/15 text-blue-400",
-  scheduled: "bg-amber-500/15 text-amber-400",
+  scheduled: "bg-warning/15 text-warning",
   publishing: "bg-purple-500/15 text-purple-400 animate-pulse",
-  published: "bg-green-500/15 text-green-400",
-  failed: "bg-red-500/15 text-red-400",
+  published: "bg-success/15 text-success",
+  failed: "bg-destructive/15 text-destructive",
   cancelled: "bg-muted text-muted-foreground",
 };
 

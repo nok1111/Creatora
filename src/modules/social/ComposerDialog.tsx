@@ -216,7 +216,7 @@ export function ComposerDialog({
                       {PLATFORM_LABEL[p]}
                     </span>
                     {cap?.requiresAppReview && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-400">
+                      <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] text-warning">
                         needs approved app
                       </span>
                     )}

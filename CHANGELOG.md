@@ -157,3 +157,11 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
 - Removed unused @tauri-apps/plugin-fs.
 - +3 hardening tests (sweep, size cap, 10k-snapshot query <100 ms).
 - Totals: 144 rust + 70 vitest green; clippy/fmt/tsc/build clean.
+
+## UI/UX Redesign — Creative Pop
+
+- Retokenized to graphite/coral/lavender/lime/butter/cream identity;
+  top horizontal nav replaces left rail; Home rebuilt around
+  "what can I make today" creation cards; new button variants
+  (creative/positive); hardcoded hues swept to semantic tokens;
+  dead nav entries removed earlier this session; 70 vitest green.

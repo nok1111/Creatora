@@ -102,14 +102,14 @@ export function ImportPanel() {
           <div className="flex items-center gap-4 text-xs">
             <b>{preview.format.toUpperCase()}</b>
             <span>{preview.rowsSeen} rows</span>
-            <span className="text-green-400">{preview.matched} matched</span>
-            <span className="text-amber-400">{preview.unmatched} unmatched</span>
+            <span className="text-success">{preview.matched} matched</span>
+            <span className="text-warning">{preview.unmatched} unmatched</span>
             <Button size="sm" className="ml-auto" disabled={busy || preview.matched === 0} onClick={() => void commit()}>
               <Upload size={13} className="mr-1" /> Import {preview.matched} rows
             </Button>
           </div>
           {preview.issues.length > 0 && (
-            <div className="rounded bg-red-500/10 p-2 text-[11px] text-red-400">
+            <div className="rounded bg-destructive/10 p-2 text-[11px] text-destructive">
               {preview.issues.slice(0, 6).map((i, k) => (
                 <div key={k}>{i}</div>
               ))}
@@ -135,9 +135,9 @@ export function ImportPanel() {
                   </td>
                   <td className="py-1">
                     {r.targetId ? (
-                      <span className="text-green-400">target found</span>
+                      <span className="text-success">target found</span>
                     ) : (
-                      <span className="text-amber-400">no match — will skip</span>
+                      <span className="text-warning">no match — will skip</span>
                     )}
                   </td>
                 </tr>

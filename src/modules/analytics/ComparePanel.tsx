@@ -84,7 +84,7 @@ export function ComparePanel() {
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="text-xs font-medium">Comparison</span>
             {rows.length > 0 && !samePlatform && (
-              <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-400">
+              <span className="rounded bg-warning/15 px-2 py-0.5 text-[10px] text-warning">
                 Mixed platforms — metrics are not equivalent; compare within one platform for meaning.
               </span>
             )}

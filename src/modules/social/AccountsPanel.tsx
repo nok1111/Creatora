@@ -75,7 +75,7 @@ export function AccountsPanel() {
               <h3 className="text-sm font-semibold">{PLATFORM_LABEL[p]}</h3>
               <div className="flex gap-1">
                 {cap?.publish ? (
-                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[9px] text-green-400">
+                  <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">
                     publish
                   </span>
                 ) : (
@@ -84,7 +84,7 @@ export function AccountsPanel() {
                   </span>
                 )}
                 {cap?.requiresAppReview && (
-                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-400">
+                  <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] text-warning">
                     app review
                   </span>
                 )}
@@ -104,7 +104,7 @@ export function AccountsPanel() {
                   key={a.id}
                   className="flex items-center gap-2 rounded border border-border px-2 py-1.5 text-xs"
                 >
-                  <CheckCircle2 className="size-3.5 text-green-400" />
+                  <CheckCircle2 className="size-3.5 text-success" />
                   <span className="flex-1 truncate">
                     {a.displayName ?? a.platformUserId}
                   </span>
@@ -134,7 +134,7 @@ export function AccountsPanel() {
               <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground">
                 <KeyRound className="size-3" /> Developer app credentials{" "}
                 {oauthClients[p] && (
-                  <span className="text-green-400">(configured)</span>
+                  <span className="text-success">(configured)</span>
                 )}
               </summary>
               <div className="mt-2 space-y-1.5">

@@ -213,7 +213,7 @@ export function EditorPage() {
       <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-1.5">
         <span className="text-sm font-medium">
           {doc.meta.name}
-          {dirty && <span className="ml-1 text-amber-400">•</span>}
+          {dirty && <span className="ml-1 text-warning">•</span>}
         </span>
         <div className="mx-1 h-4 w-px bg-border" />
         <Button variant="ghost" size="icon" className="size-7" onClick={() => void save()} title="Ctrl+S">
@@ -278,7 +278,7 @@ export function EditorPage() {
           </div>
           {comparePane && (
             <div className="relative min-w-0 flex-1 border-l border-border">
-              <span className="absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-cyan-300">
+              <span className="absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-accent-foreground">
                 {doc?.meta.name} · master
               </span>
               <Preview assets={assetMap} docOverride={doc ?? undefined} />

@@ -76,7 +76,7 @@ export function CaptionStudio({
           <span
             className={cn(
               "text-[10px]",
-              title.length > 100 ? "text-red-400" : "text-muted-foreground",
+              title.length > 100 ? "text-destructive" : "text-muted-foreground",
             )}
           >
             {title.length}/100
@@ -125,7 +125,7 @@ export function CaptionStudio({
                   onClick={() =>
                     onHashtags(hashtags.filter((h) => h !== t))
                   }
-                  className="hover:text-red-400"
+                  className="hover:text-destructive"
                 >
                   ×
                 </button>
@@ -186,7 +186,7 @@ export function CaptionStudio({
                 await api.deleteCaptionTemplate(tp.id);
                 void refetchTemplates();
               }}
-              className="text-muted-foreground hover:text-red-400"
+              className="text-muted-foreground hover:text-destructive"
             >
               <Trash2 className="size-3" />
             </button>

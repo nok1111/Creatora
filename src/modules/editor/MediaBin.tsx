@@ -109,7 +109,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
               <div className="text-[10px] text-muted-foreground">
                 {a.durationMs ? `${(a.durationMs / 1000).toFixed(1)}s` : a.kind}
                 {a.status === "missing" && (
-                  <span className="ml-1 text-amber-400">
+                  <span className="ml-1 text-warning">
                     <AlertTriangle className="inline size-3" /> {t("editor.missingMedia")}
                   </span>
                 )}

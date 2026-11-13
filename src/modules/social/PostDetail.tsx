@@ -180,9 +180,9 @@ function TargetRow({
           className={cn(
             "rounded px-1.5 py-0.5 text-[9px] uppercase",
             t.status === "published"
-              ? "bg-green-500/15 text-green-400"
+              ? "bg-success/15 text-success"
               : t.status === "failed"
-                ? "bg-red-500/15 text-red-400"
+                ? "bg-destructive/15 text-destructive"
                 : "bg-muted text-muted-foreground",
           )}
         >
@@ -209,7 +209,7 @@ function TargetRow({
         </span>
       </div>
       {t.lastError && (
-        <p className="rounded bg-red-500/10 px-2 py-1 text-[10px] text-red-400">
+        <p className="rounded bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
           {t.lastError}
         </p>
       )}
@@ -259,8 +259,8 @@ function TargetRow({
               <span>#{a.attemptNo}</span>
               <span
                 className={cn(
-                  a.status === "published" && "text-green-400",
-                  a.status === "failed" && "text-red-400",
+                  a.status === "published" && "text-success",
+                  a.status === "failed" && "text-destructive",
                 )}
               >
                 {a.status}
@@ -293,7 +293,7 @@ function LinkedFile({ assetId }: { assetId: string }) {
       <FolderOpen className="size-2.5" />
       {assets.name}
       {assets.status === "missing" && (
-        <span className="text-red-400">(missing)</span>
+        <span className="text-destructive">(missing)</span>
       )}
     </button>
   );

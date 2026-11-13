@@ -46,6 +46,29 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
         },
+        topbar: {
+          DEFAULT: "hsl(var(--topbar))",
+          foreground: "hsl(var(--topbar-foreground))",
+          accent: "hsl(var(--topbar-accent))",
+          "accent-foreground": "hsl(var(--topbar-accent-foreground))",
+          border: "hsl(var(--topbar-border))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        pop: {
+          coral: "#FF795E",
+          lime: "#B8F36B",
+          lavender: "#B99AFF",
+          butter: "#FFD477",
+          cream: "#F4F0E8",
+          graphite: "#17171D",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

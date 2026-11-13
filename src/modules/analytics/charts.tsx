@@ -105,9 +105,9 @@ export function MiniBar({
 export function SourceBadge({ source }: { source: string }) {
   const cls =
     source === "api"
-      ? "bg-green-500/15 text-green-400"
+      ? "bg-success/15 text-success"
       : source === "import"
-        ? "bg-amber-500/15 text-amber-400"
+        ? "bg-warning/15 text-warning"
         : "bg-muted text-muted-foreground";
   return (
     <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${cls}`}>

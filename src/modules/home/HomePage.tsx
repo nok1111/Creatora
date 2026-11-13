@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, Clock, Film, Star, MoreVertical, FolderOpen, Archive, Copy, Trash2, Undo2, PackageOpen } from "lucide-react";
+import { FilePlus2, Clock, Film, Star, MoreVertical, FolderOpen, Archive, Copy, Trash2, Undo2, PackageOpen,
+  Clapperboard, Smartphone, Captions, Image, AudioLines, Share2, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
 import type { ProjectSummary } from "@/lib/project-types";
@@ -39,6 +41,7 @@ function relativeTime(iso: string, locale: string): string {
 
 export function HomePage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const project = useProject();
   const [newOpen, setNewOpen] = useState(false);
@@ -113,14 +116,67 @@ export function HomePage() {
     }
   };
 
+  const cards: {
+    icon: typeof Clapperboard;
+    title: string;
+    desc: string;
+    tone: "coral" | "lavender" | "neutral";
+    action: () => void;
+  }[] = [
+    { icon: Clapperboard, title: t("home.makeVideo"), desc: t("home.makeVideoDesc"), tone: "coral", action: () => setNewOpen(true) },
+    { icon: Smartphone, title: t("home.makeShort"), desc: t("home.makeShortDesc"), tone: "coral", action: () => setNewOpen(true) },
+    { icon: Captions, title: t("home.makeSubs"), desc: t("home.makeSubsDesc"), tone: "lavender", action: () => navigate("/editor?tab=subtitles") },
+    { icon: Image, title: t("home.makeThumb"), desc: t("home.makeThumbDesc"), tone: "lavender", action: () => navigate("/editor?left=graphics") },
+    { icon: AudioLines, title: t("home.makeAudio"), desc: t("home.makeAudioDesc"), tone: "lavender", action: () => navigate("/editor") },
+    { icon: Share2, title: t("home.makePost"), desc: t("home.makePostDesc"), tone: "neutral", action: () => navigate("/social") },
+  ];
+  const chip = {
+    coral: "bg-primary/15 text-primary",
+    lavender: "bg-accent text-accent-foreground",
+    neutral: "bg-secondary text-secondary-foreground",
+  } as const;
+
   return (
-    <div className="mx-auto max-w-4xl p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t("home.title")}</h1>
-        <Button onClick={() => setNewOpen(true)}>
-          <FilePlus2 />
-          {t("home.newProject")}
-        </Button>
+    <div className="mx-auto max-w-5xl p-6 lg:p-8">
+      {/* Hero: answer "what can I make today?" */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t("home.greeting")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {project.doc?.meta.name ?? t("home.emptyProjectsHint")}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate("/library")}>
+            <Upload />
+            {t("library.importMedia", { defaultValue: "Import media" })}
+          </Button>
+          <Button onClick={() => setNewOpen(true)}>
+            <FilePlus2 />
+            {t("home.newProject")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Creation cards — one click to the right tool */}
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {cards.map((c) => (
+          <button
+            key={c.title}
+            onClick={c.action}
+            className="group flex items-start gap-3 rounded-xl border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md"
+          >
+            <div className={`flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105 ${chip[c.tone]}`}>
+              <c.icon className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">{c.title}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">{c.desc}</div>
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* Recovery prompt — shown when opening a project with a newer autosave */}

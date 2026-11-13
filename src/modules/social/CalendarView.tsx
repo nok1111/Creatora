@@ -197,7 +197,7 @@ export function CalendarView({
                   {PLATFORM_LABEL[i.platform]}
                 </span>
                 <span className="flex-1 truncate font-medium">{i.title}</span>
-                {i.autoPublish && <Zap className="size-3 text-amber-400" />}
+                {i.autoPublish && <Zap className="size-3 text-warning" />}
                 <span className="text-[10px] uppercase text-muted-foreground">
                   {i.status}
                 </span>
@@ -248,9 +248,9 @@ export function CalendarView({
                       className={cn(
                         "mt-0.5 block w-full truncate rounded px-1 py-0.5 text-left text-[10px]",
                         it.status === "published"
-                          ? "bg-green-500/15 text-green-400"
+                          ? "bg-success/15 text-success"
                           : it.status === "failed"
-                            ? "bg-red-500/15 text-red-400"
+                            ? "bg-destructive/15 text-destructive"
                             : "bg-primary/10 text-primary",
                       )}
                       title={`${PLATFORM_LABEL[it.platform]} · ${it.scheduledAt.slice(11, 16)}${it.autoPublish ? " · auto" : " · reminder"}`}

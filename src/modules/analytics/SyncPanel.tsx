@@ -119,7 +119,7 @@ export function SyncPanel() {
                 <td className="px-2 py-1.5 text-right">{r.targetsFailed}</td>
                 <td className="px-3 py-1.5 max-w-[380px]">
                   {r.errors.slice(0, 3).map((e, i) => (
-                    <div key={i} className="truncate text-red-400/80">{e}</div>
+                    <div key={i} className="truncate text-destructive/80">{e}</div>
                   ))}
                 </td>
               </tr>

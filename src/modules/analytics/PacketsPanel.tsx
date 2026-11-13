@@ -102,7 +102,7 @@ export function PacketsPanel() {
                   {t.platform}
                 </span>
                 {!t.hasExport && (
-                  <span className="text-[10px] text-amber-400">no export</span>
+                  <span className="text-[10px] text-warning">no export</span>
                 )}
               </label>
             ))}

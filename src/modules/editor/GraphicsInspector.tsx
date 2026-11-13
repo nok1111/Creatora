@@ -58,7 +58,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
             const hasOv = !!v?.clipOverrides[clipId];
             return hasOv ? (
               <button
-                className="rounded px-1 text-[9px] text-cyan-400 hover:bg-accent"
+                className="rounded px-1 text-[9px] text-accent-foreground hover:bg-accent"
                 title="Drop this element's version overrides — re-sync to the shared base"
                 onClick={() => mutate((d) => clearVersionClipOverrides(d, activeVersionId, clipId))}
               >
@@ -100,7 +100,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
               })
             }
           >
-            {clip.hidden ? <EyeOff className="size-3 text-amber-400" /> : <Eye className="size-3" />}
+            {clip.hidden ? <EyeOff className="size-3 text-warning" /> : <Eye className="size-3" />}
           </button>
         </span>
       </div>
@@ -231,7 +231,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
           </select>
         </div>
         {(presetId === "typewriter" || presetId === "wipe") && !supportsTextFx(doc, clipId) && (
-          <div className="text-[9px] text-amber-400">Only on text/graphics clips</div>
+          <div className="text-[9px] text-warning">Only on text/graphics clips</div>
         )}
       </div>
 
