@@ -4,6 +4,7 @@ pub mod error;
 pub mod jobs;
 pub mod media;
 pub mod project;
+pub mod render;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -68,6 +69,8 @@ pub fn run() {
             media::commands::list_tags,
             media::commands::tag_asset,
             media::commands::untag_asset,
+            render::commands::export_project,
+            render::commands::preview_render_plan,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

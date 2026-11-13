@@ -92,3 +92,11 @@ Creatora/
 - Every DB schema change = a new numbered migration; `user_version` pragma tracks state.
 - Project format bumps are explicit migrations in `project/migrations.rs`; opening a newer-version project shows a clear "created by a newer Creatora" error, never silent corruption.
 - No network calls for editing. Editing works fully offline.
+
+## Editing engine (Phase 3)
+
+- **One timeline model, two consumers.** `Timeline`/`Clip` in the `.creatora` doc is the only representation. The Rust `render::plan` module compiles it to an ffmpeg `filter_complex` graph; the TS `timeline-engine` module compiles the same fields to preview state (active clips at T, per-clip source time, canvas placement). Segment math is mirrored deliberately — `ms → source time → canvas rect` must produce identical results on both sides, and the e2e tests verify the ffmpeg output, not the TS math.
+- **Canvas placement parity.** A clip's source is fitted into the canvas preserving aspect ratio (letterbox), then `transform.scaleX/Y` scales that fitted box, `x/y` translate it in canvas pixels, `rotationDeg`/`opacity`/crop fractions apply after. FFmpeg expresses this as `scale → pad → (crop|rotate|alpha) → overlay=x:y`. Preview expresses it as CSS `left/top/width/height` inside a canvas-scaled stage. Same formula, same inputs.
+- **Preview transport.** One master clock (`requestAnimationFrame` + `performance.now`); each active media element (`<video>`/`<audio>`) is seeked to `sourceTimeAt(clip, t)` when drift exceeds ~80 ms and `playbackRate` matches `clip.speed`. This is intentionally tolerant — preview favors smoothness; *export* is the source of truth for frame accuracy.
+- **Heavy work off the UI thread.** Export runs in the job engine (`spawn_blocking`), spawning ffmpeg with `-progress pipe:1`; progress events report `out_time/duration`. Cancel kills the child process. ffmpeg/JS video decode never runs on the Rust or JS main threads respectively.
+- **Proxies:** planned as a `proxy_path` column on `media_assets` + a preview-quality setting; the render plan always uses originals (quality), preview uses proxy when present. Schema hooks land when a real heavy project proves the need.

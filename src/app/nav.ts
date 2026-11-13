@@ -34,7 +34,7 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   { key: "home", path: "/", icon: Home, phase: 2, implemented: true },
   { key: "library", path: "/library", icon: FolderOpen, phase: 2, implemented: false },
-  { key: "editor", path: "/editor", icon: Clapperboard, phase: 3, implemented: false },
+  { key: "editor", path: "/editor", icon: Clapperboard, phase: 3, implemented: true },
   { key: "formats", path: "/formats", icon: RectangleHorizontal, phase: 4, implemented: false },
   { key: "subtitles", path: "/subtitles", icon: Captions, phase: 5, implemented: false },
   { key: "audio", path: "/audio", icon: AudioLines, phase: 5, implemented: false },

@@ -92,6 +92,15 @@ export const api = {
       { id, destDir },
     ),
 
+  // Render
+  exportProject: (projectPath: string, outPath: string) =>
+    cmd<string>("export_project", { projectPath, outPath }),
+  previewRenderPlan: (projectPath: string) =>
+    cmd<{ ok: boolean; durationMs?: number; segments?: number; hasAudio?: boolean; reason?: string }>(
+      "preview_render_plan",
+      { projectPath },
+    ),
+
   // Media
   importMedia: (paths: string[]) => cmd<string>("import_media", { paths }),
   cancelJob: (jobId: string) => cmd<boolean>("cancel_job", { jobId }),

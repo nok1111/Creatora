@@ -65,3 +65,21 @@
 
 **Decision:** App works fully offline; any future update-check is opt-in and documented.
 **Why:** Commercial promise: local-first, privacy-respecting.
+
+## ADR-013 — Timeline time model: integer milliseconds + frame snapping
+
+**Decision:** All persisted times (`Clip.startMs`, `durationMs`, `sourceInMs`, markers, cues) are **integer milliseconds** — never float seconds, never frame numbers. Frame alignment is an *editing* concern applied at the operation layer: `msToFrame(t) = round(t·fpsNum/(fpsDen·1000))` and `frameToMs(f) = round(f·fpsDen·1000/fpsNum)`; move/trim/split snap through these. Export converts `ms/1000` to exact seconds for ffmpeg; preview derives source time as `sourceInMs + (t − startMs)·speed`.
+**Why:** Integer ms is exact (no float drift on long timelines), trivially serializable, and coarse enough for ms-level audio sync while frame snapping gives sample-accurate UX at any project fps. Frame numbers would break under variable-fps sources; float seconds accumulate error.
+**Consequence:** A clip edge can sit between frames internally; the *renderer* quantizes by construction because ffmpeg selects frames by PTS — verified by e2e duration/order tests.
+
+## ADR-014 — Undo/redo: document snapshot stack, not inverse ops
+
+**Decision:** `useEditor` keeps `past[]`/`future[]` stacks of `ProjectDoc` snapshots. Every mutation funnels through `mutate(fn)` which pushes the pre-edit doc onto `past` and clears `future`. Continuous gestures (drag/trim) coalesce: the snapshot is taken on gesture *start*, intermediate frames mutate without pushing. Stack capped at 100 entries (~few MB; docs are JSON).
+**Why:** Inverse-operation undo is elegant but every new clip/effect/property op needs a correct inverse — the classic source of "undo corrupts the project" bugs. Snapshots are total: undo restores *everything*, including future fields we haven't invented yet. Memory is bounded and documents are small.
+**Rejected:** Command-pattern inverse ops (error-prone, incomplete coverage); CRDT (no multiplayer need); event-sourcing (debug complexity for zero gain here).
+
+## ADR-015 — Render graph: absolute-placement overlay/mix, not per-track concat
+
+**Decision:** The Rust render plan turns each clip into an independent segment: `trim/setpts` video fed into `overlay` at `(x,y)` gated by `enable='between(t,start,end)'` over a `color` base; audio via `atrim/asetpts/volume/adelay(startMs)` into `amix`. No `concat` filter.
+**Why:** Absolute placement treats sequential, overlapping, reordered and gapped arrangements *identically* — the graph structure doesn't change when clips move, which makes the model identical to the preview's compositor (one layer per active clip at time T). Concat would force per-track contiguous packing and a separate enable-mapping pass.
+**Consequence:** Graph size grows linearly with clip count (fine; ffmpeg graphs handle thousands of nodes). A/V sync is guaranteed by construction: video gate and audio delay consume the *same* `startMs`.

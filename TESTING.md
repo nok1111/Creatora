@@ -31,6 +31,26 @@ npm run tauri dev
 npm run tauri build
 ```
 
+## Real-media render verification (`src-tauri/tests/render_e2e.rs`)
+
+These tests verify *exported media*, not mocks: they build a `ProjectDoc`,
+render through the same `build_plan` + `run_ffmpeg` path the app uses, then
+inspect the output file itself. Skipped only when ffmpeg is absent.
+
+| Test | Asserts via |
+|---|---|
+| `export_trimmed_clip_has_trimmed_duration` | ffprobe duration of output ≈ trimmed length |
+| `reordered_clips_render_in_new_order` | decoded rgb24 frame pixels at t=1s/3s — color dominance flips |
+| `transform_scale_and_position_land_on_canvas` | frame pixels: scaled clip occupies exactly the expected half |
+| `audio_follows_clip_timeline_position` | decoded PCM RMS: silent before clip start, tone after |
+| `image_clip_renders_for_its_duration` | duration + green frame pixels |
+| `save_reopen_preserves_timeline_exactly` | store save/open round-trip, JSON-identical timeline |
+| `cancelled_render_leaves_no_output` | cancelled flag → Err("cancelled"), no output file |
+
+Fixtures are generated on the fly by ffmpeg lavfi (`color=` + `sine=`) into
+`%TEMP%/creatora_e2e_*` — deterministic pixels and known frequencies, no
+binary corpus needed.
+
 ## Evidence policy
 
 A task is "tested" only when output is recorded: test run summary, ffprobe dump of exported file, or screenshot/steps for UI. Record results in PROJECT_STATUS.md "Latest test results".

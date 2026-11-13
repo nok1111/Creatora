@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MODULES } from "@/app/nav";
 import { HomePage } from "@/modules/home/HomePage";
 import { LibraryPage } from "@/modules/library/LibraryPage";
+import { EditorPage } from "@/modules/editor/EditorPage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { useSettings } from "@/stores/settings";
 import { autosave } from "@/services/autosave";
@@ -24,6 +25,8 @@ function pageFor(key: string) {
       return <HomePage />;
     case "library":
       return <LibraryPage />;
+    case "editor":
+      return <EditorPage />;
     case "settings":
       return <SettingsPage />;
     default:
