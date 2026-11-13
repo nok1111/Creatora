@@ -28,7 +28,7 @@
 | Visual Studio Build Tools | OK | VS 2022 Community, VC tools present |
 | WebView2 Runtime | OK | 157.0.4341.46 |
 | FFmpeg | PROVISIONED | 9.0.2 essentials (GPL build) in `tools/bin/` — see LICENSES_AND_DEPENDENCIES.md |
-| whisper.cpp | MISSING | Deferred to Phase 5 (Subtitle Studio) |
+| whisper.cpp | bundled (tools/bin, built from source) | Phase 5 |
 | pnpm/yarn | absent | npm used as package manager |
 
 ### Technical risks identified
@@ -192,6 +192,10 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 
 **e2e**: square cover reframe (blue window), vertical center window (green), keyframed pan (red→blue over time), text in vertical, multi-format export dims, version persistence, real motion tracking on generated moving-subject video.
 
+## Phase 6 done (Audio Studio: waveforms, clip pan/fades, track gain+solo, sidechain ducking, EBU R128 loudness + non-destructive normalize, silence→reviewable cut proposals, cleanup fx, WebAudio preview parity). Prior: Phase 5.
+
+**Audio chain**: per-clip `atrim→atempo→afx→volume(+kf)→track gain→afade→pan→adelay` → per-track buses → `sidechaincompress` ducking (apad-extended) → `amix` → master `alimiter`. Preview mirrors via WebAudio (analyser-driven duck, ±3 dB). Silence/normalize are reviewable proposals — never auto-destructive. Measured (60 s stereo): waveform 63 ms, loudnorm 1.4 s, silencedetect 77 ms.
+
 ## Phase 5 done (Subtitle Studio: whisper.cpp transcription, cue editor, ASS/libass burn-in, SRT/VTT/ASS export, per-version styles, karaoke/pop from real word timing). Prior phase: Phase 4.1 — Multi-Format completion (2026-11-13)
 
 **Export settings real**: per-version codec/preset/CRF|bitrate/audio/container validated (reject-not-ignore) and emitted by `ffmpeg_args`; extension corrected to container. e2e: same project → hevc/mkv + h264/mp4 verified via ffprobe codec_name.
@@ -200,13 +204,12 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 
 **Reframe audit (ADR-023 addendum)**: EMA smoothing, scene-cut reset, hold-on-exit. Verified: moving subject tracks, static → centered fallback, exit/re-entry holds position (no snap-back). Documented limits: multi-subject → midpoint; no semantics; ONNX extension point recorded.
 
-## Latest test results (2026-11-13)
+## Latest test results (2026-11-13, Phase 6)
 
-- `cargo test --lib`: **27/27**
-- `cargo test --test render_e2e`: **40/40** (+version merge, persistence, 1:1/9:16 pixel reframes, keyframed pan, batch export, text-in-vertical, motion tracking)
-- `npm test`: **41/41** (+version ops: isolation, applyVersion, dup/reset) (prev 16 → +text pixels, keyframe parity vectors, fps matrix 23.976/29.97/59.94, VFR→CFR, long A/V sync, boundaries, multi-audio, mixed-res, z-order, long projects, 720p, stress 20×100 plan + 50-clip render)
-- `npm test`: **37/37** (incl. 7 shared parity vectors mirroring Rust eval_at)
-- `cargo clippy --all-targets`: 0 warnings. `cargo fmt --check` clean. `vite build` clean.
+- `cargo test`: **90 total** — lib 34, media_import 4, render_e2e **50** (+7 audio: mix volume/solo, pan L/R isolation, fades, highpass+limiter, ducking drop-and-release, waveform peaks, silence/loudness parse), subtitles_e2e 2
+- `npm test`: **52/52** (+4 audio engine ops: track flags, duck rules, silence-cut)
+- `cargo clippy --all-targets`: 0 warnings. `cargo fmt --check` clean. `tsc --noEmit` clean. `vite build` clean.
+- Audio perf (60 s stereo WAV, modest CPU): waveform decode 63 ms, loudnorm 1.4 s, silencedetect 77 ms
 
 ## Previous results — incl. render plan graph assertions (enable window, atrim range, adelay, mute/visible handling, transform in graph, args/maps).
 - `cargo test --test media_import`: **3/3** real ffprobe/ffmpeg import pipeline.

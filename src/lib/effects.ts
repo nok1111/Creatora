@@ -70,8 +70,73 @@ export const EFFECTS: EffectDef[] = [
   },
 ];
 
+/**
+ * Audio effect registry — frontend mirror of `src-tauri/src/render/audiofx.rs`.
+ * Same canonical `Effect` model (params = f64 map); no CSS mapping — the
+ * preview applies them via the WebAudio chain (audio-preview.ts) and the
+ * render encodes them as ffmpeg audio filters.
+ */
+export const AUDIO_EFFECTS: EffectDef[] = [
+  {
+    type: "highpass",
+    label: "High-pass",
+    params: { freq: { def: 80, min: 10, max: 20000, step: 10 } },
+  },
+  {
+    type: "lowpass",
+    label: "Low-pass",
+    params: { freq: { def: 12000, min: 100, max: 20000, step: 100 } },
+  },
+  {
+    type: "eq",
+    label: "3-band EQ",
+    params: {
+      low: { def: 0, min: -24, max: 24, step: 0.5 },
+      mid: { def: 0, min: -24, max: 24, step: 0.5 },
+      high: { def: 0, min: -24, max: 24, step: 0.5 },
+    },
+  },
+  {
+    type: "denoise",
+    label: "Denoise",
+    params: { strength: { def: 12, min: 1, max: 97, step: 1 } },
+  },
+  {
+    type: "compressor",
+    label: "Compressor",
+    params: {
+      thresholdDb: { def: -18, min: -60, max: 0, step: 1 },
+      ratio: { def: 3, min: 1, max: 20, step: 0.5 },
+      attackMs: { def: 20, min: 0.01, max: 2000, step: 1 },
+      releaseMs: { def: 250, min: 0.01, max: 9000, step: 10 },
+      makeupDb: { def: 0, min: -12, max: 24, step: 0.5 },
+    },
+  },
+  {
+    type: "limiter",
+    label: "Limiter",
+    params: {
+      levelDb: { def: -0.45, min: -12, max: 0, step: 0.05 },
+    },
+  },
+  {
+    type: "deesser",
+    label: "De-esser",
+    params: { amount: { def: 0.5, min: 0, max: 1, step: 0.05 } },
+  },
+  {
+    type: "noisegate",
+    label: "Noise gate",
+    params: {
+      thresholdDb: { def: -50, min: -90, max: 0, step: 1 },
+      attackMs: { def: 20, min: 0.02, max: 2000, step: 1 },
+      releaseMs: { def: 250, min: 0.05, max: 4000, step: 10 },
+    },
+  },
+];
+
 export function effectDef(type: string): EffectDef | undefined {
-  return EFFECTS.find((d) => d.type === type);
+  return EFFECTS.find((d) => d.type === type) ?? AUDIO_EFFECTS.find((d) => d.type === type);
 }
 
 /**

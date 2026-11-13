@@ -192,3 +192,48 @@ external exports and burn-in — reusing the canonical model, not a second engin
 **Alternatives rejected.** drawtext for burn-in (no karaoke/wrapping);
 whisper server/API (violates local-first + adds token cost); distributing
 models in-repo (size + licensing clarity).
+
+## ADR-026 — Audio Studio: canonical chain, real ffmpeg filters, sidechain ducking
+
+**Context.** Phase 6 turns the single `clip.volume` scalar into a mixer:
+waveforms, clip/track gain, pan, fades, cleanup fx, ducking, loudness and
+silence tools — without a second audio engine.
+
+**Decision.**
+- One canonical audio chain per clip in `render/plan.rs`:
+  `atrim → atempo → audiofx → volume(+kf) → track gain → afade(in/out)
+   → pan → adelay` feeding per-track buses; doc-level `DuckingRule`s map
+  to ffmpeg `sidechaincompress` (source bus `asplit` → `apad` so the
+  sidechain survives the source ending), and a master `alimiter` closes
+  the mix (clipping safety, always on).
+- New model fields, all `#[serde(default)]` back-compatible:
+  `Clip{pan, fadeInMs, fadeOutMs}`, `Track{volume, solo}`,
+  `doc.ducking: Vec<DuckingRule>`. Solo semantics: any solo ⇒ only soloed
+  tracks audible (both preview and render).
+- Audio fx reuse the SAME `Effect` registry (`type`/`params`/`enabled`)
+  as video fx — `render/audiofx.rs` maps highpass/lowpass/eq/denoise
+  (afftdn)/compressor(acompressor)/limiter/deesser/noisegate(agate) to
+  ffmpeg filters; `effects.ts` gains `AUDIO_EFFECTS` with matching params.
+- Preview parity via WebAudio: `audio-preview.ts` builds
+  MediaElementSource → fx (Biquad/DynamicsCompressor for the mappable
+  kinds; denoise/limiter/noisegate/deesser are render-only, documented)
+  → StereoPanner → Gain. Ducking reads an AnalyserNode on the SOURCE
+  element per rAF and drives the target's gain with attack/release/hold —
+  same detection model as sidechaincompress, ±3 dB tolerance.
+- Waveforms: `audio::waveform` decodes to mono s16 → per-bucket min/max
+  peaks, cached on disk keyed by xxh3(path+mtime+buckets); job-based,
+  ~1 bucket per rendered px (zoom re-requests). Silence/loudness are
+  analysis commands — `silencedetect`/`loudnorm` parsed — that produce
+  REVIEWABLE proposals (`applySilenceCut` splits into keep-regions with
+  speech padding; `suggestNormalize` returns a gain the UI applies to
+  `clip.volume`, undoable, adding a limiter fx when headroom requires).
+  Nothing mutates without user action.
+
+**Alternatives rejected.** WebAudio render pipeline as canonical (not
+frame-exact, can't encode); uniform-split silence auto-cut (destructive
+without review); per-clip loudnorm two-pass render (expensive — gain
+suggestion achieves the same loudness non-destructively); separate audio
+effect registry (duplicate schema for no gain).
+
+**Measured.** 60 s stereo WAV: waveform decode 63 ms, loudnorm 1.4 s,
+silencedetect 77 ms — all far faster than realtime on a modest CPU.

@@ -13,6 +13,8 @@ export interface ProjectDoc {
   brandKitId: string | null;
   exportProfiles: unknown[];
   mediaRefs: MediaRef[];
+  /** Auto-duck rules (ADR-026). */
+  ducking: DuckingRule[];
 }
 
 export interface Meta {
@@ -48,6 +50,24 @@ export interface Track {
   locked: boolean;
   visible: boolean;
   muted: boolean;
+  /** Per-track gain (0–8), post-clip (ADR-026). */
+  volume: number;
+  /** Any solo track mutes all non-solo tracks. */
+  solo: boolean;
+}
+
+/** Non-destructive auto-duck — render uses sidechaincompress (ADR-026). */
+export interface DuckingRule {
+  id: string;
+  sourceTrack: string;
+  targetTrack: string;
+  /** Trigger level dBFS. */
+  thresholdDb: number;
+  /** Max depth, negative dB. */
+  reductionDb: number;
+  attackMs: number;
+  releaseMs: number;
+  holdMs: number;
 }
 
 export interface Transition {
@@ -214,6 +234,11 @@ export interface Clip {
   transform: Transform;
   effects: Effect[];
   volume: number;
+  /** Stereo balance −1..+1 (ADR-026). */
+  pan: number;
+  /** Clip-level fades in ms — distinct from transition crossfades. */
+  fadeInMs: number;
+  fadeOutMs: number;
   speed: number;
   text?: string | null;
   /** Canonical text styling — mirrors render/text.rs (ADR-020). */

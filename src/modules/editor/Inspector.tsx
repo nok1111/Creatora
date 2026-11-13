@@ -17,7 +17,8 @@ import {
   updateClip,
   updateEffect,
 } from "@/lib/timeline-engine";
-import { ANIMATABLE_PATHS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
+import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
+import { AudioTools } from "@/modules/editor/AudioTools";
 import type { Clip } from "@/lib/project-types";
 
 /**
@@ -173,6 +174,10 @@ export function Inspector() {
         </div>
         {num("Volume", clip.volume, (v) => mutate((d) => updateClip(d, clipId, { volume: Math.max(0, Math.min(8, v)) })), "volume", 0.05)}
         {num("Speed", clip.speed, (v) => mutate((d) => updateClip(d, clipId, { speed: Math.max(0.1, Math.min(8, v)) })), undefined, 0.1)}
+        {num("Pan", clip.pan ?? 0, (v) => mutate((d) => updateClip(d, clipId, { pan: Math.max(-1, Math.min(1, v)) })), undefined, 0.05)}
+        {num("Fade in ms", clip.fadeInMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v) })), undefined, 50)}
+        {num("Fade out ms", clip.fadeOutMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v) })), undefined, 50)}
+        <AudioTools clipId={clipId} trackId={track.id} />
       </section>
 
       <section className="space-y-1.5">
@@ -202,6 +207,11 @@ export function Inspector() {
             {EFFECTS.map((d) => (
               <option key={d.type} value={d.type}>
                 {d.label}
+              </option>
+            ))}
+            {AUDIO_EFFECTS.map((d) => (
+              <option key={d.type} value={d.type}>
+                [audio] {d.label}
               </option>
             ))}
           </select>

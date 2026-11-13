@@ -44,3 +44,28 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
 - Tests: 3 new render e2e (pixel-verified burn-in window + karaoke fill +
   serializers), 2 subtitle e2e (JSON parse + real whisper-cli run), 7 cue-ops
   vitest. 80 rust + 48 vitest total green.
+
+## Phase 6 — Audio Studio (ADR-026)
+- Waveforms on audio clips: ffmpeg PCM→peaks, disk-cached (xxh3 key),
+  job-based, zoom-dependent (~1 bucket/px), canvas-drawn on the clip block.
+- Clip audio: pan, fade-in/out (ms), volume keyframes unchanged; track
+  gain slider + solo in the header; mute/solo/volume all render-verified.
+- Mixing: per-track buses + master alimiter (clipping safety); solo gate
+  semantics identical in preview and render.
+- Auto-duck: doc-level DuckingRule (src/dst track, threshold, reduction,
+  attack/release/hold) → real sidechaincompress; e2e verifies the drop
+  during voice and the release after it (apad-extended sidechain bus).
+- Loudness: analyze_loudness (EBU R128: I/TP/LRA) + suggest_normalize —
+  gain applied to clip.volume non-destructively, limiter suggested when
+  needed; UI presets marked orientative, never "required".
+- Silence: silencedetect → reviewable region list → applySilenceCut
+  (keep-regions with padding, butt-joined, undoable); user reviews first.
+- Cleanup fx: highpass/lowpass/3-band EQ/denoise(afftdn)/compressor/
+  limiter/deesser/noisegate — canonical Effect model, ffmpeg filters,
+  WebAudio mapping where the API allows (rest = render-only, documented).
+- Preview: MediaElementSource→fx→StereoPanner→Gain graph with analyser-
+  driven ducking; element.volume fallback when AudioContext unavailable.
+- Tests: 7 audio e2e (volume/solo mix, pan channels, fades, hp+limiter,
+  ducking drop+release, waveform peaks, silence/loudness parse) +
+  4 engine vitest (track flags, duck rules, silence-cut splits).
+  Totals: 90 rust + 52 vitest green; clippy/fmt/tsc/build clean.

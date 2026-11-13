@@ -10,6 +10,14 @@ import {
   transitionAlpha,
 } from "@/lib/timeline-engine";
 import { cssFilterFor, evalKeyframes, svgMatrixFor } from "@/lib/effects";
+import {
+  applyFx,
+  chainFor,
+  duckStep,
+  resumeAudio,
+  rmsOf,
+  type DuckState,
+} from "@/services/audio-preview";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
@@ -48,6 +56,10 @@ export function Preview({
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setPlaying = useEditor((s) => s.setPlaying);
   const mediaEls = useRef(new Map<string, HTMLMediaElement>());
+  const duckStates = useRef(new Map<string, DuckState>());
+  const fxSigs = useRef(new Map<string, string>());
+  const rmsBuf = useRef(new Uint8Array(new ArrayBuffer(512)));
+  const dtMs = useRef(16);
   const previewQuality = useEditor((s) => s.previewQuality);
 
   // Master clock: advance playhead while playing. Also monitors real frame
@@ -55,6 +67,7 @@ export function Preview({
   // sustained window, preview quality auto-degrades to "proxy" (ADR-019).
   useEffect(() => {
     if (!playing) return;
+    resumeAudio();
     let raf = 0;
     let last = performance.now();
     const budget = (() => {
@@ -66,6 +79,7 @@ export function Preview({
     const tick = (now: number) => {
       const dt = now - last;
       last = now;
+      dtMs.current = dt;
       const d = useProject.getState().doc;
       const cur = useEditor.getState().playheadMs;
       const end = d ? timelineDuration(d) : 0;
@@ -126,12 +140,46 @@ export function Preview({
       el.pause();
       return;
     }
-    const vol = evalKeyframes(
-      a.clip.keyframes["volume"],
-      playheadMs - a.clip.startMs,
-      a.clip.volume,
-    );
-    el.volume = Math.min(1, Math.max(0, vol)) * (a.track.muted ? 0 : 1);
+    const rel = playheadMs - a.clip.startMs;
+    const vol = evalKeyframes(a.clip.keyframes["volume"], rel, a.clip.volume);
+    // fade envelope (clip-level fades — non-destructive)
+    let fade = 1;
+    if (a.clip.fadeInMs > 0) fade = Math.min(fade, rel / a.clip.fadeInMs);
+    if (a.clip.fadeOutMs > 0)
+      fade = Math.min(fade, (a.clip.durationMs - rel) / a.clip.fadeOutMs);
+    fade = Math.max(0, Math.min(1, fade));
+    // solo gate: when any track solos, only soloed tracks are audible
+    const anySolo = active.some((x) => x.track.solo);
+    const audible = (!a.track.muted && (!anySolo || a.track.solo)) ? 1 : 0;
+    // ducking: rules targeting this track read the SOURCE element's RMS
+    let duckG = 1;
+    for (const r of viewDoc.ducking ?? []) {
+      if (r.targetTrack !== a.track.id) continue;
+      const srcA = active.find((x) => x.track.id === r.sourceTrack);
+      const srcEl = srcA ? mediaEls.current.get(srcA.clip.id) : null;
+      const srcChain = srcEl ? chainFor(srcEl) : null;
+      const key = `${a.clip.id}:${r.id}`;
+      let st = duckStates.current.get(key);
+      if (!st) {
+        st = { g: 1, hold: 0 };
+        duckStates.current.set(key, st);
+      }
+      const srcRms = srcChain ? rmsOf(srcChain, rmsBuf.current) : 0;
+      duckG *= duckStep(st, srcRms, r, dtMs.current / 1000 || 0.016);
+    }
+    const gain = Math.max(0, vol * fade * (a.track.volume ?? 1)) * audible * duckG;
+    const chain = chainFor(el);
+    if (chain) {
+      chain.gain.gain.value = gain;
+      chain.panner.pan.value = Math.max(-1, Math.min(1, a.clip.pan ?? 0));
+      const fxSig = JSON.stringify(a.clip.effects ?? []);
+      if (fxSigs.current.get(a.clip.id) !== fxSig) {
+        fxSigs.current.set(a.clip.id, fxSig);
+        applyFx(el, chain, a.clip.effects ?? []);
+      }
+    } else {
+      el.volume = Math.min(1, gain);
+    }
     el.playbackRate = a.clip.speed || 1;
     const want = a.sourceMs;
     if (Math.abs(el.currentTime * 1000 - want) > DRIFT_MS) {

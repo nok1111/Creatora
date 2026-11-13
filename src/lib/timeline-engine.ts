@@ -18,6 +18,7 @@ import type {
   TrackKind,
   ClipOverride,
   FormatVersion,
+  DuckingRule,
   SubtitleCue,
   SubtitleStyle,
   TextStyle,
@@ -164,6 +165,8 @@ export function ensureTrack(doc: Timeline, kind: TrackKind, name: string): Track
     locked: false,
     visible: true,
     muted: false,
+    volume: 1,
+    solo: false,
   };
   doc.tracks.push(t);
   return t;
@@ -210,6 +213,9 @@ export function addClip(
     transform: { ...DEFAULT_TRANSFORM },
     effects: [],
     volume: 1,
+    pan: 0,
+    fadeInMs: 0,
+    fadeOutMs: 0,
     speed: 1,
     text: null,
     keyframes: {},
@@ -247,6 +253,9 @@ export function addTextClip(
     transform: { ...DEFAULT_TRANSFORM },
     effects: [],
     volume: 1,
+    pan: 0,
+    fadeInMs: 0,
+    fadeOutMs: 0,
     speed: 1,
     text: opts.text,
     textStyle: { ...DEFAULT_TEXT_STYLE, ...opts.style },
@@ -380,7 +389,7 @@ export function removeClip(doc: ProjectDoc, clipId: string): ProjectDoc {
 export function updateClip(
   doc: ProjectDoc,
   clipId: string,
-  patch: Partial<Pick<Clip, "volume" | "speed" | "text" | "textStyle">> & {
+  patch: Partial<Pick<Clip, "volume" | "speed" | "text" | "textStyle" | "pan" | "fadeInMs" | "fadeOutMs">> & {
     transform?: Partial<Transform>;
   },
 ): ProjectDoc {
@@ -427,6 +436,8 @@ export function addTrack(doc: ProjectDoc, kind: TrackKind): { doc: ProjectDoc; t
     locked: false,
     visible: true,
     muted: false,
+    volume: 1,
+    solo: false,
   };
   next.timeline.tracks.push(t);
   return { doc: next, trackId: t.id };
@@ -449,7 +460,7 @@ export function renameTrack(doc: ProjectDoc, trackId: string, name: string): Pro
 export function setTrackFlag(
   doc: ProjectDoc,
   trackId: string,
-  flags: Partial<Pick<Track, "locked" | "visible" | "muted">>,
+  flags: Partial<Pick<Track, "locked" | "visible" | "muted" | "volume" | "solo">>,
 ): ProjectDoc {
   const next = cloneDoc(doc);
   const t = next.timeline.tracks.find((x) => x.id === trackId);
@@ -993,6 +1004,70 @@ export function diagnoseCues(doc: ProjectDoc): CueIssue[] {
 
 export function activeCueAt(doc: ProjectDoc, tMs: number): SubtitleCue | null {
   return doc.subtitles.find((c) => tMs >= c.startMs && tMs < c.endMs) ?? null;
+}
+
+
+// ---------- audio studio (ADR-026) ----------
+
+export function upsertDuckingRule(doc: ProjectDoc, rule: DuckingRule): ProjectDoc {
+  const next = cloneDoc(doc);
+  const i = next.ducking.findIndex((r) => r.id === rule.id);
+  if (i >= 0) next.ducking[i] = { ...rule };
+  else next.ducking.push({ ...rule });
+  return next;
+}
+
+export function removeDuckingRule(doc: ProjectDoc, ruleId: string): ProjectDoc {
+  const next = cloneDoc(doc);
+  next.ducking = next.ducking.filter((r) => r.id !== ruleId);
+  return next;
+}
+
+/**
+ * Silence auto-cut proposal application: replaces `clipId` with clips for
+ * the NON-silent source regions (padding preserved). Returns null when the
+ * result would be a no-op. Undo-safe via mutate — user reviews first.
+ */
+export function applySilenceCut(
+  doc: ProjectDoc,
+  clipId: string,
+  silence: { startMs: number; endMs: number }[],
+  padMs: number,
+): ProjectDoc | null {
+  const found = findClip(doc, clipId);
+  if (!found) return null;
+  const { clip, track } = found;
+  const srcDur = clip.sourceDurationMs ?? clip.durationMs;
+  // keep-regions in source time = complement of silence, padded into speech
+  const keeps: [number, number][] = [];
+  let cur = clip.sourceInMs;
+  const sorted = [...silence].sort((a, b) => a.startMs - b.startMs);
+  for (const r of sorted) {
+    const end = Math.min(clip.sourceInMs + srcDur, r.startMs + padMs);
+    if (end > cur + 1) keeps.push([cur, end]);
+    cur = Math.max(cur, r.endMs - padMs);
+  }
+  const tail = clip.sourceInMs + srcDur;
+  if (tail > cur + 1) keeps.push([cur, tail]);
+  if (keeps.length <= 1) return null; // nothing removable
+  const next = cloneDoc(doc);
+  const tr = next.timeline.tracks.find((t) => t.id === track.id)!;
+  const i = tr.clips.findIndex((c) => c.id === clipId);
+  const newClips: import("@/lib/project-types").Clip[] = keeps.map(([sin, sout], k) => {
+    const prevEnd = k === 0 ? clip.startMs : clip.startMs + keeps
+      .slice(0, k)
+      .reduce((a, [s2, e2]) => a + (e2 - s2), 0);
+    return {
+      ...clip,
+      id: uid(),
+      startMs: prevEnd,
+      durationMs: Math.max(1, Math.round(sout - sin)),
+      sourceInMs: Math.round(sin),
+      keyframes: {},
+    };
+  });
+  tr.clips.splice(i, 1, ...newClips);
+  return next;
 }
 
 export function setVersionSubtitleStyle(doc: ProjectDoc, versionId: string, style: SubtitleStyle): ProjectDoc {

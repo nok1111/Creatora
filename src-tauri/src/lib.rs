@@ -1,3 +1,4 @@
+pub mod audio;
 mod commands;
 pub mod db;
 pub mod error;
@@ -77,6 +78,11 @@ pub fn run() {
             subtitles::commands::list_models,
             subtitles::commands::transcribe_media,
             subtitles::commands::export_subtitles,
+            audio::commands::generate_waveform,
+            audio::commands::read_waveform,
+            audio::commands::analyze_loudness,
+            audio::commands::detect_silence,
+            audio::commands::suggest_normalize,
             render::commands::preview_render_plan,
         ])
         .run(tauri::generate_context!())

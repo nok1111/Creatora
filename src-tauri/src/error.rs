@@ -59,6 +59,12 @@ impl From<rusqlite::Error> for AppError {
     }
 }
 
+impl From<String> for AppError {
+    fn from(e: String) -> Self {
+        AppError::InvalidInput(e)
+    }
+}
+
 impl From<std::io::Error> for AppError {
     fn from(e: std::io::Error) -> Self {
         AppError::Io(e.to_string())

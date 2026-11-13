@@ -47,6 +47,9 @@ import {
   duplicateVersion,
   resetVersion,
   removeVersion,
+  upsertDuckingRule,
+  removeDuckingRule,
+  applySilenceCut,
 } from "@/lib/timeline-engine";
 import { evalKeyframes } from "@/lib/effects";
 import type { ProjectDoc } from "@/lib/project-types";
@@ -68,6 +71,7 @@ function doc(): ProjectDoc {
     subtitles: [],
     subtitleStyle: DEFAULT_SUBTITLE_STYLE,
     brandKitId: null,
+    ducking: [],
     exportProfiles: [],
     mediaRefs: [{ assetId: "a1", path: "/m/a.mp4", hash: null }],
   };
@@ -583,5 +587,62 @@ describe("subtitle cues (ADR-025)", () => {
     const merged = applyVersion(styled, styled.versions[0].id)!;
     expect(merged.subtitleStyle.mode).toBe("karaoke");
     expect(styled.subtitleStyle.mode).toBe("none"); // master untouched
+  });
+});
+
+describe("audio studio ops (ADR-026)", () => {
+  const audioDoc = () => {
+    let d = doc();
+    const t1 = addTrack(d, "audio");
+    d = t1.doc;
+    const t2 = addTrack(d, "audio");
+    d = t2.doc;
+    return { d, voice: t1.trackId, music: t2.trackId };
+  };
+
+  it("setTrackFlag writes volume/solo (undo-safe)", () => {
+    const { d, music } = audioDoc();
+    const d2 = setTrackFlag(d, music, { volume: 0.5, solo: true });
+    const tr = d2.timeline.tracks.find((t) => t.id === music)!;
+    expect(tr.volume).toBe(0.5);
+    expect(tr.solo).toBe(true);
+    expect(d.timeline.tracks[1].volume).toBe(1); // immutability
+  });
+
+  it("ducking rules upsert/remove", () => {
+    const { d, voice, music } = audioDoc();
+    const rule = { id: "r1", sourceTrack: voice, targetTrack: music, thresholdDb: -35, reductionDb: -12, attackMs: 80, releaseMs: 500, holdMs: 300 };
+    const d2 = upsertDuckingRule(d, rule);
+    expect(d2.ducking).toHaveLength(1);
+    const d3 = upsertDuckingRule(d2, { ...rule, reductionDb: -20 });
+    expect(d3.ducking).toHaveLength(1);
+    expect(d3.ducking[0].reductionDb).toBe(-20);
+    expect(removeDuckingRule(d3, "r1").ducking).toHaveLength(0);
+  });
+
+  it("applySilenceCut splits a clip into keep-regions with padding", () => {
+    const { d, voice } = audioDoc();
+    const r = addClip(d, { trackId: voice, mediaRef: "a1", startMs: 0, durationMs: 10000, sourceInMs: 1000 });
+    const dd = r.doc;
+    const cut = applySilenceCut(dd, r.clipId, [
+      { startMs: 3000, endMs: 5000 },
+      { startMs: 8000, endMs: 100000 },
+    ], 100);
+    expect(cut).not.toBeNull();
+    const clips = cut!.timeline.tracks.find((t) => t.id === voice)!.clips;
+    // keep [1000,3100) and [4900,8100): silence 3–5s and 8s+ removed, 100ms pad each side
+    expect(clips).toHaveLength(2);
+    expect(clips[0].sourceInMs).toBe(1000);
+    expect(clips[0].durationMs).toBe(2100);
+    expect(clips[1].sourceInMs).toBe(4900);
+    expect(clips[1].durationMs).toBe(3200);
+    expect(clips[1].startMs).toBe(2100); // butt-joined
+  });
+
+  it("applySilenceCut returns null when nothing is removable", () => {
+    const { d, voice } = audioDoc();
+    const r = addClip(d, { trackId: voice, mediaRef: "a1", startMs: 0, durationMs: 10000 });
+    expect(applySilenceCut(r.doc, r.clipId, [], 100)).toBeNull();
+    expect(applySilenceCut(r.doc, "nope", [{ startMs: 0, endMs: 5 }], 100)).toBeNull();
   });
 });

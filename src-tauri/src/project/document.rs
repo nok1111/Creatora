@@ -33,6 +33,51 @@ pub struct ProjectDoc {
     /// Media referenced by this project (asset ids; resolved via catalog).
     #[serde(default)]
     pub media_refs: Vec<MediaRef>,
+    /// Auto-ducking rules — source track drives gain reduction on target
+    /// track (render: sidechaincompress; preview: envelope). ADR-026.
+    #[serde(default)]
+    pub ducking: Vec<DuckingRule>,
+}
+
+/// Non-destructive auto-duck: when the source track's level crosses
+/// `threshold_db`, the target track drops by `reduction_db` with
+/// attack/release smoothing and a hold window to prevent pumping.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuckingRule {
+    #[serde(default)]
+    pub id: String,
+    pub source_track: String,
+    pub target_track: String,
+    /// Sidechain trigger level, dBFS (e.g. -35).
+    #[serde(default = "default_duck_threshold")]
+    pub threshold_db: f32,
+    /// Gain reduction depth, dB (e.g. -12 → music drops 12 dB under voice).
+    #[serde(default = "default_duck_reduction")]
+    pub reduction_db: f32,
+    #[serde(default = "default_duck_attack")]
+    pub attack_ms: f32,
+    #[serde(default = "default_duck_release")]
+    pub release_ms: f32,
+    /// Hold time keeps the duck open through short speech pauses.
+    #[serde(default = "default_duck_hold")]
+    pub hold_ms: f32,
+}
+
+fn default_duck_threshold() -> f32 {
+    -35.0
+}
+fn default_duck_reduction() -> f32 {
+    -12.0
+}
+fn default_duck_attack() -> f32 {
+    20.0
+}
+fn default_duck_release() -> f32 {
+    250.0
+}
+fn default_duck_hold() -> f32 {
+    150.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +136,16 @@ pub struct Track {
     pub visible: bool,
     #[serde(default)]
     pub muted: bool,
+    /// Per-track gain multiplier (0–8) — mixes post-clip (ADR-026).
+    #[serde(default = "default_track_volume")]
+    pub volume: f32,
+    /// Solo: when ANY track is solo, non-solo tracks are silent.
+    #[serde(default)]
+    pub solo: bool,
+}
+
+fn default_track_volume() -> f32 {
+    1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,8 +195,16 @@ pub struct Clip {
     /// render use the same canonical params; see render/effects.rs).
     #[serde(default)]
     pub effects: Vec<Effect>,
-    #[serde(default)]
+    #[serde(default = "default_track_volume")]
     pub volume: f32,
+    /// Stereo balance −1 (left) … 0 (center) … +1 (right). ADR-026.
+    #[serde(default)]
+    pub pan: f32,
+    /// Clip-level fades (ms) — distinct from transition crossfades.
+    #[serde(default)]
+    pub fade_in_ms: i64,
+    #[serde(default)]
+    pub fade_out_ms: i64,
     #[serde(default)]
     pub speed: f32,
     /// Text content for text clips.
@@ -525,6 +588,7 @@ impl ProjectDoc {
             brand_kit_id: None,
             export_profiles: Vec::new(),
             media_refs: Vec::new(),
+            ducking: Vec::new(),
         }
     }
 

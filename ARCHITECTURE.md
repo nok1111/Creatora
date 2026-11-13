@@ -79,6 +79,17 @@ Creatora/
 └── package.json / vite.config.ts / tailwind.config.ts
 ```
 
+## Audio pipeline (ADR-026)
+
+- Canonical chain per clip: `atrim→atempo→audiofx→volume(+kf)→track
+  gain→afade→pan→adelay` → per-track bus; `DuckingRule`s →
+  `sidechaincompress` (source `asplit`+`apad`); `amix` → master `alimiter`.
+- `render/audiofx.rs` maps the shared `Effect` model to ffmpeg audio
+  filters; `src/services/audio-preview.ts` mirrors via WebAudio
+  (Biquad/DynamicsCompressor where expressible; analyser-driven ducking).
+- Analysis commands (`audio/`): waveform peaks (job + xxh3 disk cache),
+  `loudnorm` JSON parse, `silencedetect` → reviewable proposals only.
+
 ## Data flow
 
 - Frontend → backend: typed Tauri commands (`#[tauri::command]`), all return `Result<T, AppError>`; `AppError` serializes to `{code, message, details?}`.

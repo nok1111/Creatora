@@ -97,3 +97,12 @@ H.264/H.265/AAC decoding+encoding in distributed software may implicate patent p
 Model size/hardware guidance: tiny ≈75MB RAM-light ~realtime on modern CPU;
 small ≈466MB slower-but-accurate. No GPU build shipped yet (whisper.cpp CUDA
 is a future optional build); CPU AVX2 is the baseline.
+
+## Audio processing (Phase 6)
+
+- **ffmpeg audio filters** — afftdn/acompressor/alimiter/deesser/agate/
+  equalizer/sidechaincompress/loudnorm/silencedetect ship inside the
+  provisioned ffmpeg binary (same license as the existing build; invoked
+  as a subprocess, no linking changes).
+- **WebAudio API** — browser/webview built-in; no new dependency.
+- **xxhash-rust** — BSL-1.0 (already listed; waveform cache keys).

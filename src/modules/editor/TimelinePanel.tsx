@@ -36,6 +36,7 @@ import {
   timelineDuration,
   trimClip,
 } from "@/lib/timeline-engine";
+import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import type { Clip, Track } from "@/lib/project-types";
@@ -296,6 +297,29 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
       </button>
       <button
+        className={`rounded px-0.5 py-0.5 text-[9px] font-bold hover:bg-accent ${track.solo ? "text-cyan-400" : "text-muted-foreground"}`}
+        title="Solo (mute other tracks)"
+        onClick={(e) => {
+          e.stopPropagation();
+          mutate((d) => setTrackFlag(d, track.id, { solo: !track.solo }));
+        }}
+      >
+        S
+      </button>
+      <input
+        type="range"
+        className="w-10 accent-cyan-500"
+        min={0}
+        max={2}
+        step={0.01}
+        value={track.volume ?? 1}
+        title={`Track gain ${((track.volume ?? 1) * 100).toFixed(0)}%`}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) =>
+          mutate((d) => setTrackFlag(d, track.id, { volume: Number(e.target.value) }))
+        }
+      />
+      <button
         className="rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
         title={t("editor.trackDelete")}
         onClick={(e) => {
@@ -484,7 +508,18 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "left");
                         }}
                       />
-                      <div className="flex flex-1 items-center gap-1 truncate px-1">
+                      {track.kind === "audio" && clip.mediaRef && (
+                        <WaveformCanvas
+                          srcPath={
+                            doc.mediaRefs.find((m) => m.assetId === clip.mediaRef)?.path ?? ""
+                          }
+                          sourceInMs={clip.sourceInMs}
+                          durationMs={clip.durationMs}
+                          heightPx={TRACK_H - 8}
+                          widthPx={Math.max(6, msToPx(clip.durationMs))}
+                        />
+                      )}
+                      <div className="relative flex flex-1 items-center gap-1 truncate px-1">
                         {track.locked && <Lock className="size-3 shrink-0" />}
                         <span className="truncate">
                           {(clip.mediaRef && assets.get(clip.mediaRef)?.name) ?? "clip"} ·{" "}

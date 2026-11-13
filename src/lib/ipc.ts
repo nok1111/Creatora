@@ -148,8 +148,53 @@ export const api = {
     cmd<void>("tag_asset", { assetId, tag }),
   untagAsset: (assetId: string, tagId: string) =>
     cmd<void>("untag_asset", { assetId, tagId }),
+
+  // ---------- audio studio (ADR-026) ----------
+  /** Kicks off a waveform job (or returns null on cache hit). */
+  generateWaveform: (path: string, buckets: number) =>
+    cmd<string | null>("generate_waveform", { path, buckets }),
+  readWaveform: (path: string, buckets: number) =>
+    cmd<Waveform | null>("read_waveform", { path, buckets }),
+  analyzeLoudness: (path: string) =>
+    cmd<Loudness>("analyze_loudness", { path }),
+  detectSilence: (path: string, noiseDb: number, minMs: number) =>
+    cmd<SilenceRegion[]>("detect_silence", { path, noiseDb, minMs }),
+  suggestNormalize: (path: string, targetLufs: number, tpCeiling: number) =>
+    cmd<NormalizeSuggestion>("suggest_normalize", { path, targetLufs, tpCeiling }),
+
   generateProxies: (assetIds: string[]) =>
     cmd<string>("generate_proxies", { assetIds }),
   deleteProxy: (assetId: string) =>
     cmd<void>("delete_proxy", { assetId }),
 };
+
+export interface Waveform {
+  /** min/max pairs per bucket, -1..1 (len = buckets*2) */
+  peaks: number[];
+  buckets: number;
+  durationMs: number;
+}
+
+export interface Loudness {
+  /** Integrated LUFS */
+  integrated: number;
+  /** True peak dBTP */
+  truePeak: number;
+  /** Loudness range LU */
+  lra: number;
+  /** Gating threshold LUFS */
+  threshold: number;
+}
+
+export interface SilenceRegion {
+  startMs: number;
+  endMs: number;
+}
+
+export interface NormalizeSuggestion {
+  measuredLufs: number;
+  truePeakDb: number;
+  lraLu: number;
+  gainDb: number;
+  needsLimiter: boolean;
+}

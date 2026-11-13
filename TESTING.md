@@ -46,6 +46,13 @@ inspect the output file itself. Skipped only when ffmpeg is absent.
 | `image_clip_renders_for_its_duration` | duration + green frame pixels |
 | `save_reopen_preserves_timeline_exactly` | store save/open round-trip, JSON-identical timeline |
 | `cancelled_render_leaves_no_output` | cancelled flag → Err("cancelled"), no output file |
+| `track_volume_and_solo_mix_correctly` | decoded PCM RMS: track gain 0.5 halves RMS; solo isolates |
+| `clip_pan_isolates_channels` | per-channel RMS: left-pan clip → right channel ≈ silent |
+| `clip_fades_shape_envelope` | RMS ramp-up/down within fade windows |
+| `audio_fx_highpass_and_limiter_apply` | HP removes low band vs reference; limiter caps peak |
+| `ducking_ducks_music_under_voice` | sidechaincompress: music RMS drops during voice, releases after |
+| `waveform_peaks_match_source` | generated peaks ≈ decoded PCM min/max per bucket |
+| `loudness_and_silence_parse` | loudnorm JSON fields + silencedetect regions on known signal |
 
 Fixtures are generated on the fly by ffmpeg lavfi (`color=` + `sine=`) into
 `%TEMP%/creatora_e2e_*` — deterministic pixels and known frequencies, no

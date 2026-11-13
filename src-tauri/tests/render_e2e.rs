@@ -140,6 +140,9 @@ fn clip(id: &str, asset: &str, start_ms: i64, dur_ms: i64, src_in_ms: i64) -> Cl
         transform: Transform::default(),
         effects: vec![],
         volume: 1.0,
+        pan: 0.0,
+        fade_in_ms: 0,
+        fade_out_ms: 0,
         speed: 1.0,
         text: None,
         text_style: None,
@@ -157,6 +160,8 @@ fn video_track(clips: Vec<Clip>) -> Track {
         locked: false,
         visible: true,
         muted: false,
+        volume: 1.0,
+        solo: false,
     }
 }
 
@@ -742,6 +747,8 @@ fn stacked_tracks_composite_in_z_order() {
         locked: false,
         visible: true,
         muted: false,
+        volume: 1.0,
+        solo: false,
     });
     add_media(&mut doc, "r", &red);
     add_media(&mut doc, "b", &blue);
@@ -1093,6 +1100,9 @@ fn text_clip_renders_glyphs_on_canvas() {
             transform: Transform::default(),
             effects: vec![],
             volume: 1.0,
+            pan: 0.0,
+            fade_in_ms: 0,
+            fade_out_ms: 0,
             speed: 1.0,
             text: Some("HELLO".into()),
             text_style: Some(TextStyle {
@@ -1108,6 +1118,8 @@ fn text_clip_renders_glyphs_on_canvas() {
         locked: false,
         visible: true,
         muted: false,
+        volume: 1.0,
+        solo: false,
     });
     add_media(&mut doc, "r", &red);
     let out = render(&dir, &doc, "text.mp4");
@@ -1719,6 +1731,9 @@ fn text_clip_renders_in_vertical_version() {
             transform: Transform::default(),
             effects: vec![],
             volume: 1.0,
+            pan: 0.0,
+            fade_in_ms: 0,
+            fade_out_ms: 0,
             speed: 1.0,
             text: Some("HI".into()),
             text_style: Some(TextStyle {
@@ -1734,6 +1749,8 @@ fn text_clip_renders_in_vertical_version() {
         locked: false,
         visible: true,
         muted: false,
+        volume: 1.0,
+        solo: false,
     });
     add_media(&mut doc, "r", &red);
     doc.versions.push(FormatVersion {
@@ -1917,6 +1934,9 @@ fn version_text_override_independent_copy() {
             transform: Transform::default(),
             effects: vec![],
             volume: 1.0,
+            pan: 0.0,
+            fade_in_ms: 0,
+            fade_out_ms: 0,
             speed: 1.0,
             text: Some("YouTube Title".into()),
             text_style: Some(TextStyle::default()),
@@ -1926,6 +1946,8 @@ fn version_text_override_independent_copy() {
         locked: false,
         visible: true,
         muted: false,
+        volume: 1.0,
+        solo: false,
     });
     let ov = ClipOverride {
         text: Some("TikTok Title".into()),
@@ -2158,4 +2180,375 @@ fn external_subtitle_exports_preserve_content() {
     assert!(vtt.starts_with("WEBVTT"));
     assert!(vtt.contains("00:00:01.234 --> 00:00:05.678"));
     assert!(vtt.contains("second line"));
+}
+
+// ---------- Phase 6: Audio Studio (ADR-026) ----------
+
+/// Per-channel RMS (stereo decode, 8 kHz s16 interleaved).
+fn audio_rms_ch(path: &Path, from_s: f64, to_s: f64, ch: usize) -> f64 {
+    let out = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            &*path.to_string_lossy(),
+            "-f",
+            "s16le",
+            "-ac",
+            "2",
+            "-ar",
+            "8000",
+            "-",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let pcm = out.stdout;
+    let (a, b) = ((from_s * 8000.0) as usize * 4, (to_s * 8000.0) as usize * 4);
+    let (a, b) = (a.min(pcm.len()), b.min(pcm.len()));
+    if b <= a + 4 {
+        return 0.0;
+    }
+    let mut sum = 0f64;
+    let mut n = 0usize;
+    for i in (a..b - 3).step_by(4) {
+        let s = i16::from_le_bytes([pcm[i + ch * 2], pcm[i + ch * 2 + 1]]) as f64;
+        sum += s * s;
+        n += 1;
+    }
+    (sum / n.max(1) as f64).sqrt() / 32768.0
+}
+
+fn audio_clip(id: &str, asset: &str, start_ms: i64, dur_ms: i64) -> Clip {
+    clip(id, asset, start_ms, dur_ms, 0)
+}
+
+fn audio_track(id: &str, clips: Vec<Clip>) -> Track {
+    let mut t = video_track(clips);
+    t.id = id.into();
+    t.kind = TrackKind::Audio;
+    t
+}
+
+fn make_audio(dir: &Path, name: &str, spec: &str, secs: f64) -> PathBuf {
+    let out = dir.join(name);
+    if out.is_file() {
+        return out;
+    }
+    let st = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("{spec}:duration={secs}"),
+            "-c:a",
+            "pcm_s16le",
+        ])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    out
+}
+
+#[test]
+fn audio_pan_attenuates_opposite_channel() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("pan");
+    let a = make_audio(&dir, "a.wav", "sine=frequency=440", 3.0);
+    let mut doc = base_doc();
+    let mut c = audio_clip("c1", "a", 0, 3000);
+    c.pan = -1.0; // hard left
+    doc.timeline.tracks.push(audio_track("A1", vec![c]));
+    add_media(&mut doc, "a", &a);
+    let out = render(&dir, &doc, "out.mp4");
+    let l = audio_rms_ch(&out, 0.5, 2.5, 0);
+    let r = audio_rms_ch(&out, 0.5, 2.5, 1);
+    assert!(l > 0.04, "left silent: {l} (r={r})");
+    assert!(r < l * 0.1, "pan failed: L={l:.3} R={r:.3}");
+}
+
+#[test]
+fn clip_fade_in_and_out_ramp_level() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("cfade");
+    let a = make_audio(&dir, "a.wav", "sine=frequency=440", 4.0);
+    let mut doc = base_doc();
+    let mut c = audio_clip("c1", "a", 0, 4000);
+    c.fade_in_ms = 2000;
+    c.fade_out_ms = 2000;
+    doc.timeline.tracks.push(audio_track("A1", vec![c]));
+    add_media(&mut doc, "a", &a);
+    let out = render(&dir, &doc, "out.mp4");
+    let early = audio_rms(&out, 0.1, 0.6);
+    let mid = audio_rms(&out, 2.0, 2.9);
+    let late = audio_rms(&out, 3.4, 3.9);
+    assert!(mid > 500.0, "mid silent");
+    assert!(early < mid * 0.6, "no fade-in: {early:.3} vs {mid:.3}");
+    assert!(late < mid * 0.6, "no fade-out: {late:.3} vs {mid:.3}");
+}
+
+#[test]
+fn track_volume_and_solo_mix_correctly() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("tv");
+    let a = make_audio(&dir, "a.wav", "sine=frequency=440", 3.0);
+    let b = make_audio(&dir, "b.wav", "sine=frequency=880", 3.0);
+    // Track volume 0.5 → RMS halves.
+    let mut doc = base_doc();
+    let mut t = audio_track("A1", vec![audio_clip("c1", "a", 0, 3000)]);
+    t.volume = 0.5;
+    doc.timeline.tracks.push(t);
+    add_media(&mut doc, "a", &a);
+    let out = render(&dir, &doc, "half.mp4");
+    let mut doc2 = base_doc();
+    doc2.timeline
+        .tracks
+        .push(audio_track("A1", vec![audio_clip("c1", "a", 0, 3000)]));
+    add_media(&mut doc2, "a", &a);
+    let out2 = render(&dir, &doc2, "full.mp4");
+    let half = audio_rms(&out, 0.5, 2.5);
+    let full = audio_rms(&out2, 0.5, 2.5);
+    assert!(
+        (half / full - 0.5).abs() < 0.1,
+        "track vol: {half:.3}/{full:.3}"
+    );
+
+    // Solo: B solo → A silenced.
+    let mut doc3 = base_doc();
+    doc3.timeline
+        .tracks
+        .push(audio_track("A1", vec![audio_clip("c1", "a", 0, 3000)]));
+    let mut tb = audio_track("A2", vec![audio_clip("c2", "b", 0, 3000)]);
+    tb.solo = true;
+    doc3.timeline.tracks.push(tb);
+    add_media(&mut doc3, "a", &a);
+    add_media(&mut doc3, "b", &b);
+    let out3 = render(&dir, &doc3, "solo.mp4");
+    // 880Hz present, 440 absent → highpass the mix: energy survives; lowpass: dies.
+    let hi = {
+        let p = dir.join("hp.wav");
+        Command::new(ffmpeg().unwrap())
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                &out3.to_string_lossy(),
+                "-af",
+                "highpass=f=600",
+                &p.to_string_lossy(),
+            ])
+            .status()
+            .unwrap();
+        audio_rms(&p, 0.5, 2.5)
+    };
+    // Reference: same lowpass applied to a render of ONLY the B track.
+    let mut doc4 = base_doc();
+    doc4.timeline
+        .tracks
+        .push(audio_track("A2", vec![audio_clip("c2", "b", 0, 3000)]));
+    add_media(&mut doc4, "b", &b);
+    let out4 = render(&dir, &doc4, "onlyb.mp4");
+    let lp_of = |src: &PathBuf, name: &str| {
+        let p = dir.join(name);
+        Command::new(ffmpeg().unwrap())
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                &src.to_string_lossy(),
+                "-af",
+                "lowpass=f=300,lowpass=f=300",
+                &p.to_string_lossy(),
+            ])
+            .status()
+            .unwrap();
+        audio_rms(&p, 0.5, 2.5)
+    };
+    let lo = lp_of(&out3, "lp.wav");
+    let lo_ref = lp_of(&out4, "lpref.wav");
+    // Solo output's low-band energy ≈ the 880-only reference (no 440 leak).
+    assert!(hi > 500.0, "solo render silent");
+    assert!(lo < lo_ref * 2.0, "solo leak: {lo:.0} vs ref {lo_ref:.0}");
+}
+
+#[test]
+fn ducking_ducks_music_under_voice() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("duck");
+    // Voice: 2s burst starting at 1s; music: constant.
+    let voice = dir.join("voice.wav");
+    Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=300:duration=2",
+            "-af",
+            "adelay=1000:all=1",
+            "-t",
+            "4",
+            &voice.to_string_lossy(),
+        ])
+        .status()
+        .unwrap();
+    let music = make_audio(&dir, "music.wav", "sine=frequency=880", 4.0);
+
+    let mk_doc = |duck: bool| {
+        let mut doc = base_doc();
+        doc.timeline.tracks.push(audio_track(
+            "VOICE",
+            vec![audio_clip("v", "voice", 0, 4000)],
+        ));
+        doc.timeline.tracks.push(audio_track(
+            "MUSIC",
+            vec![audio_clip("m", "music", 0, 4000)],
+        ));
+        add_media(&mut doc, "voice", &voice);
+        add_media(&mut doc, "music", &music);
+        if duck {
+            doc.ducking.push(DuckingRule {
+                id: "d1".into(),
+                source_track: "VOICE".into(),
+                target_track: "MUSIC".into(),
+                threshold_db: -40.0,
+                reduction_db: -15.0,
+                attack_ms: 20.0,
+                release_ms: 300.0,
+                hold_ms: 100.0,
+            });
+        }
+        doc
+    };
+    let out_no = render(&dir, &mk_doc(false), "noduck.mp4");
+    let out_dk = render(&dir, &mk_doc(true), "duck.mp4");
+    // During voice (1.5–3s) the mixed level should drop vs no-duck.
+    let during_no = audio_rms(&out_no, 1.5, 2.9);
+    let during_dk = audio_rms(&out_dk, 1.5, 2.9);
+    // After voice ends (3.3–3.9s) both return to music-only level.
+    let after_dk = audio_rms(&out_dk, 3.4, 3.95);
+    let after_no = audio_rms(&out_no, 3.4, 3.95);
+    assert!(
+        during_dk < during_no * 0.85,
+        "no ducking: {during_dk:.3} vs {during_no:.3}"
+    );
+    assert!(
+        after_dk > after_no * 0.8,
+        "release failed: {after_dk:.3} vs {after_no:.3}"
+    );
+}
+
+#[test]
+fn audio_fx_highpass_and_limiter_apply() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("afx");
+    let a = make_audio(&dir, "a.wav", "sine=frequency=200", 3.0);
+    let mut doc = base_doc();
+    let mut c = audio_clip("c1", "a", 0, 3000);
+    let mut params = std::collections::BTreeMap::new();
+    params.insert("freq".to_string(), 800.0);
+    c.effects.push(Effect {
+        id: "e1".into(),
+        kind: "highpass".into(),
+        enabled: true,
+        params,
+    });
+    doc.timeline.tracks.push(audio_track("A1", vec![c]));
+    add_media(&mut doc, "a", &a);
+    let out = render(&dir, &doc, "out.mp4");
+    // Baseline without the filter.
+    let mut doc2 = base_doc();
+    doc2.timeline
+        .tracks
+        .push(audio_track("A1", vec![audio_clip("c1", "a", 0, 3000)]));
+    add_media(&mut doc2, "a", &a);
+    let out2 = render(&dir, &doc2, "base.mp4");
+    let rms = audio_rms(&out, 0.5, 2.5);
+    let base = audio_rms(&out2, 0.5, 2.5);
+    // 200 Hz below the 800 Hz highpass → strongly attenuated.
+    assert!(
+        rms < base * 0.15,
+        "highpass ineffective: {rms:.0} vs {base:.0}"
+    );
+}
+
+#[test]
+fn waveform_peaks_match_audio() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("wf");
+    let a = make_audio(&dir, "a.wav", "sine=frequency=440", 2.0);
+    let wf = creatora_lib::audio::waveform(&a, 100).unwrap();
+    assert_eq!(wf.buckets, 100);
+    assert_eq!(wf.peaks.len(), 200);
+    let max_peak = wf.peaks.iter().cloned().fold(0f32, f32::max);
+    assert!(max_peak > 0.05, "peaks too small: {max_peak}");
+    assert!(wf.duration_ms > 1800, "duration: {}", wf.duration_ms);
+}
+
+#[test]
+fn loudness_and_silence_analysis_work() {
+    let Some(_ff) = ffmpeg() else { return };
+    let dir = tmpdir("loud");
+    let a = make_audio(&dir, "a.wav", "sine=frequency=440", 3.0);
+    let l = creatora_lib::audio::loudness(&a).unwrap();
+    assert!(
+        l.integrated.is_finite() && l.integrated < 0.0,
+        "I={}",
+        l.integrated
+    );
+    assert!(l.true_peak <= 0.5, "tp={}", l.true_peak);
+
+    // Silence: 1s tone, 2s silence, 1s tone.
+    let gapped = dir.join("gapped.wav");
+    Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-filter_complex",
+            "[0][1][2]concat=n=3:v=0:a=1",
+            &gapped.to_string_lossy(),
+        ])
+        .status()
+        .unwrap();
+    let regions = creatora_lib::audio::detect_silence(&gapped, -35.0, 400).unwrap();
+    assert!(!regions.is_empty(), "no silence detected");
+    let mid = &regions[0];
+    assert!(
+        mid.start_ms > 500 && mid.start_ms < 1600,
+        "start={}",
+        mid.start_ms
+    );
+    assert!(
+        mid.end_ms - mid.start_ms > 1500,
+        "len={}",
+        mid.end_ms - mid.start_ms
+    );
 }

@@ -43,6 +43,15 @@ pub struct Segment {
     /// Source range consumed = duration_ms * speed (speed > 0).
     pub speed: f64,
     pub volume: f32,
+    /// Per-track gain multiplier (ADR-026).
+    pub track_volume: f32,
+    /// Stereo balance -1..+1.
+    pub pan: f32,
+    /// Clip-level fades, ms (distinct from transition crossfades).
+    pub fade_in_ms: i64,
+    pub fade_out_ms: i64,
+    /// Track array index — ducking rules key on this.
+    pub track_id: String,
     /// Canvas-relative transform.
     pub transform: crate::project::document::Transform,
     /// Ordered effect stack (canonical params — render/effects.rs).
@@ -134,6 +143,8 @@ fn collect_segments(
 ) -> Result<Vec<Segment>, AppError> {
     let mut segments = Vec::new();
     let mut missing: Vec<String> = Vec::new();
+    // Solo semantics: any solo track mutes all non-solo tracks.
+    let any_solo = doc.timeline.tracks.iter().any(|t| t.solo);
 
     for (track_index, track) in doc.timeline.tracks.iter().enumerate() {
         let is_video_track = matches!(track.kind, TrackKind::Video | TrackKind::Image);
@@ -159,7 +170,10 @@ fn collect_segments(
             };
             let visual =
                 is_video_track && track.visible && matches!(src.kind.as_str(), "video" | "image");
-            let audible = src.has_audio && !track.muted && (is_audio_track || is_video_track);
+            let audible = src.has_audio
+                && !track.muted
+                && (!any_solo || track.solo)
+                && (is_audio_track || is_video_track);
             if !visual && !audible {
                 continue;
             }
@@ -177,6 +191,11 @@ fn collect_segments(
                     1.0
                 },
                 volume: clip.volume.clamp(0.0, 8.0),
+                track_volume: track.volume.clamp(0.0, 8.0),
+                pan: clip.pan.clamp(-1.0, 1.0),
+                fade_in_ms: clip.fade_in_ms.max(0),
+                fade_out_ms: clip.fade_out_ms.max(0),
+                track_id: track.id.clone(),
                 transform: clip.transform,
                 effects: clip.effects.clone(),
                 keyframes: clip.keyframes.clone(),
@@ -524,6 +543,15 @@ pub fn build_plan_with(
     let mut overlay_idx = 0usize;
     let mut group_idx = 0usize;
     let mut processed = std::collections::HashSet::new();
+    // Ducking bookkeeping (ADR-026): source tracks → sidechain bus labels,
+    // target segs → post-compress outputs for the master mix.
+    let duck_src: std::collections::HashSet<String> =
+        doc.ducking.iter().map(|r| r.source_track.clone()).collect();
+    let duck_tgt: std::collections::HashSet<String> =
+        doc.ducking.iter().map(|r| r.target_track.clone()).collect();
+    let mut src_bus: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut tgt_segs: Vec<(usize, String)> = Vec::new();
 
     // Audio chain helper — atrim/asetpts/atempo/volume(+kf)/afade/adelay.
     // Fades implement transition audio parity with the video crossfade.
@@ -539,6 +567,8 @@ pub fn build_plan_with(
             c.push(',');
             c.push_str(&atempo_chain(seg.speed));
         }
+        // Audio effects stack — canonical Effect model (ADR-026).
+        c.push_str(&crate::render::audiofx::audio_effects_chain(&seg.effects));
         if let Some(k) = seg.keyframes.get("volume") {
             c.push_str(&format!(
                 ",volume='{}':eval=frame",
@@ -546,6 +576,21 @@ pub fn build_plan_with(
             ));
         } else if seg.volume != 1.0 {
             c.push_str(&format!(",volume={}", seg.volume));
+        }
+        if (seg.track_volume - 1.0).abs() > 1e-6 {
+            c.push_str(&format!(",volume={}", seg.track_volume));
+        }
+        // Clip-level fades run inside the clip window (before adelay).
+        if seg.fade_in_ms > 0 {
+            c.push_str(&format!(",afade=t=in:st=0:d={}", ms_to_s(seg.fade_in_ms)));
+        }
+        if seg.fade_out_ms > 0 {
+            let st = seg.duration_ms - seg.fade_out_ms;
+            c.push_str(&format!(
+                ",afade=t=out:st={}:d={}",
+                ms_to_s(st),
+                ms_to_s(seg.fade_out_ms)
+            ));
         }
         if fade_in > 0 {
             c.push_str(&format!(",afade=t=in:st=0:d={}", ms_to_s(fade_in)));
@@ -557,6 +602,10 @@ pub fn build_plan_with(
                 ms_to_s(st),
                 ms_to_s(fade_out)
             ));
+        }
+        if let Some(pan) = crate::render::audiofx::pan_filter(seg.pan) {
+            c.push(',');
+            c.push_str(&pan);
         }
         if seg.start_ms > 0 {
             c.push_str(&format!(",adelay={}:all=1", seg.start_ms));
@@ -641,9 +690,23 @@ pub fn build_plan_with(
             );
             let a_lbl = lbl("a", i + 1);
             let mut c = c;
-            c.push_str(&a_lbl);
+            if duck_src.contains(&seg.track_id) {
+                // Source segs feed BOTH the master mix and the sidechain bus.
+                let as_lbl = lbl("as", i + 1);
+                c.push_str(&format!(",asplit=2{a_lbl}{as_lbl}"));
+                src_bus
+                    .entry(seg.track_id.clone())
+                    .or_default()
+                    .push(as_lbl);
+            } else {
+                c.push_str(&a_lbl);
+            }
             filters.push(c);
-            audio_labels.push(a_lbl);
+            if duck_tgt.contains(&seg.track_id) {
+                tgt_segs.push((i, a_lbl));
+            } else {
+                audio_labels.push(a_lbl);
+            }
         }
     }
 
@@ -698,10 +761,78 @@ pub fn build_plan_with(
         cur = next;
     }
     filters.push(format!("{cur}format=yuv420p[vout]"));
+
+    // ---- ducking (ADR-026): one stereo sidechain bus per source track,
+    // split once per sidechaincompress application.
+    // applications[bus_key] = times the bus is consumed.
+    let mut bus_feeds: std::collections::HashMap<String, Vec<(String, usize)>> =
+        std::collections::HashMap::new(); // track → [(rule_key, feed_idx)]
+    for (si, a_lbl) in &tgt_segs {
+        let track_id = segments[*si].track_id.clone();
+        for (ri, r) in doc.ducking.iter().enumerate() {
+            if r.target_track == track_id && src_bus.contains_key(&r.source_track) {
+                bus_feeds
+                    .entry(r.source_track.clone())
+                    .or_default()
+                    .push((a_lbl.clone(), ri));
+            }
+        }
+    }
+    let mut sc_idx = 0usize;
+    let mut sc_labels: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for (src_track, feeds) in &bus_feeds {
+        let ins = src_bus[src_track].concat();
+        let n_ins = src_bus[src_track].len();
+        // apad keeps the bus alive past the source's end — otherwise
+        // sidechaincompress terminates the target early (verified e2e).
+        let bus = format!("{ins}amix=inputs={n_ins}:normalize=0:duration=longest,aformat=channel_layouts=stereo,apad");
+        // asplit into one label per sidechaincompress application.
+        let outs: Vec<String> = (0..feeds.len()).map(|j| lbl("sc", sc_idx + j)).collect();
+        sc_labels.insert(src_track.clone(), outs.clone());
+        sc_idx += feeds.len();
+        filters.push(format!("{bus},asplit={}{}", feeds.len(), outs.concat()));
+    }
+    // Apply rules to each target seg (rules chain when several hit one track).
+    let mut feed_counters: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for (si, a_lbl) in &tgt_segs {
+        let track_id = segments[*si].track_id.clone();
+        let mut cur = a_lbl.clone();
+        for (ri, r) in doc.ducking.iter().enumerate() {
+            if r.target_track != track_id || !src_bus.contains_key(&r.source_track) {
+                continue;
+            }
+            let fi = feed_counters.entry(r.source_track.clone()).or_insert(0);
+            let sc = sc_labels[&r.source_track][*fi].clone();
+            *fi += 1;
+            let out = lbl("ad", *si * 16 + ri);
+            // threshold dB→linear; mix bounds duck depth at reduction_db;
+            // hold folds into the release tail (compressor has no hold param).
+            let thresh = (10f64)
+                .powf(r.threshold_db as f64 / 20.0)
+                .clamp(0.0009, 1.0);
+            let mix = (1.0 - (10f64).powf(r.reduction_db as f64 / 20.0)).clamp(0.0, 1.0);
+            filters.push(format!(
+                "{cur}{sc}sidechaincompress=threshold={thresh:.4}:ratio=20:attack={:.1}:release={:.1}:mix={mix:.4}:makeup=1{out}",
+                r.attack_ms.clamp(0.01, 2000.0),
+                (r.release_ms + r.hold_ms).clamp(0.01, 9000.0),
+            ));
+            cur = out;
+        }
+        audio_labels.push(cur);
+    }
+
     let has_audio = !audio_labels.is_empty();
     if has_audio {
+        // Master limiter — transparent under 0.95, protects overlap clipping.
+        let tail = if audio_labels.len() > 1 {
+            ",alimiter=limit=0.95:level=false"
+        } else {
+            ""
+        };
         filters.push(format!(
-            "{}amix=inputs={}:normalize=0:duration=longest[aout]",
+            "{}amix=inputs={}:normalize=0:duration=longest{tail}[aout]",
             audio_labels.concat(),
             audio_labels.len()
         ));
@@ -871,6 +1002,9 @@ mod tests {
                 transform: Transform::default(),
                 effects: vec![],
                 volume: 1.0,
+                pan: 0.0,
+                fade_in_ms: 0,
+                fade_out_ms: 0,
                 speed: 1.0,
                 text: None,
                 text_style: None,
@@ -880,6 +1014,8 @@ mod tests {
             locked: false,
             visible: true,
             muted: false,
+            volume: 1.0,
+            solo: false,
         });
         let mut srcs = HashMap::new();
         srcs.insert(

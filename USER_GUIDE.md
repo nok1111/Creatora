@@ -19,7 +19,7 @@ Creatora is an all-in-one Creator Studio for Windows: edit video, adapt it for e
 | Editor | Timeline video editing |
 | Formats | One project → YouTube, Shorts, TikTok, Reels, square |
 | Subtitles | Auto-transcribe, style, burn-in or export SRT/VTT |
-| Audio | Mix, clean up, voice-over |
+| Audio | Mix, clean up, voice-over, waveforms, ducking, loudness |
 | Graphics | Thumbnails and social graphics |
 | Brand | Logos, colors, fonts, reusable presets |
 | Social | Connect YouTube/TikTok/Instagram/Facebook |
@@ -52,6 +52,27 @@ Open a project, then:
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 
 *(Configurable bindings land in a later phase.)*
+
+## Audio Studio
+
+- **Waveforms** appear on audio clips automatically (generated in the
+  background, cached on disk; they refine as you zoom).
+- **Track header**: speaker = mute, **S** = solo, slider = track gain.
+- **Clip inspector → Audio**: volume, speed, **pan** (−1 left … +1 right),
+  **fade in/out** (ms).
+- **Audio fx** (add-effect dropdown, entries marked `[audio]`): high-pass,
+  low-pass, 3-band EQ, denoise, compressor, limiter, de-esser, noise gate.
+  Preview applies the ones WebAudio can express; all apply on export.
+- **Measure / Normalize →**: reads real EBU R128 loudness (LUFS, true
+  peak, LRA) and applies the suggested gain to clip volume — undoable,
+  never clipping (adds a limiter when needed). LUFS presets are
+  *orientative*, not platform requirements.
+- **Silence detect** lists silent regions for YOUR review — "Apply cut
+  proposal" splits the clip keeping the speech (with padding). Fully
+  undoable; nothing is removed until you apply it.
+- **Auto-duck**: add a rule (source track → target track) — e.g. voice →
+  music. Music ducks while voice is active and releases after, with
+  adjustable threshold/reduction/attack/release/hold.
 
 ## Where is my data?
 
