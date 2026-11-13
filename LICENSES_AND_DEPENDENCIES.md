@@ -22,6 +22,18 @@ FFmpeg is invoked **exclusively as an external subprocess** (`ffmpeg.exe`, `ffpr
 
 **Record at build time:** ffmpeg version string, configure flags, source URL/commit, license texts in `tools/THIRD_PARTY_NOTICES/`. Startup probe runs `ffmpeg -version` + `ffmpeg -hide_banner -encoders` to verify capabilities and detect missing codecs → settings shows encoder availability.
 
+### Provisioned build (dev, 2026-11-13)
+
+- **Version:** ffmpeg 9.0.2-essentials_build (gyan.dev release-essentials)
+- **License:** GPL v3 (per bundled README; `--enable-gpl` in configure)
+- **Source:** https://github.com/FFmpeg/FFmpeg/commit/946fcce07b
+- **Downloaded:** https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+- **Notices:** `tools/THIRD_PARTY_NOTICES/LICENSE` (GPL-3), `README.txt` (build readme)
+- **Location:** `tools/bin/ffmpeg.exe` + `ffprobe.exe` (gitignored — provisioned, not committed)
+- **Key encoders confirmed:** libx264, libx264rgb, h264_amf, h264_nvenc (+ h264_qsv, hevc_nvenc/qsv/amf, libx265, aac, libmp3lame)
+- **HW accel:** d3d11va, d3d12va, dxva2, nvdec/nvenc, amf, cuda — runtime availability depends on user GPU; exporter must probe and fall back.
+- **Location in build:** `media::tool_path()` resolves exe-dir → repo `tools/bin` (debug) → `CREATORA_FFMPEG`/`CREATORA_FFPROBE` env → PATH.
+
 ### Codec patent note
 H.264/H.265/AAC decoding+encoding in distributed software may implicate patent pools (MPEG LA/Access Advance/HEVC Advance). FFmpeg's license covers copyright, not patents. Patent-licensing exposure is a **commercial decision to flag** — many distributors ship anyway; note it, don't resolve it here.
 

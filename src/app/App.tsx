@@ -7,6 +7,7 @@ import { ModulePlaceholder } from "@/components/ModulePlaceholder";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MODULES } from "@/app/nav";
 import { HomePage } from "@/modules/home/HomePage";
+import { LibraryPage } from "@/modules/library/LibraryPage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
 import { useSettings } from "@/stores/settings";
 import { autosave } from "@/services/autosave";
@@ -21,6 +22,8 @@ function pageFor(key: string) {
   switch (key) {
     case "home":
       return <HomePage />;
+    case "library":
+      return <LibraryPage />;
     case "settings":
       return <SettingsPage />;
     default:

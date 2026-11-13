@@ -2,6 +2,7 @@ use crate::db::Db;
 use crate::error::{AppError, CmdResult};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tauri::{Manager, State};
 
 #[derive(Serialize)]
@@ -28,7 +29,7 @@ pub fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfo> {
 }
 
 #[tauri::command]
-pub fn get_settings(db: State<'_, Db>) -> CmdResult<HashMap<String, String>> {
+pub fn get_settings(db: State<'_, Arc<Db>>) -> CmdResult<HashMap<String, String>> {
     db.with(|conn| {
         let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
         let rows = stmt
@@ -39,7 +40,7 @@ pub fn get_settings(db: State<'_, Db>) -> CmdResult<HashMap<String, String>> {
 }
 
 #[tauri::command]
-pub fn set_setting(db: State<'_, Db>, key: String, value: String) -> CmdResult<()> {
+pub fn set_setting(db: State<'_, Arc<Db>>, key: String, value: String) -> CmdResult<()> {
     if key.is_empty() || key.len() > 128 || value.len() > 8192 {
         return Err(AppError::InvalidInput(
             "setting key/value length out of bounds".into(),

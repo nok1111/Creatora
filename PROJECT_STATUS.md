@@ -5,10 +5,10 @@
 
 ## Current state
 
-- **Current phase:** PHASE 1 — COMPLETE. Next: PHASE 2 — Projects & Media Library
-- **Current task:** Phase 2 kickoff — `.creatora` project format + project CRUD
-- **Build status:** `npm run build` ✓ · `cargo check` ✓ · `cargo test` 2/2 ✓ · `npm test` 3/3 ✓
-- **Next exact action:** Design `src-tauri/src/project/` — format_version 1 document model, project CRUD commands, project creation dialog in Home
+- **Current phase:** PHASE 2 — Projects & Media Library (IN PROGRESS)
+- **Current task:** Phase 2 remainder — collections/tags UI, project packaging, asset favorites, drag-drop import
+- **Build status:** `npm run build` ✓ · `cargo check` ✓ · `cargo test` 11/11 ✓ · `cargo test --test media_import` 3/3 ✓ · `npm test` 3/3 ✓
+- **Next exact action:** Collections + tags UI in Library; `project_asset` usage wiring on save; drag-drop import via window file-drop event
 
 ## PHASE 0 — Repository Audit (COMPLETE)
 
@@ -27,68 +27,53 @@
 | Rust (MSVC) | OK | 1.97.1 stable, `x86_64-pc-windows-msvc` |
 | Visual Studio Build Tools | OK | VS 2022 Community, VC tools present |
 | WebView2 Runtime | OK | 157.0.4341.46 |
-| FFmpeg | MISSING | Not on PATH — see LICENSES_AND_DEPENDENCIES.md §FFmpeg |
+| FFmpeg | PROVISIONED | 9.0.2 essentials (GPL build) in `tools/bin/` — see LICENSES_AND_DEPENDENCIES.md |
 | whisper.cpp | MISSING | Deferred to Phase 5 (Subtitle Studio) |
 | pnpm/yarn | absent | npm used as package manager |
 
 ### Technical risks identified
 
-1. **FFmpeg licensing** — GPL vs LGPL build choice affects commercial distribution. Mitigation: FFmpeg runs as a separate subprocess (never linked); full analysis + redistribution obligations in LICENSES_AND_DEPENDENCIES.md.
-2. **Preview engine performance** — Real-time compositing in a WebView2 canvas needs GPU acceleration with CPU fallback. Mitigation: two-tier preview (HTMLVideoElement decode + WebGL2 compositor, Canvas2D fallback), proxy media for large files.
-3. **Social API access** — TikTok/Instagram/FB publishing requires app review that cannot be completed autonomously. Mitigation: honest capability matrix in API_INTEGRATIONS.md; build adapter architecture + export-first fallback now, wire OAuth when credentials exist.
-4. **Long export jobs** — must be cancellable, resumable where possible, and never block UI. Mitigation: dedicated job engine in Rust with progress events over Tauri channels.
-5. **Project file compatibility** — versioned `.creatora` format + SQLite schema migrations from day one (DECISIONS.md ADR-005).
+1. **FFmpeg licensing** — GPL subprocess approach decided + build provisioned (record: LICENSES_AND_DEPENDENCIES.md). Counsel review flagged before commercial release.
+2. **Preview engine performance** — two-tier design documented (WebView2 decode + WebGL2 compositor, Canvas2D fallback), proxy media for large files.
+3. **Social API access** — honest capability matrix in API_INTEGRATIONS.md; blocked items marked.
+4. **Long export jobs** — job engine implemented (`src-tauri/src/jobs/`), progress events + cancellation + durable job rows.
+5. **Project file compatibility** — `.creatora` format v1 + version guard + migration chain in place.
 
-### Phase 0 acceptance criteria
+### Phase 0 acceptance criteria — PASSED 2026-11-13
 
-- [x] Repository inspected; existing code identified (none)
-- [x] Stack verified against environment
-- [x] All 10 mandatory documents created
-- [x] Architecture defined (ARCHITECTURE.md)
-- [x] Database design created (DATABASE_SCHEMA.md)
-- [x] Module dependency map (DEVELOPMENT_PLAN.md §Dependencies)
-- [x] Detailed development plan (DEVELOPMENT_PLAN.md)
-- [x] Phase acceptance criteria defined per phase (DEVELOPMENT_PLAN.md)
+## PHASE 1 — Foundations & Design System (COMPLETE — PASSED 2026-11-13)
 
-**Phase 0: PASSED — 2026-11-13**
+Implemented: Vite 8 + React 18 + TS strict + Tauri 2 + Tailwind 3 scaffold; Creatora dark-first design tokens + light variant; app shell with nav rail, 13 modules routed; i18n EN/ES type-checked; SQLite catalog + embedded migrations; typed AppError; settings persistence; autosave service foundation; ErrorBoundary + toasts; CSP; job-friendly architecture.
 
-## PHASE 1 — Foundations & Design System (COMPLETE)
+## PHASE 2 — Projects & Media Library (IN PROGRESS)
 
-### Implemented
+### Done & verified
 
-- Scaffold: Vite 8 + React 18 + TS strict; Tauri 2 core; Tailwind 3 + shadcn-style tokens; path alias `@/`.
-- Design system: Creatora tokens — dark-first navy/charcoal + violet accent, light variant; sidebar token stays dark in both themes; slim scrollbars; Inter/system font stack.
-- App shell: left nav rail (icon rail → labeled on wide), all 13 modules routed from single registry (`src/app/nav.ts`); honest `ModulePlaceholder` shows planned phase — no fake UI.
-- Home: real `app_info` IPC (version, data dir, ffmpeg probe result — correctly reports missing).
-- Settings (real): theme dark/light, language EN/ES, autosave interval — persisted to SQLite via commands.
-- Rust core: `Db` (rusqlite + WAL + FK + busy_timeout), embedded ordered migrations (`user_version` tracking), typed `AppError` → serialized `{code,message}`, `media.rs` ffmpeg locator (tools/bin → env → PATH).
-- i18n: i18next, `en`/`es` catalogs type-checked to identical shape; language persisted.
-- Autosave foundation: `src/services/autosave.ts` — source registry, dirty-check ticks, serial saves, error handler, beforeunload flush; unit-tested.
-- Error handling: `AppError` frontend class + `cmd<T>` wrapper; ErrorBoundary; sonner toasts.
-- CSP meta on index.html; offline-first (no telemetry, no network calls anywhere).
+**Projects:**
+- `.creatora` format v1: full serde model (meta/canvas/timeline/tracks/clips/transform/keyframes/subtitles/mediaRefs), camelCase JSON, format-version guard rejects newer files, migration chain ready.
+- Atomic save (tmp+rename), autosave to `data_dir/autosaves/<id>.creatora`, recovery detection by mtime (nanosecond compare — seconds-based check failed test, fixed).
+- Commands: create/open/save/autosave/recover/discard/list/set-flag(favorite,archive)/duplicate/delete(+optional file delete).
+- Catalog sync: `projects` rows upsert on create/open/save; `last_opened_at` tracked; default dir `Documents/Creatora/Projects` (setting `project.defaultDir` override).
+- Frontend: `useProject` store (doc, dirty, recovery), New Project dialog (6 presets + custom w/h/fps, validation), Home recents list with open/favorite/duplicate/archive/delete(confirm w/ file option), open-project indicator + save, recovery prompt accept/discard, relative timestamps localized.
+- Autosave wired: open project registered as autosave source; dirty → autosave every interval.
 
-### Phase 1 acceptance evidence
+**Media library:**
+- `ffprobe` subprocess → MediaInfo (streams, fps fractions, duration, codecs); kind classification.
+- Import job: `import_media` → JobManager (progress `job://progress`, result `job://finished`, cancel via `cancel_job`, durable `jobs` rows, registry self-cleanup).
+- Per-file: existing-path dedup, xxh3 content hash → duplicate_of flag, probe, ffmpeg thumbnail (video@1s / image, scaled ≤320px JPEG → `data_dir/thumbs/`).
+- Commands: `list_assets` (kind filter + name search), `scan_missing_assets`, `relink_asset`, `delete_asset`.
+- Library UI: kind filter chips, search, asset grid w/ thumbnails via asset:// protocol (scope enabled), missing overlay badge, duplicate icon, relink/delete menu, missing banner count, import progress in button, per-file import error toasts.
+- Test corpus generated in `tools/test-media/` (720p h264+aac, vertical, mp3, png) — gitignored.
 
-- [x] Builds: `npm run build` clean (tsc + vite); `cargo check` clean; app binary compiles + links.
-- [x] `npm run tauri dev` launched: window opened, log shows `applied migration 0001_init (user_version=1)` + `catalog ready at ...\com.creatora.app`; `creatora.db` file verified on disk.
-- [x] Navigation reaches every module placeholder (routed via HashRouter + registry).
-- [x] Theme toggle persists (settings table round-trip; `appearance.theme` key).
-- [x] Language switch EN↔ES — catalogs type-checked identical shape.
-- [x] `cargo test`: 2/2 (migration applies; idempotent re-open). `npm test`: 3/3 (autosave service).
-- [x] Structured errors reach UI as toasts (cmd wrapper + sonner; ErrorBoundary for render crashes).
-- [x] `npm audit`: 0 vulnerabilities (after upgrading vite→8, vitest→5).
+### Not yet done (Phase 2 remainder)
 
-**Phase 1: PASSED — 2026-11-13**
-
-## Pending tasks (Phase 2 — Projects & Media Library)
-
-- [ ] `.creatora` format v1 doc model (Rust serde + TS mirror types) + project migrations
-- [ ] Project CRUD commands + create/open dialog + Home recents wired to DB
-- [ ] Autosave wiring for open project + crash recovery record
-- [ ] Media import (dialog + drag-drop) → ffprobe metadata → media_assets
-- [ ] Thumbnail + hash dedup jobs; job engine core (`jobs` module)
-- [ ] Library UI: grid, search/filter, collections/tags, missing-media detection + relink
-- [ ] Project archive/duplicate/delete-with-confirm/favorite
+- [ ] Collections + tags UI (schema exists; no commands/UI yet)
+- [ ] `project_asset` usage refs written on save
+- [ ] Drag-drop import (only file-dialog import currently)
+- [ ] Asset favorites + batch operations
+- [ ] Project packaging/export-import bundle (media consolidation)
+- [ ] Project thumbnail generation
+- [ ] Autosave→editor integration (store exists; editor lands Phase 3)
 
 ## Known bugs
 
@@ -96,20 +81,20 @@ None.
 
 ## Blockers
 
-- FFmpeg binary must be provisioned before Phase 2 media import works end-to-end (plan in LICENSES_AND_DEPENDENCIES.md; `CREATORA_FFMPEG` env override supported for dev).
-- Social platform API credentials do not exist yet; adapters will be built against documented flows and marked `unverified` until real credentials exist (API_INTEGRATIONS.md).
+- Social platform API credentials do not exist yet (Phase 8 concern).
+- `scan_missing_assets`/`relink` verified via unit-level DB ops; full UI click-path needs manual check on next launch.
 
-## Latest test results
+## Latest test results (2026-11-13)
 
-- `cargo test`: 2 passed (db migrations apply; idempotent).
-- `npm test`: 3 passed (autosave dirty-source selection, error handler, unregister).
-- `npx tsc --noEmit`: clean. `vite build`: clean (334 kB bundle / 106 kB gzip).
-- `npm audit`: 0 vulnerabilities.
-- Manual: `tauri dev` launch verified — window + migration log + DB file created.
+- `cargo test`: **11/11** — migrations idempotent, doc round-trip/version-guard/missing-sections, atomic save, autosave recovery, filename sanitize, fps parse.
+- `cargo test --test media_import`: **3/3** against real tools — ffprobe video metadata (1280×720 h264 ~6s), audio/png classification, import→thumbnail→dedup→missing-error end-to-end.
+- `npm test`: 3/3 (autosave). `tsc --noEmit` clean. `vite build` clean (~451 kB). `npm audit`: 0.
+- Manual: `tauri dev` launches clean; catalog + migrations verified on disk; ffmpeg detected by `app_info`.
 
 ## Session log
 
 | Date | Session summary |
 |---|---|
-| 2026-11-13 | Phase 0: audited empty repo + dev machine; wrote all 10 mandatory docs; committed (f2169b9). |
-| 2026-11-13 | Phase 1: scaffolded Tauri 2 + React app; shell/nav/theme/i18n/settings/SQLite/autosave foundation; all checks green; live `tauri dev` launch verified. |
+| 2026-11-13 | Phase 0: audit + 10 docs committed (f2169b9). |
+| 2026-11-13 | Phase 1: app foundation — shell/theme/i18n/settings/SQLite/autosave; verified + committed (4bbef32). |
+| 2026-11-13 | Phase 2 partial: `.creatora` format + project CRUD + autosave/recovery + New Project dialog + recents UI; ffmpeg provisioned (9.0.2 GPL); job engine; media import + library UI + missing/relink; integration tests vs real ffmpeg pass. |
