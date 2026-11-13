@@ -142,3 +142,34 @@ Creatora/
 - **Preview transport.** One master clock (`requestAnimationFrame` + `performance.now`); each active media element (`<video>`/`<audio>`) is seeked to `sourceTimeAt(clip, t)` when drift exceeds ~80 ms and `playbackRate` matches `clip.speed`. This is intentionally tolerant — preview favors smoothness; *export* is the source of truth for frame accuracy.
 - **Heavy work off the UI thread.** Export runs in the job engine (`spawn_blocking`), spawning ffmpeg with `-progress pipe:1`; progress events report `out_time/duration`. Cancel kills the child process. ffmpeg/JS video decode never runs on the Rust or JS main threads respectively.
 - **Proxies:** planned as a `proxy_path` column on `media_assets` + a preview-quality setting; the render plan always uses originals (quality), preview uses proxy when present. Schema hooks land when a real heavy project proves the need.
+
+## Social Studio (Phase 8)
+
+```
+src/modules/social/        React: SocialPage (dashboard+list+filters),
+                           ComposerDialog, CaptionStudio, ValidationPanel,
+                           CalendarView, AccountsPanel, PostDetail
+src/stores/social.ts       Zustand: posts, filters, accounts, selection
+src/lib/social-types.ts    TS mirrors + extractHashtags (≡ Rust)
+
+src-tauri/src/social/
+  model.rs                 SocialPost, PostTarget, SocialAccount, …
+  posts.rs                 CRUD commands, scheduling, media link, templates
+  rules.rs                 versioned platform ruleset (v1 embedded, vN override)
+  validate.rs              validate_social_post → findings + fix links
+  vault.rs                 keyring (Windows Credential Manager) tokens+secrets
+  oauth.rs                 RFC 8252 loopback + PKCE, refresh, account persist
+  publish.rs               publish/export/capability commands + job runners
+  scheduler.rs             local 60s tick → auto-publish or social://due event
+  platforms/{yt,tt,ig,fb}  real API adapters behind publish() dispatch
+```
+
+Data flow: project + version → `export_for_target` (reuses
+`run_export_body`) → file imported to Library + linked → optional
+`publish_post_target` job → adapter → `platform_post_id` → status
+`published`. Every attempt rows into `publication_attempts`.
+
+Status machine (target-level): draft → ready → scheduled → publishing →
+published | failed. `scheduled` means "time set"; only auto_publish+account
++file make a publish job actually run — otherwise `social://due` fires and
+the UI shows a reminder. Export sets `ready`, never `published`.

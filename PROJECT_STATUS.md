@@ -5,10 +5,10 @@
 
 ## Current state
 
-- **Current phase:** PHASE 3 — editor sub-phases 3A–3D COMPLETE: full track/clip editing, effects+keyframes+transitions pipeline with preview/render parity, proxies+prefetch, real-media validation.
-- **Current task:** Phase 3 audit + docs, then Phase 4 (multi-format) — user gate required before new modules.
-- **Build status:** `npm run build` ✓ · `cargo test` 24+4+16 ✓ · `npm test` 23 ✓ · `tsc` clean · clippy clean
-- **Next exact action:** Phase 4 multi-format studio — OR editor depth (WebGL compositor, wipe transitions, easing curves, frame cache) if review asks for more polish first.
+- **Current phase:** PHASE 8 COMPLETE — Social Studio: posts multi-plataforma, ruleset versionado, validación, captions, calendario local, OAuth+vault, adaptadores reales YouTube/TikTok/Instagram/Facebook con capacidades honestas.
+- **Current task:** Phase 9 candidate — local analytics/insights o polish sprint (code-splitting, benchmarks).
+- **Build status:** `npm run build` ✓ · `cargo test` 50+4+58+4+2 ✓ (118) · `npm test` 67 ✓ · `tsc` clean · clippy 0 warnings · fmt clean
+- **Next exact action:** Phase 9 — pending product decision (analytics local vs perf sprint).
 
 ## PHASE 0 — Repository Audit (COMPLETE)
 
@@ -233,3 +233,16 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 | 2026-11-13 | Phase 2 partial: `.creatora` format + project CRUD + autosave/recovery + New Project dialog + recents UI; ffmpeg provisioned (9.0.2 GPL); job engine; media import + library UI + missing/relink; integration tests vs real ffmpeg pass. |
 | 2026-11-13 | Phase 2 pass 2 (7171df4): favorites, collections/tags, drag-drop import, usage tracking, bundle export + missing-media self-heal. |
 | 2026-11-13 | Phase 3 vertical slice: render engine (plan→ffmpeg graph, job-driven export, real progress/cancel), timeline engine + ops, snapshot undo/redo, editor UI (bin/preview/timeline), 7 real-media e2e tests — audited per spec. |
+
+## PHASE 8 — Social Studio & Platform Integrations (COMPLETE, commit TBD)
+
+- **Modelo**: migración `0004_social` — `social_posts` + `social_post_targets` (multi-plataforma, version_id, export_path, caption override, scheduled_at, auto_publish), `caption_templates`, `hashtag_history`, `publication_attempts`. `publications` (0001) queda legacy no usada.
+- **Posts**: CRUD, duplicar, estados reales (draft/ready/scheduled/publishing/published/failed — published solo con platform_post_id real), search/filter.
+- **Ruleset**: `platform_rules.v1.json` embebido + override por `app_data/platform_rules.vN.json` (versionado, re-verificable); required vs recommended vs account/API-dependent.
+- **Validation**: `validate_social_post` — aspect ratio, resolución, duración, tamaño, audio, thumbnail, título, descripción, hashtags duplicados; findings Error/Warning/Recommendation/Passed con fix accionable y deep-link al módulo corrector.
+- **Caption Studio**: editor por plataforma (variantes independientes), hashtag manager + historial, plantillas, contadores de caracteres/hashtags por plataforma, preview.
+- **Export**: `export_for_target` reutiliza `run_export_body` del pipeline existente, importa el archivo al catálogo y lo linkea al target — sin duplicar lógica de render.
+- **Calendario**: scheduler local (tick 60s); `auto_publish=1` + cuenta + archivo → job de publish real; si no, evento `social://due` (recordatorio — nunca afirma publicado). Vistas mes/semana/lista, drag-reschedule, filtros.
+- **OAuth**: loopback RFC 8252 + PKCE S256 + nonce state, 3-min window, client_id/secret del usuario (vault keyring — Windows Credential Manager). Refresh dentro del job de publish.
+- **Adaptadores reales**: YouTube (resumable upload + thumbnails.set), TikTok (FILE_UPLOAD init+chunks+status — gated por app approval), Facebook Pages (resumable video upload), Instagram (container flow — exige video_url público, error estructurado si no hay hostedUrl).
+- **Tests**: +12 lib (rules/validate/scheduler/vault/oauth), +4 integración SQLite (CRUD, cascade, templates/hashtags, due-targets), +4 vitest (extractHashtags mirror + social types).

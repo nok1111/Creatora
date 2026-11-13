@@ -299,3 +299,37 @@ alpha), `wipe_reveals_left_to_right`, `wipe_out_erases_at_tail`,
 `typewriter_grows_text_over_time`, `blur_reveal_sharpens`,
 `shadow_offsets_dark_pixels`, `text_scale_keyframes_grow_on_canvas`,
 `hidden_clip_is_not_rendered`.
+
+## ADR-028 — Social Studio: local-first posts + honest adapters (Phase 8)
+
+**Decision.** Social content is modelled as `social_posts` +
+`social_post_targets` (per-platform rows: version, export file, caption
+override, schedule, auto_publish). Publishing is dispatched per-platform
+through `social/platforms/*` adapters; `published` is ONLY written when
+the adapter returns a real `platform_post_id` — an export is never a
+publish.
+
+**Platform rules** live in a versioned JSON ruleset
+(`platform_rules.v1.json` embedded; `app_data/platform_rules.vN.json`
+wins). Each rule carries `level` (required/recommended/account/api)
+because limits change and depend on account type — UI never hardcodes
+numbers.
+
+**Credentials.** Tokens + OAuth client secrets go to Windows Credential
+Manager via `keyring` (DPAPI). SQLite stores metadata only. OAuth is
+authorization-code + PKCE + loopback listener (RFC 8252); the user
+supplies their own developer-app client_id — nothing embeds secrets.
+
+**Honest capability gating.** Instagram's Graph API requires a public
+`video_url` — pure-local publish is impossible, so the adapter returns a
+structured limitation error unless the user hosts the file. TikTok runs
+the real Content Posting flow but gated scopes surface the API error
+verbatim. Facebook Pages and YouTube run real resumable uploads.
+
+**Scheduler.** Local tick; auto-publish only when auto_publish+account+
+file all exist, else emits `social://due` reminder — scheduled ≠ will-
+publish.
+
+**Migration note.** `0003_proxy_path.sql` is intentionally NOT
+registered — `proxy_path` already ships inside 0001's CREATE TABLE, so
+running it would break every existing DB (duplicate column).

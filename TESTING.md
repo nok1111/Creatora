@@ -91,3 +91,18 @@ Phase 1:
 - Timeline scrub on 1080p proxy: no dropped frames beyond decode latency.
 - Memory: < 1.5GB RSS with a 30-min 4K project open (proxies enabled).
 - Export throughput: ≥ 0.5× realtime for 1080p H.264 software encode baseline.
+
+## Phase 8 — Social Studio
+
+| Suite | What it covers | Where |
+|---|---|---|
+| `social::rules` (lib ×4) | builtin ruleset parses; every platform present; limits typed; versioned override file wins | `src/social/rules.rs` tests |
+| `social::validate` (lib ×5) | aspect-ratio error + fix link, empty title, duplicate hashtags, oversized file, clean pass | `src/social/validate.rs` tests |
+| `social::posts` (lib ×1) | `extract_hashtags` mirror — punctuation trims only at edges | `src/social/posts.rs` tests |
+| `social::oauth` (lib ×2) | PKCE pair S256 shape, state nonce, expiry math | `src/social/oauth.rs` tests |
+| `tests/social_db.rs` (×4) | SQLite integration: post+target lifecycle & status rules, cascade delete of targets/attempts, caption templates + hashtag history roundtrip, scheduler `due_targets` | `src-tauri/tests/` |
+| `social-types.test.ts` (vitest ×4) | TS `extractHashtags` mirror vs Rust semantics, type guards | `src/lib/` |
+
+Adapter HTTP calls are **not** unit-tested against live APIs (no credentials
+in CI); platform flows are exercised end-to-end only with real user apps.
+Mocked-HTTP adapter tests are a pending Phase 9 item.

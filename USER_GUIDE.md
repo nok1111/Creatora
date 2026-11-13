@@ -109,6 +109,31 @@ Open a project, then:
   Graphics, shown when a clip has version overrides) drops them and
   returns the element to the shared base.
 
+## Social Studio
+
+- **Posts**: create a post from any project, pick one or more
+  platforms (YouTube, TikTok, Instagram, Facebook) and, per platform,
+  which format version to use. Duplicate, search and filter by status.
+- **Captions**: each platform gets its own title/description/hashtags
+  without touching the project. Templates and hashtag history are
+  saved locally; counters show per-platform limits.
+- **Validation**: run the check before exporting — it flags wrong
+  aspect ratios (with a link to Multi-Format Studio), missing audio or
+  thumbnails, empty titles, duplicate hashtags and more, classified as
+  Error / Warning / Recommendation.
+- **Export**: "Export for target" renders the chosen version with the
+  existing engine and links the file to the post — an export does NOT
+  mark anything as published.
+- **Calendar**: month/week/list views, drag to reschedule. Scheduling
+  is local; a target auto-publishes only if you enabled Auto-publish
+  AND a connected account AND the export exists. Otherwise you get a
+  reminder when it's due.
+- **Accounts**: connect via OAuth (system browser). You configure your
+  own developer-app credentials — nothing is embedded. Tokens live in
+  Windows Credential Manager; disconnecting deletes them. Instagram
+  requires a Business/Creator account and a publicly reachable video
+  URL; TikTok direct-publish needs an approved app.
+
 ## Where is my data?
 
 - Projects: `.creatora` files wherever you saved them (default: `Documents\Creatora\Projects`).

@@ -6,7 +6,8 @@
 
 - OAuth 2.0 authorization-code flow, system browser + loopback redirect + PKCE (ADR-007).
 - Tokens in Windows Credential Manager (ADR-006). Scopes recorded per account in `social_accounts.scopes_json`.
-- Adapters: `src-tauri/src/platforms/{youtube,tiktok,instagram,facebook}.rs` implementing a `Platform` trait: `capabilities()`, `authorize()`, `refresh()`, `upload/publish()`, `status()`, `analytics()`.
+- Adapters implemented: `src-tauri/src/social/platforms/{youtube,tiktok,instagram,facebook}.rs` behind `platforms::publish()` dispatch (Phase 8).
+- `published` status is only set when the adapter returns a real `platform_post_id` — `publication_attempts` records every call with sanitized error strings (never tokens).
 
 ## YouTube (YouTube Data API v3 + YouTube Analytics API)
 
@@ -23,6 +24,8 @@
 
 **Blockers:** OAuth consent screen verification for scopes beyond basic (unverified apps show warning screens — acceptable for v1 but documented).
 
+**Implemented (Phase 8):** resumable upload (`videos.insert` → `Location` + chunked PUT), title/description/tags/privacyStatus, thumbnail upload (`thumbnails.set`), token refresh. Publish returns the real video id or a structured error.
+
 ## TikTok (TikTok for Developers — Content Posting API)
 
 | Capability | API | Status | Notes |
@@ -33,7 +36,9 @@
 | Publish status | `v2/post/publish/status/fetch/` | documented | |
 | Analytics | `user.info.stats`, video list | documented | Research API is separate and restricted |
 
-**Blockers:** Real app approval by TikTok — cannot be self-completed. Plan: build adapter + draft-inbox path; mark direct publish `blocked` until approval exists. Offer export + caption/metadata packet fallback (honest alternative per spec).
+**Blockers:** Real app approval by TikTok — cannot be self-completed.
+
+**Implemented (Phase 8):** `v2/post/publish/video/init/` (FILE_UPLOAD) + chunked PUT + `status/fetch` poll. The adapter runs the real flow; without approved `video.publish`/`video.upload` scopes TikTok returns an API error which is surfaced verbatim (target → Failed with the message).
 
 ## Instagram (Instagram Graph API / Platform)
 
@@ -47,6 +52,8 @@
 
 **Blockers:** Personal IG accounts unsupported by API — must communicate requirement of Professional account. Meta app review for `instagram_content_publish` beyond test users.
 
+**Implemented (Phase 8):** real container flow (`/{ig-user}/media` → poll → `/media_publish`). **Honest limitation:** the Graph API requires a publicly reachable `video_url`; the app is local-first so pure-local publish returns a structured error explaining the requirement unless the user supplies `hostedUrl` (their own hosting). Never fakes success.
+
 ## Facebook (Graph API — Pages)
 
 | Capability | API | Status | Notes |
@@ -59,6 +66,8 @@
 
 **Blockers:** Meta app review (`pages_manage_posts`, `pages_read_engagement`, video perms) for non-test use.
 
+**Implemented (Phase 8):** resumable Page video upload (`/{page-id}/videos`: start → transfer chunks → finish) with real token. Works today for app roles (dev/test users + owned pages); broader use needs App Review.
+
 ## Cross-cutting rules
 
 - `published`/`scheduled` statuses are set ONLY from confirmed API responses (publication row stores `platform_post_id` + `platform_url`).
@@ -67,7 +76,11 @@
 - Every adapter call logs request/response metadata (never tokens) for audit.
 - Unverified capabilities are disabled behind `#[cfg]`-independent runtime flags and labeled "Not connected/unverified" in UI — never silently simulated.
 
-## External docs to re-verify at implementation time (Phase 8)
+## Re-verification
+
+Platform limits and API contracts change. `platform_rules` is versioned (`platform_rules.v1.json` embedded, `platform_rules.vN.json` in app_data overrides). Rules are recommendations/limits snapshots — re-verify before each release:
+
+## External docs to re-verify
 
 - Google: `developers.google.com/youtube/v3`, `developers.google.com/youtube/analytics`
 - TikTok: `developers.tiktok.com/doc/content-posting-api-*`

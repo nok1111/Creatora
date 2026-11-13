@@ -40,7 +40,7 @@ export const MODULES: ModuleDef[] = [
   { key: "audio", path: "/audio", icon: AudioLines, phase: 5, implemented: false },
   { key: "graphics", path: "/graphics", icon: Image, phase: 6, implemented: false },
   { key: "brand", path: "/brand", icon: Palette, phase: 6, implemented: false },
-  { key: "social", path: "/social", icon: Share2, phase: 8, implemented: false },
+  { key: "social", path: "/social", icon: Share2, phase: 8, implemented: true },
   { key: "planner", path: "/planner", icon: CalendarDays, phase: 9, implemented: false },
   { key: "analytics", path: "/analytics", icon: BarChart3, phase: 9, implemented: false },
   { key: "export", path: "/export", icon: Rocket, phase: 7, implemented: false },

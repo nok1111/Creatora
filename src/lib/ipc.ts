@@ -179,6 +179,62 @@ export const api = {
   importBrandKit: (path: string) =>
     cmd<import("./project-types").BrandKit>("import_brand_kit", { path }),
 
+  // ---------- social studio (ADR-028) ----------
+  listSocialPosts: (opts?: { status?: string; platform?: string; query?: string }) =>
+    cmd<import("./social-types").SocialPost[]>("list_social_posts", opts ?? {}),
+  getSocialPost: (id: string) =>
+    cmd<import("./social-types").SocialPost>("get_social_post", { id }),
+  createSocialPost: (input: import("./social-types").PostInput) =>
+    cmd<import("./social-types").SocialPost>("create_social_post", { input }),
+  updateSocialPost: (id: string, input: import("./social-types").PostInput) =>
+    cmd<import("./social-types").SocialPost>("update_social_post", { id, input }),
+  deleteSocialPost: (id: string) => cmd<void>("delete_social_post", { id }),
+  duplicateSocialPost: (id: string) =>
+    cmd<import("./social-types").SocialPost>("duplicate_social_post", { id }),
+  upsertPostTarget: (postId: string, input: import("./social-types").TargetInput) =>
+    cmd<import("./social-types").SocialPostTarget>("upsert_post_target", { postId, input }),
+  deletePostTarget: (id: string) => cmd<void>("delete_post_target", { id }),
+  setTargetStatus: (id: string, status: string) =>
+    cmd<void>("set_target_status", { id, status }),
+  schedulePostTarget: (id: string, scheduledAt: string | null, autoPublish: boolean) =>
+    cmd<void>("schedule_post_target", { id, scheduledAt, autoPublish }),
+  linkTargetMedia: (targetId: string, assetId: string | null) =>
+    cmd<void>("link_target_media", { targetId, assetId }),
+  listCaptionTemplates: () =>
+    cmd<import("./social-types").CaptionTemplate[]>("list_caption_templates"),
+  saveCaptionTemplate: (t: { id?: string; name: string; body: string; hashtags: string[] }) =>
+    cmd<string>("save_caption_template", { ...t }),
+  deleteCaptionTemplate: (id: string) =>
+    cmd<void>("delete_caption_template", { id }),
+  listHashtagHistory: (limit?: number) =>
+    cmd<string[]>("list_hashtag_history", { limit }),
+  listSocialAccounts: () =>
+    cmd<import("./social-types").SocialAccount[]>("list_social_accounts"),
+  disconnectSocialAccount: (id: string) =>
+    cmd<void>("disconnect_social_account", { id }),
+  listPublicationAttempts: (targetId: string) =>
+    cmd<import("./social-types").PublicationAttempt[]>("list_publication_attempts", { targetId }),
+  listScheduled: (from: string, to: string) =>
+    cmd<import("./social-types").ScheduledItem[]>("list_scheduled", { from, to }),
+  validateSocialPost: (postId: string) =>
+    cmd<import("./social-types").ValidationResult>("validate_social_post", { postId }),
+  socialOauthBegin: (platform: string, clientId: string) =>
+    cmd<{ redirectUri: string; platform: string; scopes: string[] }>(
+      "social_oauth_begin", { platform, clientId }),
+  publishPostTarget: (targetId: string) =>
+    cmd<string>("publish_post_target", { targetId }),
+  exportForTarget: (targetId: string, outDir: string) =>
+    cmd<string>("export_for_target", { targetId, outDir }),
+  platformCapabilities: () =>
+    cmd<import("./social-types").PlatformCapability[]>("platform_capabilities"),
+  platformRuleset: () =>
+    cmd<Record<string, unknown>>("platform_ruleset"),
+  saveOauthClient: (platform: string, clientId: string, clientSecret?: string) =>
+    cmd<void>("save_oauth_client", { platform, clientId, clientSecret }),
+  oauthClientStatus: () =>
+    cmd<Record<string, boolean>>("oauth_client_status"),
+  revealPath: (path: string) => cmd<void>("reveal_path", { path }),
+
   generateProxies: (assetIds: string[]) =>
     cmd<string>("generate_proxies", { assetIds }),
   deleteProxy: (assetId: string) =>

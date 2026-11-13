@@ -195,3 +195,22 @@ back-compatible, no format_version bump required):
 - Migrations run at app start before any query; wrapped in a transaction each.
 - Never edit an applied migration. New change = new file.
 - `.creatora` project files carry their own `format_version` and a separate migration chain in `src-tauri/src/project/migrations.rs`.
+
+## Migration 0004 — social (Phase 8)
+
+| Table | Purpose |
+|---|---|
+| `social_posts` | Local-first post: project link, base title/description/hashtags, status, thumbnail. `account` is never required — drafts work offline. |
+| `social_post_targets` | One row per (post, platform, version): `version_id`, `export_path`, `export_asset_id`, `caption_override`, `scheduled_at`, `auto_publish`, `account_id` (nullable), `status`, `platform_post_id`. UNIQUE(post_id, platform, version_id). |
+| `caption_templates` | Saved caption/description templates (name, body). |
+| `hashtag_history` | Hashtag reuse: `tag` UNIQUE + `uses` counter + `last_used`. |
+| `publication_attempts` | Audit log per publish call: target, account, result json (sanitized — never tokens), error text, timestamps. |
+
+The 0001 `publications`/`export_jobs`/`analytics_snapshots`/`social_accounts`
+design anticipated this phase; `social_accounts` is reused (metadata only —
+tokens live in the OS credential vault), `publications` stays as an unused
+legacy table because its `account_id NOT NULL` cannot represent local drafts.
+
+NOTE: `migrations/0003_proxy_path.sql` exists but is deliberately NOT
+registered — `proxy_path` already ships inside the current 0001 CREATE TABLE
+(registering it would fail on every existing DB with duplicate column).

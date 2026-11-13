@@ -140,3 +140,14 @@ Sub-phased per product review — vertical slice first, then depth, then perform
 ## PHASE 12 — Final QA & release
 
 - Full regression against acceptance criteria of all phases; clean-install test; upgrade + uninstall tests; release notes; USER_GUIDE completion.
+
+## Execution status update (post Phase 8)
+
+- Phase 8 (Social Studio) — **DONE**: model, ruleset, validation,
+  captions, calendar, export integration, OAuth+vault, four real
+  adapters with honest capability gating. Docs updated; 118 rust +
+  67 vitest green.
+- Phase 9 candidates: local analytics/insights (publication_attempts +
+  platform stats where scopes allow), publish-packet export fallback,
+  mocked-HTTP adapter tests, or a perf sprint (bundle code-splitting,
+  WebGL compositor).

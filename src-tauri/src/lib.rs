@@ -7,6 +7,7 @@ pub mod jobs;
 pub mod media;
 pub mod project;
 pub mod render;
+pub mod social;
 pub mod subtitles;
 
 use std::sync::Arc;
@@ -38,6 +39,7 @@ pub fn run() {
             let jobs = jobs::JobManager::default();
             jobs.attach_db(db.clone());
             app.manage(jobs);
+            social::scheduler::start(app.handle().clone(), db.clone());
             app.manage(db);
             Ok(())
         })
@@ -95,6 +97,34 @@ pub fn run() {
             graphics::export_brand_kit,
             graphics::import_brand_kit,
             render::commands::preview_render_plan,
+            social::posts::create_social_post,
+            social::posts::update_social_post,
+            social::posts::get_social_post,
+            social::posts::list_social_posts,
+            social::posts::delete_social_post,
+            social::posts::duplicate_social_post,
+            social::posts::upsert_post_target,
+            social::posts::delete_post_target,
+            social::posts::set_target_status,
+            social::posts::schedule_post_target,
+            social::posts::link_target_media,
+            social::posts::list_caption_templates,
+            social::posts::save_caption_template,
+            social::posts::delete_caption_template,
+            social::posts::list_hashtag_history,
+            social::posts::list_social_accounts,
+            social::posts::disconnect_social_account,
+            social::posts::list_publication_attempts,
+            social::posts::list_scheduled,
+            social::posts::reveal_path,
+            social::validate::validate_social_post,
+            social::oauth::social_oauth_begin,
+            social::publish::publish_post_target,
+            social::publish::export_for_target,
+            social::publish::platform_capabilities,
+            social::publish::platform_ruleset,
+            social::publish::save_oauth_client,
+            social::publish::oauth_client_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

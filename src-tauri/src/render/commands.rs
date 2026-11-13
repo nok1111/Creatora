@@ -176,20 +176,34 @@ pub fn export_project(
     }
     let db2 = (*db).clone();
     let job_id = jobs.spawn(app.clone(), "render.export", move |ctx: &JobCtx| {
-        let doc = store::open(&project_path).map_err(|e| e.to_string())?;
+        run_export_body(ctx, &project_path, &out_path, version_id.as_deref(), &db2)
+    });
+    Ok(job_id)
+}
+
+/// The export body, extracted so other commands (social export) can run a
+/// render inside their own job without duplicating the render pipeline.
+pub fn run_export_body(
+    ctx: &JobCtx,
+    project_path: &std::path::Path,
+    out_path: &std::path::Path,
+    version_id: Option<&str>,
+    db2: &Arc<Db>,
+) -> Result<serde_json::Value, String> {
+    {
+        let doc = store::open(project_path).map_err(|e| e.to_string())?;
         let export = version_id
-            .as_deref()
             .and_then(|id| doc.version(id))
             .map(|v| v.export.clone())
             .unwrap_or_default();
-        let doc = match &version_id {
+        let doc = match version_id {
             Some(id) => doc
                 .apply_version(id)
                 .ok_or_else(|| format!("unknown version: {id}"))?,
             None => doc,
         };
         // Container-correct extension — settings never silently ignored.
-        let mut out_path = out_path.clone();
+        let mut out_path = out_path.to_path_buf();
         let want_ext = export.container.clone();
         if out_path
             .extension()
@@ -197,7 +211,7 @@ pub fn export_project(
         {
             out_path.set_extension(&want_ext);
         }
-        let sources = resolve_sources(&doc, Some(&db2));
+        let sources = resolve_sources(&doc, Some(db2));
         let mut plan = plan::build_plan_with(&doc, &sources, &export).map_err(|e| e.to_string())?;
         // Subtitle burn-in via libass — cues are timeline-absolute ms which
         // maps 1:1 to output time (ADR-025). Temp file lives for the job.
@@ -234,8 +248,7 @@ pub fn export_project(
             skipped_clips: clip_count.saturating_sub(plan.segments.len()),
         })
         .map_err(|e| e.to_string())
-    });
-    Ok(job_id)
+    }
 }
 
 /// Batch export: one job per version (independent progress/cancel/error).

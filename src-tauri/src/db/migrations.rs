@@ -10,6 +10,13 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "0002_asset_favorites",
         include_str!("../../migrations/0002_asset_favorites.sql"),
     ),
+    // NOTE: migrations/0003_proxy_path.sql is intentionally NOT registered —
+    // proxy_path already ships inside the current 0001 CREATE TABLE, so
+    // running the ALTER would fail on every existing DB (duplicate column).
+    (
+        "0004_social",
+        include_str!("../../migrations/0004_social.sql"),
+    ),
 ];
 
 pub fn migrate(conn: &Connection) -> Result<(), AppError> {

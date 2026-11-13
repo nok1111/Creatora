@@ -10,6 +10,7 @@ import { HomePage } from "@/modules/home/HomePage";
 import { LibraryPage } from "@/modules/library/LibraryPage";
 import { EditorPage } from "@/modules/editor/EditorPage";
 import { SettingsPage } from "@/modules/settings/SettingsPage";
+import { SocialPage } from "@/modules/social/SocialPage";
 import { useSettings } from "@/stores/settings";
 import { autosave } from "@/services/autosave";
 
@@ -27,6 +28,8 @@ function pageFor(key: string) {
       return <LibraryPage />;
     case "editor":
       return <EditorPage />;
+    case "social":
+      return <SocialPage />;
     case "settings":
       return <SettingsPage />;
     default:
