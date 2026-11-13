@@ -127,6 +127,9 @@ pub struct Clip {
     pub source_in_ms: i64,
     #[serde(default)]
     pub source_out_ms: Option<i64>,
+    /// Full source duration — trim ops clamp against it when present.
+    #[serde(default)]
+    pub source_duration_ms: Option<i64>,
     #[serde(default)]
     pub transform: Transform,
     /// Ordered effect stack — each entry applies in sequence (preview and
@@ -140,6 +143,10 @@ pub struct Clip {
     /// Text content for text clips.
     #[serde(default)]
     pub text: Option<String>,
+    /// Style for text clips — canonical model shared with the preview
+    /// (render/text.rs ↔ modules/editor/Preview.tsx). ADR-020.
+    #[serde(default)]
+    pub text_style: Option<TextStyle>,
     /// Keyframed properties: path ("transform.x", "volume", …) → samples.
     /// Times are ms relative to the clip's start.
     #[serde(default)]
@@ -162,6 +169,68 @@ pub struct Effect {
 
 fn default_true() -> bool {
     true
+}
+
+/// Canonical text-element styling — v1 covers what both renderers express
+/// exactly: size, color, outline, box background, alignment + transform offset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextStyle {
+    /// Absolute .ttf/.otf path; None → platform default (Windows: arial.ttf).
+    #[serde(default)]
+    pub font_file: Option<String>,
+    #[serde(default = "default_font_size")]
+    pub font_size_px: f64,
+    /// "#RRGGBB" or "#RRGGBBAA".
+    #[serde(default = "default_white")]
+    pub color: String,
+    #[serde(default)]
+    pub outline_color: Option<String>,
+    #[serde(default)]
+    pub outline_width: f64,
+    /// Optional filled box behind the text.
+    #[serde(default)]
+    pub background_color: Option<String>,
+    #[serde(default = "default_pad")]
+    pub background_pad_px: f64,
+    /// "left" | "center" | "right"
+    #[serde(default = "default_center")]
+    pub align_h: String,
+    /// "top" | "middle" | "bottom"
+    #[serde(default = "default_middle")]
+    pub align_v: String,
+}
+
+fn default_font_size() -> f64 {
+    48.0
+}
+fn default_white() -> String {
+    "#FFFFFF".into()
+}
+fn default_center() -> String {
+    "center".into()
+}
+fn default_middle() -> String {
+    "middle".into()
+}
+fn default_pad() -> f64 {
+    8.0
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        TextStyle {
+            font_file: None,
+            font_size_px: 48.0,
+            color: "#FFFFFF".into(),
+            outline_color: None,
+            outline_width: 0.0,
+            background_color: None,
+            background_pad_px: 8.0,
+            align_h: "center".into(),
+            align_v: "middle".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

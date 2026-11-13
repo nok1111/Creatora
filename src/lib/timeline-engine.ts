@@ -16,9 +16,11 @@ import type {
   Timeline,
   Track,
   TrackKind,
+  TextStyle,
   Transform,
   Transition,
 } from "@/lib/project-types";
+import { DEFAULT_TEXT_STYLE } from "@/lib/project-types";
 
 export const DEFAULT_TRANSFORM: Transform = {
   x: 0,
@@ -175,15 +177,24 @@ export function addClip(
     durationMs: number;
     sourceInMs?: number;
     name?: string;
+    /** Full source-media duration (for trim clamping). */
+    sourceDurationMs?: number | null;
+    /** Target track id — falls back to first track of `trackKind`. */
+    trackId?: string;
   },
 ): { doc: ProjectDoc; clipId: string } {
   const next = cloneDoc(doc);
   const kind = opts.trackKind ?? "video";
-  const track = ensureTrack(
-    next.timeline,
-    kind,
-    kind === "video" ? "V1" : kind === "audio" ? "A1" : "T1",
-  );
+  const track =
+    (opts.trackId
+      ? next.timeline.tracks.find((t) => t.id === opts.trackId)
+      : undefined) ??
+    ensureTrack(
+      next.timeline,
+      kind,
+      kind === "video" ? "V1" : kind === "audio" ? "A1" : "T1",
+    );
+  if (track.locked) return { doc: next, clipId: "" };
   const c: Clip = {
     id: uid(),
     mediaRef: opts.mediaRef,
@@ -191,11 +202,50 @@ export function addClip(
     durationMs: Math.max(1, snapToFrame(opts.durationMs, doc)),
     sourceInMs: Math.max(0, opts.sourceInMs ?? 0),
     sourceOutMs: null,
+    sourceDurationMs: opts.sourceDurationMs ?? null,
     transform: { ...DEFAULT_TRANSFORM },
     effects: [],
     volume: 1,
     speed: 1,
     text: null,
+    keyframes: {},
+  };
+  track.clips.push(c);
+  track.clips.sort((a, b) => a.startMs - b.startMs);
+  return { doc: next, clipId: c.id };
+}
+
+/** Text clip on a text track — no media ref; canonical style applied. */
+export function addTextClip(
+  doc: ProjectDoc,
+  opts: {
+    text: string;
+    startMs: number;
+    durationMs: number;
+    style?: Partial<TextStyle>;
+    trackId?: string;
+  },
+): { doc: ProjectDoc; clipId: string } {
+  const next = cloneDoc(doc);
+  const track =
+    (opts.trackId
+      ? next.timeline.tracks.find((t) => t.id === opts.trackId)
+      : undefined) ?? ensureTrack(next.timeline, "text", "T1");
+  if (track.locked) return { doc: next, clipId: "" };
+  const c: Clip = {
+    id: uid(),
+    mediaRef: null,
+    startMs: Math.max(0, snapToFrame(opts.startMs, doc)),
+    durationMs: Math.max(1, snapToFrame(opts.durationMs, doc)),
+    sourceInMs: 0,
+    sourceOutMs: null,
+    sourceDurationMs: null,
+    transform: { ...DEFAULT_TRANSFORM },
+    effects: [],
+    volume: 1,
+    speed: 1,
+    text: opts.text,
+    textStyle: { ...DEFAULT_TEXT_STYLE, ...opts.style },
     keyframes: {},
   };
   track.clips.push(c);
@@ -232,11 +282,22 @@ export function trimClip(
   const { clip } = hit;
   const frame = frameToMs(1, next);
   if (edge === "end") {
-    clip.durationMs = Math.max(frame, snapToFrame(clip.durationMs + deltaMs, next));
+    let d = Math.max(frame, snapToFrame(clip.durationMs + deltaMs, next));
+    // Never extend past the end of the source media (when known): an
+    // over-long doc clip would export shorter than the timeline shows.
+    if (clip.sourceDurationMs != null && clip.speed > 0) {
+      const maxDur = Math.floor(
+        (clip.sourceDurationMs - clip.sourceInMs) / clip.speed,
+      );
+      if (maxDur > 0) d = Math.min(d, Math.max(frame, maxDur));
+    }
+    clip.durationMs = d;
   } else {
     const d = snapToFrame(deltaMs, next);
     const maxShift = clip.durationMs - frame; // keep ≥1 frame
-    const applied = Math.min(Math.max(d, -clip.startMs), maxShift);
+    // Lower bound: can't reveal media before sourceIn 0 (or before t=0).
+    const minShift = Math.max(-clip.startMs, -(clip.sourceInMs / clip.speed));
+    const applied = Math.min(Math.max(d, minShift), maxShift);
     clip.startMs += applied;
     clip.durationMs -= applied;
     clip.sourceInMs += Math.round(applied * clip.speed);
@@ -270,10 +331,28 @@ export function splitClip(
     startMs: at,
     durationMs: left.durationMs - leftDur,
     sourceInMs: left.sourceInMs + Math.round(leftDur * left.speed),
+    keyframes: {},
   };
+  // Keyframes are clip-relative: the right half keeps only samples at/after
+  // the cut, shifted to its own origin. Samples exactly at the cut keep the
+  // animation continuous on both sides.
+  for (const [path, kfs] of Object.entries(left.keyframes)) {
+    const before = kfs.filter((k) => k.tMs <= leftDur);
+    const after = kfs
+      .filter((k) => k.tMs >= leftDur)
+      .map((k) => ({ ...k, tMs: k.tMs - leftDur }));
+    if (before.length) left.keyframes[path] = before;
+    else delete left.keyframes[path];
+    if (after.length) right.keyframes[path] = after;
+  }
   left.durationMs = leftDur;
   track.clips.push(right);
   track.clips.sort((a, b) => a.startMs - b.startMs);
+  // Transitions: the outgoing fade lives at the clip's TAIL → after a split
+  // it belongs to the right half. clipB (head fade) stays on the left.
+  for (const tr of track.transitions) {
+    if (tr.clipA === left.id) tr.clipA = right.id;
+  }
   return { doc: next, rightClipId: right.id };
 }
 
@@ -284,6 +363,9 @@ export function removeClip(doc: ProjectDoc, clipId: string): ProjectDoc {
     const i = t.clips.findIndex((c) => c.id === clipId);
     if (i >= 0) {
       t.clips.splice(i, 1);
+      t.transitions = t.transitions.filter(
+        (tr) => tr.clipA !== clipId && tr.clipB !== clipId,
+      );
       return next;
     }
   }
@@ -423,6 +505,7 @@ export function pasteClips(
   atMs: number,
 ): { doc: ProjectDoc; clipIds: string[] } {
   const next = cloneDoc(doc);
+  if (entries.length === 0) return { doc: next, clipIds: [] };
   const at = snapToFrame(atMs, next);
   const min = Math.min(...entries.map((e) => e.clip.startMs));
   const ids: string[] = [];
@@ -476,8 +559,43 @@ export function removeClips(doc: ProjectDoc, clipIds: string[]): { doc: ProjectD
     const before = t.clips.length;
     t.clips = t.clips.filter((c) => !clipIds.includes(c.id));
     removed += before - t.clips.length;
+    t.transitions = t.transitions.filter(
+      (tr) => !clipIds.includes(tr.clipA) && !clipIds.includes(tr.clipB),
+    );
   }
   return { doc: next, removed };
+}
+
+/**
+ * Move a clip to a different track (same kind) at `startMs`.
+ * Transitions are per-track — the clip's transition links are dropped on
+ * the source track (they cannot span tracks).
+ */
+export function moveClipToTrack(
+  doc: ProjectDoc,
+  clipId: string,
+  targetTrackId: string,
+  startMs: number,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  const target = next.timeline.tracks.find((t) => t.id === targetTrackId);
+  if (!hit || !target || hit.track.locked || target.locked) return next;
+  if (hit.track.id === target.id) {
+    return moveClip(next, clipId, startMs);
+  }
+  // Kind compatibility: video/image clips land on video tracks, audio on
+  // audio tracks. Never mix.
+  const wantVideo = hit.track.kind !== "audio";
+  if ((target.kind === "audio") === wantVideo) return next;
+  hit.track.clips = hit.track.clips.filter((c) => c.id !== clipId);
+  hit.track.transitions = hit.track.transitions.filter(
+    (tr) => tr.clipA !== clipId && tr.clipB !== clipId,
+  );
+  hit.clip.startMs = Math.max(0, snapToFrame(startMs, next));
+  target.clips.push(hit.clip);
+  target.clips.sort((a, b) => a.startMs - b.startMs);
+  return next;
 }
 
 // ---------- effects / keyframes / transitions ----------

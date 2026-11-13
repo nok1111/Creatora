@@ -136,11 +136,13 @@ fn clip(id: &str, asset: &str, start_ms: i64, dur_ms: i64, src_in_ms: i64) -> Cl
         duration_ms: dur_ms,
         source_in_ms: src_in_ms,
         source_out_ms: None,
+        source_duration_ms: None,
         transform: Transform::default(),
         effects: vec![],
         volume: 1.0,
         speed: 1.0,
         text: None,
+        text_style: None,
         keyframes: Default::default(),
     }
 }
@@ -810,4 +812,413 @@ fn high_res_canvas_renders_at_full_size() {
     assert_eq!((w, h), (1280, 720));
     let f = grab_frame(&out, 0.4, 1280, 720);
     assert!(frame_mean(&f, 1280, 720, 0) > 120.0);
+}
+
+// ---------- Phase 3E: compatibility matrix & hardening ----------
+
+/// Project doc at a rational canvas fps (fps_num/fps_den).
+fn doc_fps(num: u32, den: u32) -> ProjectDoc {
+    let mut d = base_doc();
+    d.canvas.fps_num = num;
+    d.canvas.fps_den = den;
+    d
+}
+
+#[test]
+fn fractional_fps_canvas_23976_produces_exact_rate() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fps23976");
+    let src = make_clip_sz(&dir, "src.mp4", "red", 440, 2.0, 320, 240, 24);
+    let mut doc = doc_fps(24000, 1001);
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "s", 0, 1500, 0)]));
+    add_media(&mut doc, "s", &src);
+    let out = render(&dir, &doc, "out.mp4");
+    let (_w, _h, fps) = probe_meta(&out);
+    assert!((fps - 23.976).abs() < 0.01, "fps={fps}");
+    // duration within a frame of the 1.5s clip
+    let d = duration_s(&out);
+    assert!((d - 1.5).abs() < 0.2, "d={d}");
+}
+
+#[test]
+fn fractional_fps_canvas_5994_produces_exact_rate() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fps5994");
+    let src = make_clip_sz(&dir, "src.mp4", "blue", 440, 2.0, 320, 240, 60);
+    let mut doc = doc_fps(60000, 1001);
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "s", 0, 1000, 0)]));
+    add_media(&mut doc, "s", &src);
+    let out = render(&dir, &doc, "out.mp4");
+    let (_w, _h, fps) = probe_meta(&out);
+    assert!((fps - 59.94).abs() < 0.01, "fps={fps}");
+}
+
+#[test]
+fn vfr_source_conforms_to_cfr_canvas() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("vfr");
+    // VFR source: concat of 15fps + 45fps halves via filter — simplest
+    // reliable VFR is minterpolate-free: generate CFR pieces and mux concat
+    // with different source rates → ffprobe shows variable rate.
+    let a = dir.join("vfr_a.mp4");
+    let b = dir.join("vfr_b.mp4");
+    for (p, r) in [(&a, 15), (&b, 45)] {
+        let st = Command::new(ffmpeg().unwrap())
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("color=c=red:s=320x240:d=1:r={r}"),
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=1",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-shortest",
+            ])
+            .arg(p)
+            .status()
+            .unwrap();
+        assert!(st.success());
+    }
+    // Concat demuxer keeps each segment's timestamps → VFR container.
+    let list = dir.join("list.txt");
+    std::fs::write(
+        &list,
+        format!(
+            "file '{}'\nfile '{}'",
+            a.to_string_lossy().replace("\\", "/"),
+            b.to_string_lossy().replace("\\", "/"),
+        ),
+    )
+    .unwrap();
+    let vfr = dir.join("vfr.mp4");
+    let st = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+        ])
+        .arg(&list)
+        .args(["-c", "copy"])
+        .arg(&vfr)
+        .status()
+        .unwrap();
+    assert!(st.success());
+
+    let mut doc = base_doc(); // 30fps canvas
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "v", 0, 1500, 0)]));
+    add_media(&mut doc, "v", &vfr);
+    let out = render(&dir, &doc, "out.mp4");
+    let (_w, _h, fps) = probe_meta(&out);
+    assert!((fps - 30.0).abs() < 0.01, "fps={fps}");
+    let d = duration_s(&out);
+    assert!((d - 1.5).abs() < 0.3, "d={d}");
+}
+
+#[test]
+fn av_sync_holds_across_long_timeline() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("sync_long");
+    // 20s timeline: tone-bearing clips at start, middle and end.
+    let tone = make_clip(&dir, "tone.mp4", "black", 880, 30.0);
+    let silence = make_clip(&dir, "sil.mp4", "0x202020", 0, 30.0); // freq 0 ≈ silent
+    let mut doc = base_doc();
+    doc.timeline.tracks.push(video_track(vec![
+        clip("a", "t", 0, 1000, 0),         // tone 0-1s
+        clip("b", "q", 1000, 9000, 0),      // quiet 1-10s
+        clip("c", "t", 10000, 1000, 5000),  // tone 10-11s (src 5s)
+        clip("d", "q", 11000, 8000, 0),     // quiet 11-19s
+        clip("e", "t", 19000, 1000, 10000), // tone 19-20s (src 10s)
+    ]));
+    add_media(&mut doc, "t", &tone);
+    add_media(&mut doc, "q", &silence);
+    let out = render(&dir, &doc, "sync.mp4");
+
+    // Tone present at start/middle/end windows.
+    assert!(audio_rms(&out, 0.2, 0.8) > 500.0, "start tone missing");
+    assert!(audio_rms(&out, 10.2, 10.8) > 500.0, "mid tone missing");
+    assert!(audio_rms(&out, 19.2, 19.8) > 500.0, "end tone missing");
+    // Silent gaps really are quiet → no drift-introduced overlap.
+    assert!(audio_rms(&out, 5.0, 6.0) < 200.0, "gap 5-6s not quiet");
+    assert!(audio_rms(&out, 15.0, 16.0) < 200.0, "gap 15-16s not quiet");
+}
+
+#[test]
+fn clip_at_timeline_edges_handles_boundaries() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("edges");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 2.0);
+    // 1-frame clip at t=0 and a clip ending exactly at timeline end.
+    let mut doc = base_doc();
+    let mut one_frame = clip("f", "r", 0, 33, 0); // ~1 frame @30fps
+    one_frame.duration_ms = 33;
+    doc.timeline.tracks.push(video_track(vec![
+        one_frame,
+        clip("tail", "r", 33, 967, 500),
+    ]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "edges.mp4");
+    let d = duration_s(&out);
+    assert!((d - 1.0).abs() < 0.15, "d={d}");
+}
+
+#[test]
+fn multi_audio_stream_uses_first_stream() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("multiaudio");
+    // Source with two audio streams (440Hz + 880Hz).
+    let src = dir.join("dual.mp4");
+    let st = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=320x240:d=2:r=30",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:duration=2",
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "m", 0, 1500, 0)]));
+    add_media(&mut doc, "m", &src);
+    let out = render(&dir, &doc, "out.mp4");
+    // Output has exactly one audio stream (first source stream).
+    let n = Command::new(media::ffprobe_path().unwrap())
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(&out)
+        .output()
+        .unwrap();
+    let streams = String::from_utf8_lossy(&n.stdout).lines().count();
+    assert_eq!(streams, 1, "expected single output audio stream");
+    assert!(audio_rms(&out, 0.2, 0.8) > 500.0);
+}
+
+#[test]
+fn text_clip_renders_glyphs_on_canvas() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    if !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return; // default font unavailable on this box
+    }
+    let dir = tmpdir("text");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 2.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 2000, 0)]));
+    doc.timeline.tracks.push(Track {
+        id: "tt".into(),
+        kind: TrackKind::Text,
+        name: "T1".into(),
+        clips: vec![Clip {
+            id: "txt".into(),
+            media_ref: None,
+            start_ms: 0,
+            duration_ms: 2000,
+            source_in_ms: 0,
+            source_out_ms: None,
+            source_duration_ms: None,
+            transform: Transform::default(),
+            effects: vec![],
+            volume: 1.0,
+            speed: 1.0,
+            text: Some("HELLO".into()),
+            text_style: Some(TextStyle {
+                font_size_px: 80.0,
+                color: "#FFFFFF".into(),
+                align_h: "center".into(),
+                align_v: "middle".into(),
+                ..Default::default()
+            }),
+            keyframes: Default::default(),
+        }],
+        transitions: vec![],
+        locked: false,
+        visible: true,
+        muted: false,
+    });
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "text.mp4");
+    let f = grab_frame(&out, 1.0, 320, 240);
+    // Center region: white glyph pixels over red background.
+    // Look for bright-white pixels (all channels high) in the middle band.
+    let mut white = 0u64;
+    for row in 90..150 {
+        for col in 60..260 {
+            let i = (row * 320 + col) * 3;
+            if f[i] > 200 && f[i + 1] > 200 && f[i + 2] > 200 {
+                white += 1;
+            }
+        }
+    }
+    assert!(white > 500, "expected text pixels, got {white}");
+}
+
+#[test]
+fn keyframe_eval_parity_table() {
+    // Shared vectors: TS evalKeyframes (effects.ts) must produce identical
+    // results — same linear model. Any drift here = preview/render mismatch.
+    let kf = |t: i64, v: f64| Keyframe {
+        t_ms: t,
+        v,
+        ease: "linear".into(),
+    };
+    let cases: Vec<(Vec<Keyframe>, i64, f64, f64)> = vec![
+        (vec![], 500, 0.7, 0.7),                            // empty → base
+        (vec![kf(100, 0.0), kf(900, 1.0)], 500, 0.0, 0.5),  // mid lerp
+        (vec![kf(100, 0.0), kf(900, 1.0)], 0, 0.0, 0.0),    // before → first
+        (vec![kf(100, 0.0), kf(900, 1.0)], 5000, 0.0, 1.0), // after → last
+        (vec![kf(0, 2.0), kf(1000, -1.0)], 250, 9.0, 1.25), // down-ramp
+        (vec![kf(0, 1.0), kf(500, 3.0), kf(1000, 2.0)], 750, 0.0, 2.5), // mid segment
+        (vec![kf(200, 5.0)], 0, 1.0, 5.0),                  // single key → clamp
+    ];
+    for (kfs, t, base, want) in cases {
+        let got = creatora_lib::render::keyframes::eval_at(&kfs, t, base);
+        assert!((got - want).abs() < 1e-9, "t={t}: got {got} want {want}");
+    }
+}
+
+// ---------- stress: scale + real timing ----------
+
+#[test]
+fn stress_plan_builds_at_scale() {
+    // 20 tracks × 5 clips (100 clips), 30-min timeline — build_plan must
+    // stay tractable; measure real time for regression tracking.
+    let mut doc = base_doc();
+    add_media(&mut doc, "m", Path::new("x.mp4"));
+    for t in 0..20 {
+        let mut tr = video_track(vec![]);
+        tr.id = format!("v{t}");
+        tr.name = format!("V{t}");
+        for c in 0..5 {
+            tr.clips.push(clip(
+                &format!("c{t}_{c}"),
+                "m",
+                (c * 6 * 60_000) as i64, // 5×6min ≈ 30min
+                60_000,
+                0,
+            ));
+        }
+        doc.timeline.tracks.push(tr);
+    }
+    let mut sources = HashMap::new();
+    sources.insert(
+        "m".to_string(),
+        SourceInfo {
+            path: PathBuf::from("x.mp4"),
+            kind: "video".into(),
+            has_audio: true,
+        },
+    );
+    let t0 = std::time::Instant::now();
+    let plan = plan::build_plan(&doc, &sources).unwrap();
+    let el = t0.elapsed();
+    eprintln!(
+        "[stress] 20 tracks × 100 clips, 30min: build_plan in {el:?}, filter graph {} bytes",
+        plan.filter_complex.len()
+    );
+    assert!(!plan.filter_complex.is_empty());
+    assert!(el.as_secs() < 10, "plan build too slow: {el:?}");
+}
+
+#[test]
+fn stress_render_50_clips_timing() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("stress50");
+    let red = make_clip(&dir, "r.mp4", "red", 220, 1.0);
+    let mut doc = base_doc();
+    // 50 clips × 400ms = 20s timeline, single source.
+    let mut clips = Vec::new();
+    for i in 0..50 {
+        clips.push(clip(&format!("c{i}"), "r", (i * 400) as i64, 400, 0));
+    }
+    doc.timeline.tracks.push(video_track(clips));
+    add_media(&mut doc, "r", &red);
+    let out = dir.join("s50.mp4");
+    let sources = resolve_sources(&doc, None);
+    let plan = plan::build_plan(&doc, &sources).unwrap();
+    eprintln!(
+        "[stress] 50-clip filter graph: {} bytes",
+        plan.filter_complex.len()
+    );
+    let t0 = std::time::Instant::now();
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+    let el = t0.elapsed();
+    eprintln!("[stress] 50 clips rendered in {el:?}");
+    let d = duration_s(&out);
+    assert!((d - 20.0).abs() < 0.35, "dur {d}");
 }

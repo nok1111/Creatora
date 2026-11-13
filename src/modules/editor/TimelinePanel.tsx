@@ -23,6 +23,7 @@ import {
   addTrack,
   findClip,
   moveClips,
+  moveClipToTrack,
   moveTrackOrder,
   removeClips,
   removeTrack,
@@ -136,10 +137,26 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       const cursorMs = pxToMs(ev.clientX - laneRect.left);
       if (mode === "move") {
         const target = snap(cursorMs - grabOffsetMs, moving);
+        // Vertical: which lane is the pointer over? Enables cross-track move.
+        let targetTrackId = track.id;
+        for (const l of document.querySelectorAll<HTMLElement>("[data-lane]")) {
+          const r = l.getBoundingClientRect();
+          if (ev.clientY >= r.top && ev.clientY < r.bottom) {
+            targetTrackId = l.dataset.trackId ?? track.id;
+            break;
+          }
+        }
         mutateInGesture((d) => {
-          const cur = findClip(d, clip.id)?.clip;
-          if (!cur) return d;
-          return moveClips(d, moving, target - cur.startMs);
+          let next = d;
+          if (targetTrackId !== track.id) {
+            next = moveClipToTrack(next, clip.id, targetTrackId, target);
+          }
+          const cur = findClip(next, clip.id)?.clip;
+          if (!cur) return next;
+          const others = moving.filter((id) => id !== clip.id);
+          return others.length
+            ? moveClips(next, others, target - cur.startMs)
+            : next;
         });
       } else {
         mutateInGesture((d) => {
@@ -228,7 +245,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         mediaRef: assetId,
         startMs: ms,
         durationMs: dur,
+        sourceDurationMs: dur,
         trackKind: track.kind,
+        trackId: track.id,
       });
       if (filePath && !r.doc.mediaRefs.some((m) => m.assetId === assetId)) {
         r.doc.mediaRefs.push({ assetId, path: filePath, hash: null });
@@ -429,6 +448,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               <div
                 key={track.id}
                 data-lane
+                data-track-id={track.id}
                 className={`relative border-b border-border/50 ${
                   track.locked
                     ? "bg-secondary/25"

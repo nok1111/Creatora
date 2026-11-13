@@ -107,3 +107,15 @@
 **Decision:** `generate_proxies` (job engine) transcodes video assets to `proxies/<id>.mp4` (H.264 ≤960w CRF30 + AAC96k, faststart) recorded in `media_assets.proxy_path`. The preview swaps to the proxy when `previewQuality == "proxy"` (default); **export always reads originals** — `media_refs` paths are untouched.
 **Why:** Preview smoothness must never trade against export fidelity. Because a proxy is a pure decode substitution (same duration, same timeline), the single source-time model is unaffected — no dual-path sync logic.
 **Consequence:** Along with `preload="auto"` on active elements and a 3s look-ahead prefetch window of hidden decoders, multi-clip playback stays smooth; memory stays bounded because only active+prefetch elements exist at any time.
+
+## ADR-020 — Text tracks: canonical TextStyle on the clip, drawtext ↔ DOM span
+
+**Status**: accepted · **Phase**: 3E
+
+**Context**: Text needs a single canonical model shared by preview and render (per the "no shallow titles" requirement). Fontconfig is not configured on the dev host, so font resolution must be an explicit file path, not a family name.
+
+**Decision**: `Clip.text` + `Clip.text_style` (TextStyle: fontFile?, fontSizePx, color, outlineColor/Width, backgroundColor/Pad, alignH/V). Render: transparent `color` source inside filter_complex → `drawtext` (explicit `fontfile`, escaping at the option level) → same gated-overlay path as media layers, so z-order, timing, transform offset and opacity/keyframes reuse existing machinery. Preview: flexbox container (alignH↔justify, alignV↔items) + span with `cqh`-scaled font-size/stroke/box + translate(evalT.x/y). v1 scope = exactly the subset both sides express identically; richer text (shadows, per-word styles, curves) extends the same model later.
+
+**Alternatives**: rasterized text images (breaks keyframing/preview parity), ASS subtitles (wrong layer — that's for export subtitles, not design text), SVG→ffmpeg drawsvg (extra moving parts, no preview benefit).
+
+**Consequences**: fontFile defaults to `C:\Windows\Fonts\arial.ttf` on Windows — a `fontFile`-less doc on another OS falls back to nothing usable; Fontconfig default font substitution for missing fontfile is a known follow-up. drawtext x/y accept `t` (verified); geq requires `T` (verified).

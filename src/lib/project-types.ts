@@ -65,6 +65,34 @@ export interface Effect {
   params: Record<string, number>;
 }
 
+export interface TextStyle {
+  /** Absolute font path; null → platform default. */
+  fontFile?: string | null;
+  fontSizePx: number;
+  /** "#RRGGBB" or "#RRGGBBAA". */
+  color: string;
+  outlineColor?: string | null;
+  outlineWidth: number;
+  backgroundColor?: string | null;
+  backgroundPadPx: number;
+  /** "left" | "center" | "right" */
+  alignH: string;
+  /** "top" | "middle" | "bottom" */
+  alignV: string;
+}
+
+export const DEFAULT_TEXT_STYLE: TextStyle = {
+  fontFile: null,
+  fontSizePx: 48,
+  color: "#FFFFFF",
+  outlineColor: null,
+  outlineWidth: 0,
+  backgroundColor: null,
+  backgroundPadPx: 8,
+  alignH: "center",
+  alignV: "middle",
+};
+
 export interface Keyframe {
   /** ms relative to clip start. */
   tMs: number;
@@ -79,11 +107,15 @@ export interface Clip {
   durationMs: number;
   sourceInMs: number;
   sourceOutMs?: number | null;
+  /** Full source-media duration — lets trim clamp to real bounds. */
+  sourceDurationMs?: number | null;
   transform: Transform;
   effects: Effect[];
   volume: number;
   speed: number;
   text?: string | null;
+  /** Canonical text styling — mirrors render/text.rs (ADR-020). */
+  textStyle?: TextStyle | null;
   /** property path ("transform.x", "volume", …) → samples, clip-relative ms. */
   keyframes: Record<string, Keyframe[]>;
 }

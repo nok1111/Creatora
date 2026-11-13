@@ -34,6 +34,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
         mediaRef: a.id,
         startMs: playheadMs,
         durationMs: dur,
+        sourceDurationMs: a.durationMs ?? null,
         trackKind,
       });
       clipId = r.clipId;

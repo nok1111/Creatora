@@ -5,6 +5,7 @@ use crate::db::Db;
 use crate::error::{AppError, CmdResult};
 use crate::jobs::{JobCtx, JobManager};
 use crate::media::probe;
+use rusqlite::OptionalExtension;
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -732,4 +733,29 @@ pub fn generate_proxies(
         .map_err(|e| e.to_string())
     });
     Ok(job_id)
+}
+
+/// Remove a proxy file and clear `proxy_path` — preview falls back to the
+/// original source.
+#[tauri::command]
+pub fn delete_proxy(db: State<'_, Arc<Db>>, asset_id: String) -> CmdResult<()> {
+    let row: Option<String> = db.with(|c| {
+        Ok(c.query_row(
+            "SELECT proxy_path FROM media_assets WHERE id = ?1",
+            [&asset_id],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten())
+    })?;
+    if let Some(p) = row {
+        let _ = std::fs::remove_file(&p);
+    }
+    db.with(|c| {
+        Ok(c.execute(
+            "UPDATE media_assets SET proxy_path = NULL WHERE id = ?1",
+            [&asset_id],
+        )?)
+    })?;
+    Ok(())
 }

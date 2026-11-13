@@ -135,4 +135,6 @@ export const api = {
     cmd<void>("untag_asset", { assetId, tagId }),
   generateProxies: (assetIds: string[]) =>
     cmd<string>("generate_proxies", { assetIds }),
+  deleteProxy: (assetId: string) =>
+    cmd<void>("delete_proxy", { assetId }),
 };

@@ -30,6 +30,8 @@ function isImagePath(p: string): boolean {
   return /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(p);
 }
 
+const pct = (n: number, total: number) => `${(n / total) * 100}%`;
+
 export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
   const doc = useProject((s) => s.doc);
   const playheadMs = useEditor((s) => s.playheadMs);
@@ -39,11 +41,19 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
   const mediaEls = useRef(new Map<string, HTMLMediaElement>());
   const previewQuality = useEditor((s) => s.previewQuality);
 
-  // Master clock: advance playhead while playing.
+  // Master clock: advance playhead while playing. Also monitors real frame
+  // times — if the rAF cadence stays ≥1.5× the project's frame budget for a
+  // sustained window, preview quality auto-degrades to "proxy" (ADR-019).
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
     let last = performance.now();
+    const budget = (() => {
+      const d = useProject.getState().doc;
+      if (!d) return 1000 / 30;
+      return 1000 / (d.canvas.fpsNum / d.canvas.fpsDen);
+    })();
+    let slowCount = 0;
     const tick = (now: number) => {
       const dt = now - last;
       last = now;
@@ -56,6 +66,11 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
         return;
       }
       setPlayhead(cur + dt);
+      // ~2s sustained over-budget → degrade once per session.
+      slowCount = dt > budget * 1.5 ? slowCount + 1 : 0;
+      if (slowCount > 60 && useEditor.getState().previewQuality === "full") {
+        useEditor.getState().setPreviewQuality("proxy");
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -121,6 +136,7 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
           aspectRatio: `${doc.canvas.width} / ${doc.canvas.height}`,
           height: "min(100%, calc((100vw - 560px) * 9 / 16))",
           backgroundColor: doc.canvas.background,
+          containerType: "size",
         }}
       >
         {/* SVG defs for matrix-based effects (temperature). */}
@@ -138,7 +154,7 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
         {visual.map(({ clip }) => {
           const asset = clip.mediaRef ? assets.get(clip.mediaRef) : undefined;
           const missing = !asset || asset.status === "missing";
-          const pct = (n: number, total: number) => `${(n / total) * 100}%`;
+
           if (missing || !asset) {
             const r = clipRect(doc, clip, doc.canvas.width, doc.canvas.height);
             return (
@@ -233,6 +249,50 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
                 muted
                 style={{ display: "none" }}
               />
+            );
+          })}
+
+        {/* Text clips — same anchor model as render/text.rs drawtext:
+            block positioned on canvas + transform.x/y offset (ADR-020). */}
+        {active
+          .filter((a) => a.track.kind === "text" && a.track.visible && a.clip.text)
+          .map(({ clip }) => {
+            const st = clip.textStyle;
+            if (!st) return null;
+            const evalT = evalTransform(clip);
+            const justify =
+              st.alignH === "left" ? "flex-start" : st.alignH === "right" ? "flex-end" : "center";
+            const align =
+              st.alignV === "top" ? "flex-start" : st.alignV === "bottom" ? "flex-end" : "center";
+            return (
+              <div
+                key={clip.id}
+                className="absolute inset-0 flex"
+                style={{
+                  justifyContent: justify,
+                  alignItems: align,
+                  opacity: Math.max(0, Math.min(1, evalT.opacity)),
+                  transform: `translate(${pct(evalT.x, doc.canvas.width)}, ${pct(evalT.y, doc.canvas.height)})`,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: `${(st.fontSizePx / doc.canvas.height) * 100}cqh`,
+                    color: st.color,
+                    WebkitTextStroke:
+                      st.outlineWidth > 0 && st.outlineColor
+                        ? `${(st.outlineWidth / doc.canvas.height) * 100}cqh ${st.outlineColor}`
+                        : undefined,
+                    background: st.backgroundColor ?? undefined,
+                    padding: st.backgroundColor
+                      ? `${(st.backgroundPadPx / doc.canvas.height) * 100}cqh`
+                      : undefined,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {clip.text}
+                </span>
+              </div>
             );
           })}
 

@@ -12,6 +12,7 @@ import {
   frameToMs,
   moveClip,
   moveClips,
+  moveClipToTrack,
   moveTrackOrder,
   msToFrame,
   pasteClips,
@@ -121,8 +122,10 @@ describe("ops", () => {
     const { doc: d1, clipId } = addClip(d, { mediaRef: "a1", startMs: 1000, durationMs: 2000 });
     const over = trimClip(d1, clipId, "end", -99999);
     expect(findClip(over, clipId)!.clip.durationMs).toBe(33); // 1 frame @30fps
+    // sourceIn=0 → can't reveal earlier media: start stays put.
     const neg = trimClip(d1, clipId, "start", -99999);
-    expect(findClip(neg, clipId)!.clip.startMs).toBe(0);
+    expect(findClip(neg, clipId)!.clip.startMs).toBe(1000);
+    expect(findClip(neg, clipId)!.clip.sourceInMs).toBe(0);
   });
 
   it("remove + update work immutably", () => {
@@ -335,5 +338,92 @@ describe("batch clip ops", () => {
     const { doc: d2, removed } = removeClips(d, [a.clipId]);
     expect(removed).toBe(0);
     expect(findClip(d2, a.clipId)).not.toBeNull();
+  });
+});
+
+describe("3E hardening fixes", () => {
+  it("splitClip remaps right-half keyframes to its origin", () => {
+    const { doc: d1, clipId } = addClip(doc(), { mediaRef: "a1", startMs: 0, durationMs: 2000 });
+    let d = setKeyframe(d1, clipId, "volume", 0, 0.2);
+    d = setKeyframe(d, clipId, "volume", 1000, 0.8);
+    d = setKeyframe(d, clipId, "volume", 1500, 1.0);
+    const r = splitClip(d, clipId, 1000)!;
+    const left = findClip(r.doc, clipId)!.clip;
+    const right = findClip(r.doc, r.rightClipId)!.clip;
+    expect(left.keyframes["volume"].map((k) => k.tMs)).toEqual([0, 1000]);
+    // 1500 - 1000 = 500 on the right half's origin; cut-point key stays for continuity
+    expect(right.keyframes["volume"].map((k) => [k.tMs, k.v])).toEqual([[0, 0.8], [500, 1.0]]);
+  });
+
+  it("splitClip re-points outgoing transition to the right half", () => {
+    let d = doc();
+    const a = addClip(d, { mediaRef: "a1", startMs: 0, durationMs: 2000 });
+    const b = addClip(a.doc, { mediaRef: "a1", startMs: 2000, durationMs: 1000 });
+    d = b.doc;
+    d = addTransition(d, d.timeline.tracks[0].id, a.clipId, b.clipId, 400)!.doc;
+    const r = splitClip(d, a.clipId, 1000)!;
+    const tr = r.doc.timeline.tracks[0].transitions[0];
+    expect(tr.clipA).toBe(r.rightClipId);
+  });
+
+  it("removeClip + removeClips drop dangling transitions", () => {
+    let d = doc();
+    const a = addClip(d, { mediaRef: "a1", startMs: 0, durationMs: 2000 });
+    const b = addClip(a.doc, { mediaRef: "a1", startMs: 2000, durationMs: 1000 });
+    d = addTransition(b.doc, b.doc.timeline.tracks[0].id, a.clipId, b.clipId, 400)!.doc;
+    expect(d.timeline.tracks[0].transitions).toHaveLength(1);
+    d = removeClip(d, b.clipId);
+    expect(d.timeline.tracks[0].transitions).toHaveLength(0);
+    // batch path
+    const a2 = addClip(d, { mediaRef: "a1", startMs: 2000, durationMs: 1000 });
+    d = addTransition(a2.doc, a2.doc.timeline.tracks[0].id, a.clipId, a2.clipId, 400)!.doc;
+    const { doc: d2 } = removeClips(d, [a2.clipId]);
+    expect(d2.timeline.tracks[0].transitions).toHaveLength(0);
+  });
+
+  it("trimClip start never makes sourceIn negative", () => {
+    const { doc: d1, clipId } = addClip(doc(), {
+      mediaRef: "a1", startMs: 1000, durationMs: 1000, sourceInMs: 300,
+    });
+    const d2 = trimClip(d1, clipId, "start", -2000);
+    const c = findClip(d2, clipId)!.clip;
+    expect(c.sourceInMs).toBe(0); // clamped, not -1700
+    expect(c.startMs).toBe(700); // only revealed 300ms
+  });
+
+  it("trimClip end clamps to sourceDurationMs", () => {
+    const { doc: d1, clipId } = addClip(doc(), {
+      mediaRef: "a1", startMs: 0, durationMs: 1000, sourceInMs: 500,
+      sourceDurationMs: 2000,
+    });
+    const d2 = trimClip(d1, clipId, "end", 5000);
+    const c = findClip(d2, clipId)!.clip;
+    expect(c.durationMs).toBe(1500); // 2000 - 500 source left
+  });
+
+  it("moveClipToTrack moves to compatible track and drops transitions", () => {
+    let d = doc();
+    const a = addClip(d, { mediaRef: "a1", startMs: 0, durationMs: 1000 }); // V1
+    const b = addClip(a.doc, { mediaRef: "a1", startMs: 1000, durationMs: 1000 });
+    const v2 = addTrack(b.doc, "video"); // V2
+    const a1 = addTrack(v2.doc, "audio"); // A1
+    d = a1.doc;
+    d = addTransition(d, d.timeline.tracks[0].id, a.clipId, b.clipId, 300)!.doc;
+    // video clip onto audio track → rejected
+    const dBad = moveClipToTrack(d, a.clipId, a1.trackId, 0);
+    expect(findClip(dBad, a.clipId)!.track.kind).toBe("video");
+    // onto V2 at 500ms → moved, transitions dropped from source track
+    const d2 = moveClipToTrack(d, a.clipId, v2.trackId, 500);
+    const hit = findClip(d2, a.clipId)!;
+    expect(hit.track.id).toBe(v2.trackId);
+    expect(hit.clip.startMs).toBe(500);
+    expect(d2.timeline.tracks[0].transitions).toHaveLength(0);
+  });
+
+  it("pasteClips on empty clipboard is a no-op", () => {
+    const d = doc();
+    const { doc: d2, clipIds } = pasteClips(d, [], 1000);
+    expect(clipIds).toEqual([]);
+    expect(d2.timeline.tracks).toHaveLength(0);
   });
 });

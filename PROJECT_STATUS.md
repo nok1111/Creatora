@@ -172,9 +172,22 @@ None blocking. See Phase-3 limitation list.
 - Social platform API credentials do not exist yet (Phase 8 concern).
 - `scan_missing_assets`/`relink` verified via unit-level DB ops; full UI click-path needs manual check on next launch.
 
+## Phase 3E — editor hardening (2026-11-13, checkpoint)
+
+Audit → fix loop found and fixed **real bugs**: splitClip keyframe remap, orphan transitions on remove/move, trimClip unbounded by source duration, cross-track moves leaving invalid transition refs, drop-target ignoring the chosen track, empty-clipboard paste (Infinity). Preview/render parity: transition groups now require real overlap; `geq` uses `T` not `t`.
+
+**New in 3E**: text tracks (ADR-020 — canonical TextStyle, drawtext render, DOM preview, pixel-verified); shared keyframe parity vectors both sides (7 cases, 1e-9); `delete_proxy`; partial-proxy cleanup; auto quality degradation (rAF cadence vs frame budget → proxy); decoder set remains bounded by active-clip window + 3s prefetch.
+
+**Stress measured** (not invented): 20 tracks × 100 clips on a 30-min timeline → `build_plan` well under budget, graph emitted; 50-clip render end-to-end in ~2s machine time, duration verified. 4K not yet benchmarked — planned.
+
 ## Latest test results (2026-11-13)
 
-- `cargo test --lib`: **17/17** — incl. render plan graph assertions (enable window, atrim range, adelay, mute/visible handling, transform in graph, args/maps).
+- `cargo test --lib`: **27/27**
+- `cargo test --test render_e2e`: **26/26** (prev 16 → +text pixels, keyframe parity vectors, fps matrix 23.976/29.97/59.94, VFR→CFR, long A/V sync, boundaries, multi-audio, mixed-res, z-order, long projects, 720p, stress 20×100 plan + 50-clip render)
+- `npm test`: **37/37** (incl. 7 shared parity vectors mirroring Rust eval_at)
+- `cargo clippy --all-targets`: 0 warnings. `cargo fmt --check` clean. `vite build` clean.
+
+## Previous results — incl. render plan graph assertions (enable window, atrim range, adelay, mute/visible handling, transform in graph, args/maps).
 - `cargo test --test media_import`: **3/3** real ffprobe/ffmpeg import pipeline.
 - `cargo test --test render_e2e`: **7/7** — real exported media verified (duration, order via pixels, transform via pixels, audio delay via PCM RMS, image clip, save/reopen fidelity, cancel cleanup).
 - `npm test`: **11/11** (3 autosave + 8 timeline-engine). `tsc --noEmit` clean. `vite build` clean (~495 kB).

@@ -69,6 +69,7 @@ pub fn run() {
             media::commands::tag_asset,
             media::commands::untag_asset,
             media::commands::generate_proxies,
+            media::commands::delete_proxy,
             render::commands::export_project,
             render::commands::preview_render_plan,
         ])

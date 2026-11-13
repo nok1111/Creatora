@@ -54,6 +54,18 @@ pub struct Segment {
     pub audible: bool,
 }
 
+/// A text-track clip: transparent canvas + drawtext.
+#[derive(Debug, Clone)]
+pub struct TextSeg {
+    pub clip_id: String,
+    pub start_ms: i64,
+    pub duration_ms: i64,
+    pub text: String,
+    pub style: crate::project::document::TextStyle,
+    pub transform: crate::project::document::Transform,
+    pub keyframes: std::collections::BTreeMap<String, Vec<crate::project::document::Keyframe>>,
+}
+
 #[derive(Debug)]
 pub struct RenderPlan {
     pub width: u32,
@@ -66,6 +78,8 @@ pub struct RenderPlan {
     pub segments: Vec<Segment>,
     pub filter_complex: String,
     pub has_audio: bool,
+    /// Text-track clips rendered via drawtext (no file input).
+    pub text_segments: Vec<TextSeg>,
 }
 
 fn ms_to_s(ms: i64) -> String {
@@ -81,6 +95,34 @@ fn lbl(prefix: &str, i: usize) -> String {
 /// (index 0 renders bottom-most). `visible=false` video tracks and
 /// `muted` tracks are honored; text/graphics tracks are skipped (Phase 3
 /// renders video/audio/image only).
+fn collect_text_segments(doc: &ProjectDoc) -> Vec<TextSeg> {
+    let mut out = Vec::new();
+    for track in &doc.timeline.tracks {
+        if track.kind != TrackKind::Text || !track.visible {
+            continue;
+        }
+        for clip in &track.clips {
+            if clip.duration_ms <= 0 {
+                continue;
+            }
+            let Some(text) = &clip.text else { continue };
+            if text.is_empty() {
+                continue;
+            }
+            out.push(TextSeg {
+                clip_id: clip.id.clone(),
+                start_ms: clip.start_ms.max(0),
+                duration_ms: clip.duration_ms,
+                text: text.clone(),
+                style: clip.text_style.clone().unwrap_or_default(),
+                transform: clip.transform,
+                keyframes: clip.keyframes.clone(),
+            });
+        }
+    }
+    out
+}
+
 fn collect_segments(
     doc: &ProjectDoc,
     sources: &HashMap<String, SourceInfo>,
@@ -140,12 +182,10 @@ fn collect_segments(
         }
     }
 
+    if segments.is_empty() && missing.is_empty() {
+        return Ok(segments); // possible text-only timeline — decided upstream
+    }
     if segments.is_empty() {
-        if missing.is_empty() {
-            return Err(AppError::InvalidInput(
-                "timeline has nothing to export".into(),
-            ));
-        }
         return Err(AppError::InvalidInput(format!(
             "all clips reference missing media ({})",
             missing.join(", ")
@@ -337,9 +377,13 @@ fn build_groups(doc: &ProjectDoc, segments: &[Segment]) -> Vec<Group> {
             if !segments[ia].visual || !segments[ib].visual {
                 continue;
             }
-            // Overlap actually present? clamp duration to the overlap window.
+            // Overlap actually present? Preview shows no fade without it —
+            // skip rather than render a phantom 1ms xfade.
             let overlap = segments[ia].start_ms + segments[ia].duration_ms - segments[ib].start_ms;
-            let d = tr.duration_ms.min(overlap).max(1);
+            if overlap <= 0 {
+                continue;
+            }
+            let d = tr.duration_ms.min(overlap);
             // Try to extend an existing group ending at ia.
             if let Some(g) = groups.iter_mut().find(|g| g.members.last() == Some(&ia)) {
                 g.members.push(ib);
@@ -368,6 +412,12 @@ pub fn build_plan(
     sources: &HashMap<String, SourceInfo>,
 ) -> Result<RenderPlan, AppError> {
     let mut segments = collect_segments(doc, sources)?;
+    let text_segments = collect_text_segments(doc);
+    if segments.is_empty() && text_segments.is_empty() {
+        return Err(AppError::InvalidInput(
+            "timeline has nothing to export".into(),
+        ));
+    }
     let groups = build_groups(doc, &segments);
     let mut in_group = std::collections::HashSet::new();
     for g in &groups {
@@ -530,6 +580,45 @@ pub fn build_plan(
         }
     }
 
+    // Text segments: generated transparent canvas + drawtext, overlaid like
+    // any other visual layer (z = after all media tracks — text on top).
+    for (j, ts) in text_segments.iter().enumerate() {
+        let (w, h) = (doc.canvas.width, doc.canvas.height);
+        let (px, py) = crate::render::text::pos_exprs(
+            &ts.keyframes,
+            ts.transform.x as f64,
+            ts.transform.y as f64,
+        );
+        let (x, y) = crate::render::text::anchor_exprs(&ts.style, &px, &py);
+        let mut c = format!(
+            "color=c=black@0.0:size={}x{}:rate={},format=rgba,{}",
+            w,
+            h,
+            fps_string(doc),
+            crate::render::text::drawtext_opts(&ts.style, &ts.text, &x, &y),
+        );
+        let ko = ts.keyframes.get("transform.opacity");
+        if let Some(k) = ko {
+            let e = crate::render::keyframes::expr_var(k, 0.0, ts.transform.opacity as f64, 'T');
+            c.push_str(&format!(
+                ",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({e})'"
+            ));
+        } else if ts.transform.opacity < 1.0 {
+            c.push_str(&format!(",colorchannelmixer=aa={}", ts.transform.opacity));
+        }
+        c.push_str(&lbl("vt", j + 1));
+        filters.push(c);
+        let start_s = ms_to_s(ts.start_ms);
+        let end_s = ms_to_s(ts.start_ms + ts.duration_ms);
+        let out_lbl = lbl("o", overlay_idx + 1);
+        filters.push(format!(
+            "{cur}{}overlay=0:0:enable='between(t,{start_s},{end_s})'{out_lbl}",
+            lbl("vt", j + 1)
+        ));
+        cur = out_lbl;
+        overlay_idx += 1;
+    }
+
     filters.push(format!("{cur}format=yuv420p[vout]"));
     let has_audio = !audio_labels.is_empty();
     if has_audio {
@@ -550,6 +639,7 @@ pub fn build_plan(
         segments,
         filter_complex: filters.join(";"),
         has_audio,
+        text_segments,
     })
 }
 
@@ -662,11 +752,13 @@ mod tests {
                 duration_ms: dur,
                 source_in_ms: src_in,
                 source_out_ms: None,
+                source_duration_ms: None,
                 transform: Transform::default(),
                 effects: vec![],
                 volume: 1.0,
                 speed: 1.0,
                 text: None,
+                text_style: None,
                 keyframes: Default::default(),
             }],
             transitions: vec![],
