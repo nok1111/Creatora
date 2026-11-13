@@ -33,6 +33,12 @@ import {
   trimClip,
   updateClip,
   updateEffect,
+  applyVersion,
+  addVersion,
+  setVersionClipOverride,
+  duplicateVersion,
+  resetVersion,
+  removeVersion,
 } from "@/lib/timeline-engine";
 import { evalKeyframes } from "@/lib/effects";
 import type { ProjectDoc } from "@/lib/project-types";
@@ -49,7 +55,7 @@ function doc(): ProjectDoc {
     },
     canvas: { width: 1920, height: 1080, fpsNum: 30, fpsDen: 1, background: "#000" },
     timeline: { tracks: [], markers: [] },
-    formats: {},
+    versions: [],
     subtitles: [],
     brandKitId: null,
     exportProfiles: [],
@@ -425,5 +431,64 @@ describe("3E hardening fixes", () => {
     const { doc: d2, clipIds } = pasteClips(d, [], 1000);
     expect(clipIds).toEqual([]);
     expect(d2.timeline.tracks).toHaveLength(0);
+  });
+});
+
+describe("format versions (ADR-021)", () => {
+  const withClip = () => {
+    let d = doc();
+    const r = addClip(d, {
+      mediaRef: "a1",
+      trackKind: "video",
+      startMs: 0,
+      durationMs: 2000,
+    });
+    return { d: r.doc, clipId: r.clipId };
+  };
+
+  it("applyVersion overrides only whitelisted fields; base untouched", () => {
+    const { d, clipId } = withClip();
+    const { doc: v1, versionId } = addVersion(d, {
+      name: "9:16",
+      canvas: { width: 1080, height: 1920, fpsNum: 30, fpsDen: 1, background: "#000" },
+    });
+    const v2 = setVersionClipOverride(v1, versionId, clipId, {
+      transform: { x: -100, y: 0, scaleX: 2, scaleY: 2, rotationDeg: 0, opacity: 1, cropTop: 0, cropRight: 0, cropBottom: 0, cropLeft: 0 },
+      keyframes: { "transform.x": [{ tMs: 0, v: -50, ease: "linear" }] },
+    });
+    const merged = applyVersion(v2, versionId)!;
+    expect(merged.canvas.width).toBe(1080);
+    const clip = merged.timeline.tracks[0].clips[0];
+    expect(clip.transform.x).toBe(-100);
+    expect(clip.keyframes["transform.x"][0].v).toBe(-50);
+    // shared structure identical
+    expect(clip.durationMs).toBe(2000);
+    // base doc untouched
+    const base = v2.timeline.tracks[0].clips[0];
+    expect(base.transform.x).toBe(0);
+    expect(base.keyframes["transform.x"]).toBeUndefined();
+  });
+
+  it("edits to one version never leak to another", () => {
+    const { d, clipId } = withClip();
+    const { doc: d1, versionId: vA } = addVersion(d, { name: "A", canvas: { width: 100, height: 100, fpsNum: 30, fpsDen: 1, background: "#000" } });
+    const { doc: d2, versionId: vB } = addVersion(d1, { name: "B", canvas: { width: 200, height: 200, fpsNum: 30, fpsDen: 1, background: "#000" } });
+    const d3 = setVersionClipOverride(d2, vA, clipId, {
+      transform: { x: 9, y: 0, scaleX: 1, scaleY: 1, rotationDeg: 0, opacity: 1, cropTop: 0, cropRight: 0, cropBottom: 0, cropLeft: 0 },
+    });
+    const mB = applyVersion(d3, vB)!;
+    expect(mB.timeline.tracks[0].clips[0].transform.x).toBe(0); // B unaffected
+  });
+
+  it("duplicate + reset behave", () => {
+    const { d, clipId } = withClip();
+    const { doc: d1, versionId } = addVersion(d, { name: "A", canvas: { width: 100, height: 100, fpsNum: 30, fpsDen: 1, background: "#000" } });
+    const d2 = setVersionClipOverride(d1, versionId, clipId, { transform: { x: 5, y: 0, scaleX: 1, scaleY: 1, rotationDeg: 0, opacity: 1, cropTop: 0, cropRight: 0, cropBottom: 0, cropLeft: 0 } });
+    const { doc: d3, versionId: dup } = duplicateVersion(d2, versionId);
+    expect(d3.versions).toHaveLength(2);
+    expect(d3.versions.find((v) => v.id === dup)!.clipOverrides[clipId].transform!.x).toBe(5);
+    const d4 = resetVersion(d3, versionId);
+    expect(d4.versions.find((v) => v.id === versionId)!.clipOverrides).toEqual({});
+    expect(removeVersion(d4, dup!).versions).toHaveLength(1);
   });
 });

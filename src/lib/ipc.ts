@@ -93,8 +93,12 @@ export const api = {
     ),
 
   // Render
-  exportProject: (projectPath: string, outPath: string) =>
-    cmd<string>("export_project", { projectPath, outPath }),
+  exportProject: (projectPath: string, outPath: string, versionId?: string) =>
+    cmd<string>("export_project", { projectPath, outPath, versionId }),
+  exportVersions: (projectPath: string, outDir: string, versionIds: string[]) =>
+    cmd<string[]>("export_versions", { projectPath, outDir, versionIds }),
+  analyzeSubject: (path: string, inMs: number, outMs: number, samples = 24) =>
+    cmd<string>("analyze_subject", { path, inMs, outMs, samples }),
   previewRenderPlan: (projectPath: string) =>
     cmd<{ ok: boolean; durationMs?: number; segments?: number; hasAudio?: boolean; reason?: string }>(
       "preview_render_plan",

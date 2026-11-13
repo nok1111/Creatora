@@ -29,6 +29,13 @@ interface EditorState {
   clipboard: { kind: TrackKind; clip: Clip }[];
   /** Preview decode source: original files or generated proxies. */
   previewQuality: "full" | "proxy";
+  /** Active format version — null = master. All edits to whitelisted
+   *  fields route to this version's overrides (ADR-021). */
+  activeVersionId: string | null;
+  /** Side-by-side compare of master vs active version in the preview. */
+  compareMode: boolean;
+  setActiveVersion: (id: string | null) => void;
+  setCompareMode: (v: boolean) => void;
 
   past: ProjectDoc[];
   future: ProjectDoc[];
@@ -73,6 +80,10 @@ export const useEditor = create<EditorState>((set, get) => {
     snapEnabled: true,
     clipboard: [],
     previewQuality: "proxy",
+    activeVersionId: null,
+    compareMode: false,
+    setActiveVersion: (id) => set({ activeVersionId: id }),
+    setCompareMode: (v) => set({ compareMode: v }),
     past: [],
     future: [],
     gestureBase: null,

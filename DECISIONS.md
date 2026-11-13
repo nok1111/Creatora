@@ -119,3 +119,31 @@
 **Alternatives**: rasterized text images (breaks keyframing/preview parity), ASS subtitles (wrong layer — that's for export subtitles, not design text), SVG→ffmpeg drawsvg (extra moving parts, no preview benefit).
 
 **Consequences**: fontFile defaults to `C:\Windows\Fonts\arial.ttf` on Windows — a `fontFile`-less doc on another OS falls back to nothing usable; Fontconfig default font substitution for missing fontfile is a known follow-up. drawtext x/y accept `t` (verified); geq requires `T` (verified).
+
+## ADR-021 — Format versions: shared timeline + whitelisted per-clip overrides
+
+**Status**: accepted · **Phase**: 4A
+
+**Context**: One project, many aspect-ratio outputs. The alternative — a full copy of the timeline per version — duplicates every structural edit and invites divergence bugs; a separate engine per version violates the single-model rule.
+
+**Decision**: `ProjectDoc.versions: Vec<FormatVersion>` (format_version 2; v1 `formats` map migrates cleanly — it was never populated). A version holds its own `canvas`, `safeZones`, `export` settings and `clipOverrides` keyed by clip id. The whitelist is strict: `transform`, `keyframes` on `transform.*` paths, `textStyle`. Timing, effects, audio, track structure are shared — versions can NEVER diverge structurally. `apply_version` (Rust) / `applyVersion` (TS) produce the merged doc that preview and render both consume — the same merge function semantics, one engine.
+
+**Alternatives**: timeline-per-version (rejected: edit divergence), per-clip "aspect variants" inline on clips (rejected: bloats every clip, harder to reset).
+
+**Consequences**: Inspector routes transform/keyframe writes to overrides when a version is active (undo covers it — all mutations are doc-level). Structural edits while a version is active apply to the shared timeline — intended.
+
+## ADR-022 — Format presets: centralized catalog, dimensions ≠ guarantees
+
+**Status**: accepted · **Phase**: 4B
+
+**Decision**: `src/lib/format-presets.ts` is the single source of truth: preset id, label, canvas dims, safe-zone suggestions, platform hint, suggested duration cap. Platform fields are *recommendation metadata* — the UI never claims publish-compatibility. Rust never sees preset ids; versions persist concrete canvas numbers.
+
+## ADR-023 — Smart reframe: local motion-centroid tracking, no ML required
+
+**Status**: accepted · **Phase**: 4C
+
+**Decision**: `render/reframe.rs` decodes a clip's window to 96px grayscale via ffmpeg and computes the centroid of frame-to-frame change (motion energy), falling back to a luminance centroid for static scenes. Samples → `transform.x/y` keyframes written as version overrides — always user-editable. Handles subjects exiting/re-entering: motion-less frames fall back, keyed positions interpolate.
+
+**Alternatives**: ONNX face detection (documented future option — model ~5-20 MB, license varies, hardware-dependent); static-center framing only (rejected — not detection).
+
+**Consequences**: Honest scope — tracks movement/salience, not semantics. License-clean, offline, deterministic; verified against synthetic moving-subject video.

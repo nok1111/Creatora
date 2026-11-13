@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useProject } from "@/stores/project";
+import { effectiveDoc } from "@/lib/timeline-engine";
 import { useEditor } from "@/stores/editor";
 import {
   activeClipsAt,
@@ -32,8 +33,16 @@ function isImagePath(p: string): boolean {
 
 const pct = (n: number, total: number) => `${(n / total) * 100}%`;
 
-export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
+export function Preview({
+  assets,
+  docOverride,
+}: {
+  assets: Map<string, AssetSummary>;
+  /** Render this doc instead of the store's active view (compare mode). */
+  docOverride?: import("@/lib/project-types").ProjectDoc;
+}) {
   const doc = useProject((s) => s.doc);
+  const activeVersionId = useEditor((s) => s.activeVersionId);
   const playheadMs = useEditor((s) => s.playheadMs);
   const playing = useEditor((s) => s.playing);
   const setPlayhead = useEditor((s) => s.setPlayhead);
@@ -78,6 +87,10 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
   }, [playing, setPlayhead, setPlaying]);
 
   if (!doc) return null;
+  const viewDoc = docOverride ?? effectiveDoc(doc, activeVersionId);
+  const activeVersion = docOverride
+    ? undefined
+    : doc.versions.find((v) => v.id === activeVersionId);
 
   /** Transform evaluated at playhead: base values overlaid by keyframes. */
   const evalTransform = (clip: Clip) => {
@@ -93,11 +106,11 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
       rotationDeg: evalKeyframes(k["transform.rotationDeg"], rel, t.rotationDeg),
       opacity:
         evalKeyframes(k["transform.opacity"], rel, t.opacity) *
-        transitionAlpha(doc, clip.id, playheadMs),
+        transitionAlpha(viewDoc, clip.id, playheadMs),
     };
   };
 
-  const active = activeClipsAt(doc, playheadMs);
+  const active = activeClipsAt(viewDoc, playheadMs);
   const visual = active.filter((a) => a.track.visible && a.track.kind !== "audio");
 
   // Sync every mounted element to the model: seek on drift, rate, volume,
@@ -133,9 +146,9 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
       <div
         className="relative max-h-full overflow-hidden rounded border border-border bg-black"
         style={{
-          aspectRatio: `${doc.canvas.width} / ${doc.canvas.height}`,
+          aspectRatio: `${viewDoc.canvas.width} / ${viewDoc.canvas.height}`,
           height: "min(100%, calc((100vw - 560px) * 9 / 16))",
-          backgroundColor: doc.canvas.background,
+          backgroundColor: viewDoc.canvas.background,
           containerType: "size",
         }}
       >
@@ -156,16 +169,16 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
           const missing = !asset || asset.status === "missing";
 
           if (missing || !asset) {
-            const r = clipRect(doc, clip, doc.canvas.width, doc.canvas.height);
+            const r = clipRect(viewDoc, clip, viewDoc.canvas.width, viewDoc.canvas.height);
             return (
               <div
                 key={clip.id}
                 className="absolute flex items-center justify-center bg-zinc-800/80 text-xs text-zinc-400"
                 style={{
-                  left: pct(r.x, doc.canvas.width),
-                  top: pct(r.y, doc.canvas.height),
-                  width: pct(r.w, doc.canvas.width),
-                  height: pct(r.h, doc.canvas.height),
+                  left: pct(r.x, viewDoc.canvas.width),
+                  top: pct(r.y, viewDoc.canvas.height),
+                  width: pct(r.w, viewDoc.canvas.width),
+                  height: pct(r.h, viewDoc.canvas.height),
                 }}
               >
                 {asset?.name ?? "missing media"}
@@ -180,8 +193,8 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
           const r = clipRect(
             doc,
             evalClip,
-            asset.width ?? doc.canvas.width,
-            asset.height ?? doc.canvas.height,
+            asset.width ?? viewDoc.canvas.width,
+            asset.height ?? viewDoc.canvas.height,
           );
           const filters = [
             svgMatrixFor(clip.effects) ? `url(#fx-${clip.id})` : "",
@@ -190,10 +203,10 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
             .filter(Boolean)
             .join(" ");
           const style: React.CSSProperties = {
-            left: pct(r.x, doc.canvas.width),
-            top: pct(r.y, doc.canvas.height),
-            width: pct(r.w, doc.canvas.width),
-            height: pct(r.h, doc.canvas.height),
+            left: pct(r.x, viewDoc.canvas.width),
+            top: pct(r.y, viewDoc.canvas.height),
+            width: pct(r.w, viewDoc.canvas.width),
+            height: pct(r.h, viewDoc.canvas.height),
             opacity: Math.max(0, Math.min(1, evalT.opacity)),
             transform:
               evalT.rotationDeg !== 0
@@ -226,7 +239,7 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
 
         {/* Prefetch window: clips starting within 3s get hidden decoders so
             activation doesn't stall on container open. Not synced — load-only. */}
-        {doc.timeline.tracks
+        {viewDoc.timeline.tracks
           .flatMap((t) => t.clips)
           .filter(
             (c) =>
@@ -272,20 +285,20 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
                   justifyContent: justify,
                   alignItems: align,
                   opacity: Math.max(0, Math.min(1, evalT.opacity)),
-                  transform: `translate(${pct(evalT.x, doc.canvas.width)}, ${pct(evalT.y, doc.canvas.height)})`,
+                  transform: `translate(${pct(evalT.x, viewDoc.canvas.width)}, ${pct(evalT.y, viewDoc.canvas.height)})`,
                 }}
               >
                 <span
                   style={{
-                    fontSize: `${(st.fontSizePx / doc.canvas.height) * 100}cqh`,
+                    fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
                     color: st.color,
                     WebkitTextStroke:
                       st.outlineWidth > 0 && st.outlineColor
-                        ? `${(st.outlineWidth / doc.canvas.height) * 100}cqh ${st.outlineColor}`
+                        ? `${(st.outlineWidth / viewDoc.canvas.height) * 100}cqh ${st.outlineColor}`
                         : undefined,
                     background: st.backgroundColor ?? undefined,
                     padding: st.backgroundColor
-                      ? `${(st.backgroundPadPx / doc.canvas.height) * 100}cqh`
+                      ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`
                       : undefined,
                     whiteSpace: "pre-wrap",
                   }}
@@ -295,6 +308,25 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
               </div>
             );
           })}
+
+        {/* Safe-zone guides for the active version (ADR-021: guides only,
+            never burned into render). */}
+        {activeVersion &&
+          (() => {
+            const z = activeVersion.safeZones;
+            if (z.top + z.bottom + z.left + z.right <= 0) return null;
+            return (
+              <div
+                className="pointer-events-none absolute border border-dashed border-cyan-400/50"
+                style={{
+                  left: `${z.left * 100}%`,
+                  top: `${z.top * 100}%`,
+                  right: `${z.right * 100}%`,
+                  bottom: `${z.bottom * 100}%`,
+                }}
+              />
+            );
+          })()}
 
         {/* Audio-track elements (no visual). */}
         {active

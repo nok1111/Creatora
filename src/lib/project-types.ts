@@ -5,7 +5,8 @@ export interface ProjectDoc {
   meta: Meta;
   canvas: Canvas;
   timeline: Timeline;
-  formats: Record<string, unknown>;
+  /** Derived format versions — ADR-021. v2+. */
+  versions: FormatVersion[];
   subtitles: SubtitleCue[];
   brandKitId: string | null;
   exportProfiles: unknown[];
@@ -79,6 +80,48 @@ export interface TextStyle {
   alignH: string;
   /** "top" | "middle" | "bottom" */
   alignV: string;
+}
+
+export interface SafeZones {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+export interface ExportSettings {
+  codec: string;
+  preset: string;
+  crf: number;
+  audioBitrate: string;
+  /** Platform cap metadata — render does NOT truncate. 0 = none. */
+  maxDurationMs: number;
+}
+
+export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+  codec: "libx264",
+  preset: "veryfast",
+  crf: 20,
+  audioBitrate: "192k",
+  maxDurationMs: 0,
+};
+
+/** Whitelisted per-clip fields a version may override (present = replace). */
+export interface ClipOverride {
+  transform?: Transform;
+  /** Replaces ONLY listed keyframe paths. */
+  keyframes?: Record<string, Keyframe[]>;
+  textStyle?: TextStyle;
+}
+
+export interface FormatVersion {
+  id: string;
+  name: string;
+  presetId?: string | null;
+  canvas: Canvas;
+  safeZones: SafeZones;
+  clipOverrides: Record<string, ClipOverride>;
+  export: ExportSettings;
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {

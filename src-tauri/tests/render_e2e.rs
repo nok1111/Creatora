@@ -1222,3 +1222,576 @@ fn stress_render_50_clips_timing() {
     let d = duration_s(&out);
     assert!((d - 20.0).abs() < 0.35, "dur {d}");
 }
+
+// ---------- Phase 4: multi-format versions ----------
+
+#[test]
+fn version_merge_overrides_only_whitelisted() {
+    use creatora_lib::project::document::*;
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "m", 0, 1000, 0)]));
+    let ov = ClipOverride {
+        transform: Some(Transform {
+            x: 50.0,
+            scale_x: 2.0,
+            scale_y: 2.0,
+            ..Default::default()
+        }),
+        keyframes: [(
+            "transform.opacity".into(),
+            vec![Keyframe {
+                t_ms: 0,
+                v: 0.0,
+                ease: "linear".into(),
+            }],
+        )]
+        .into_iter()
+        .collect(),
+        ..Default::default()
+    };
+    doc.versions.push(FormatVersion {
+        id: "v9x16".into(),
+        name: "9:16".into(),
+        preset_id: Some("ar-9x16".into()),
+        canvas: Canvas {
+            width: 1080,
+            height: 1920,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
+        export: ExportSettings::default(),
+    });
+    let merged = doc.apply_version("v9x16").unwrap();
+    assert_eq!(merged.canvas.width, 1080);
+    assert_eq!(merged.canvas.height, 1920);
+    let c = &merged.timeline.tracks[0].clips[0];
+    assert_eq!(c.transform.x, 50.0);
+    assert_eq!(c.transform.scale_x, 2.0);
+    assert_eq!(c.keyframes["transform.opacity"][0].v, 0.0);
+    // Untouched fields identical — timeline structure shared.
+    assert_eq!(c.start_ms, 0);
+    assert_eq!(c.duration_ms, 1000);
+    // Base doc unchanged — version edits never leak back.
+    assert_eq!(doc.canvas.width, 320);
+    assert_eq!(doc.timeline.tracks[0].clips[0].transform.x, 0.0);
+    assert!(doc.versions[0].clip_overrides.contains_key("c1"));
+}
+
+#[test]
+fn versions_round_trip_persistence() {
+    use creatora_lib::project::document::*;
+    let mut doc = base_doc();
+    doc.versions.push(FormatVersion {
+        id: "sq".into(),
+        name: "Square".into(),
+        preset_id: Some("ar-1x1".into()),
+        canvas: Canvas {
+            width: 1080,
+            height: 1080,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones {
+            top: 0.1,
+            ..Default::default()
+        },
+        clip_overrides: Default::default(),
+        export: ExportSettings {
+            crf: 18,
+            ..Default::default()
+        },
+    });
+    let json = serde_json::to_string(&doc).unwrap();
+    let back = ProjectDoc::parse(&json).unwrap();
+    assert_eq!(back.versions.len(), 1);
+    assert_eq!(back.versions[0].canvas.height, 1080);
+    assert_eq!(back.versions[0].export.crf, 18);
+    assert!((back.versions[0].safe_zones.top - 0.1).abs() < 1e-6);
+    // v1 file without versions still parses.
+    let v1 = json.replace("\"versions\":", "\"versions_unused\":");
+    let back2 = ProjectDoc::parse(&v1);
+    assert!(back2.is_ok());
+}
+
+#[test]
+fn motion_analysis_tracks_moving_subject() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    // Real moving subject: white box sweeping left→right on black.
+    let dir = tmpdir("reframe");
+    let src = dir.join("moving.mp4");
+    // overlay re-evaluates per frame — a REAL moving subject.
+    let ok = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=black:size=320x240:rate=30:d=4",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=white:size=40x40:rate=30:d=4",
+            "-filter_complex",
+            "[0:v][1:v]overlay=x=t*60:y=100",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+    let samples = creatora_lib::render::reframe::analyze_motion(&src, 0, 4000, 12).unwrap();
+    assert!(samples.len() >= 4, "got {} samples", samples.len());
+    // Centroid x must increase over time (box moves right).
+    let first: Vec<f64> = samples.iter().take(3).map(|s| s.cx).collect();
+    let last: Vec<f64> = samples.iter().rev().take(3).map(|s| s.cx).collect();
+    let f0 = first.iter().sum::<f64>() / first.len() as f64;
+    let f1 = last.iter().sum::<f64>() / last.len() as f64;
+    assert!(f1 > f0 + 0.1, "subject not tracked: {f0} → {f1}");
+    assert!(samples.iter().any(|s| s.motion), "no motion detected");
+}
+
+#[test]
+fn version_16x9_to_square_cover_reframe_pixels() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fmt_sq");
+    // Source: left half RED, right half BLUE — distinct windows.
+    let src = dir.join("split.mp4");
+    let ok = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:size=160x240:rate=30:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=blue:size=160x240:rate=30:d=2",
+            "-filter_complex",
+            "[0:v][1:v]hstack",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+
+    // Base doc 320×240 (16:9-ish); version 240×240 (1:1) reframed to the
+    // RIGHT half (focus x=1.0) via cover-fit transform override.
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "m", 0, 2000, 0)]));
+    add_media(&mut doc, "m", &src);
+
+    // cover/fit scale for 320x240 → 240x240: fit=0.75, cover=1.0 → 4/3.
+    // focusX=1 → window sits on the right edge (transform.x = -w/2 = -160).
+    let ov = ClipOverride {
+        transform: Some(Transform {
+            x: -160.0,
+            y: 0.0,
+            scale_x: 4.0 / 3.0,
+            scale_y: 4.0 / 3.0,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    doc.versions.push(FormatVersion {
+        id: "sq".into(),
+        name: "1:1".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 240,
+            height: 240,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
+        export: ExportSettings::default(),
+    });
+
+    let merged = doc.apply_version("sq").unwrap();
+    let sources = resolve_sources(&merged, None);
+    let plan = plan::build_plan(&merged, &sources).unwrap();
+    let out = dir.join("sq.mp4");
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+
+    // Dimensions verified via ffprobe.
+    let (w, h, _) = probe_meta(&out);
+    assert_eq!((w, h), (240, 240));
+
+    // Pixel check: the cover window shows the BLUE (right) half.
+    let f = grab_frame(&out, 1.0, 240, 240);
+    let blue = mean_channel(&f, 240, 100, 100, 40, 40, 2);
+    let red = mean_channel(&f, 240, 100, 100, 40, 40, 0);
+    assert!(blue > 0.6, "expected blue window, blue={blue}");
+    assert!(red < 0.3, "expected no red, red={red}");
+}
+
+#[test]
+fn version_16x9_to_vertical_keeps_center_window() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fmt_916");
+    // Horizontal thirds: RED | GREEN | BLUE — vertical crop should show GREEN.
+    let src = dir.join("thirds.mp4");
+    let ok = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:size=108x136:rate=30:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=green:size=104x136:rate=30:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=blue:size=108x136:rate=30:d=2",
+            "-filter_complex",
+            "[0:v][1:v][2:v]hstack=inputs=3",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+
+    // Base 320×136 → version 136×240 (portrait, taller than wide).
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "m", 0, 2000, 0)]));
+    add_media(&mut doc, "m", &src);
+
+    // cover 320x135 → 135x240: fit=min(135/320,240/135)=0.422;
+    // cover=max(…)=1.778 → scale=1.778/0.422=4.2148… exact: cover/fit.
+    let fit = (136.0f64 / 320.0).min(240.0 / 136.0);
+    let cover = (136.0f64 / 320.0).max(240.0 / 136.0);
+    let ov = ClipOverride {
+        transform: Some(Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: (cover / fit) as f32,
+            scale_y: (cover / fit) as f32,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    doc.versions.push(FormatVersion {
+        id: "v".into(),
+        name: "9:16".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 136,
+            height: 240,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
+        export: ExportSettings::default(),
+    });
+
+    let merged = doc.apply_version("v").unwrap();
+    let sources = resolve_sources(&merged, None);
+    let plan = plan::build_plan(&merged, &sources).unwrap();
+    let out = dir.join("v.mp4");
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+
+    let (w, h, _) = probe_meta(&out);
+    assert_eq!((w, h), (136, 240));
+    let f = grab_frame(&out, 1.0, 136, 240);
+    // Centered window → GREEN third dominates center column.
+    let g = mean_channel(&f, 136, 55, 100, 25, 40, 1);
+    let r = mean_channel(&f, 136, 55, 100, 25, 40, 0);
+    assert!(g > r * 1.5, "expected green center, g={g} r={r}");
+}
+
+#[test]
+fn version_keyframed_reframe_moves_window() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fmt_kf");
+    let src = dir.join("split.mp4");
+    Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:size=160x240:rate=30:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=blue:size=160x240:rate=30:d=2",
+            "-filter_complex",
+            "[0:v][1:v]hstack",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "m", 0, 2000, 0)]));
+    add_media(&mut doc, "m", &src);
+
+    // 1:1 version, animated pan: start on LEFT half (focus 0 → x=+160),
+    // end on RIGHT half (x=-160) via version-scoped transform.x keyframes.
+    let ov = ClipOverride {
+        transform: Some(Transform {
+            x: 160.0,
+            scale_x: 4.0 / 3.0,
+            scale_y: 4.0 / 3.0,
+            ..Default::default()
+        }),
+        keyframes: [(
+            "transform.x".into(),
+            vec![
+                Keyframe {
+                    t_ms: 0,
+                    v: 160.0,
+                    ease: "linear".into(),
+                },
+                Keyframe {
+                    t_ms: 2000,
+                    v: -160.0,
+                    ease: "linear".into(),
+                },
+            ],
+        )]
+        .into_iter()
+        .collect(),
+        ..Default::default()
+    };
+    doc.versions.push(FormatVersion {
+        id: "sq".into(),
+        name: "sq".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 240,
+            height: 240,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: [("c1".to_string(), ov)].into_iter().collect(),
+        export: ExportSettings::default(),
+    });
+    let merged = doc.apply_version("sq").unwrap();
+    let sources = resolve_sources(&merged, None);
+    let plan = plan::build_plan(&merged, &sources).unwrap();
+    let out = dir.join("pan.mp4");
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+
+    let early = grab_frame(&out, 0.2, 240, 240);
+    let late = grab_frame(&out, 1.8, 240, 240);
+    let e_red = mean_channel(&early, 240, 100, 100, 40, 40, 0);
+    let l_blue = mean_channel(&late, 240, 100, 100, 40, 40, 2);
+    assert!(e_red > 0.6, "early should be red: {e_red}");
+    assert!(l_blue > 0.6, "late should be blue: {l_blue}");
+}
+
+#[test]
+fn multi_version_export_produces_all_formats() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("fmt_batch");
+    let red = make_clip(&dir, "r.mp4", "red", 220, 1.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 1000, 0)]));
+    add_media(&mut doc, "r", &red);
+    for (id, w, h) in [("v916", 240u32, 426u32), ("v11", 240, 240)] {
+        doc.versions.push(FormatVersion {
+            id: id.into(),
+            name: id.into(),
+            preset_id: None,
+            canvas: Canvas {
+                width: w,
+                height: h,
+                fps_num: 30,
+                fps_den: 1,
+                background: "#000".into(),
+            },
+            safe_zones: SafeZones::default(),
+            clip_overrides: Default::default(),
+            export: ExportSettings::default(),
+        });
+    }
+    // Same loop export_versions' jobs run.
+    for (id, w, h) in [
+        (None, 320u32, 240u32),
+        (Some("v916"), 240, 426),
+        (Some("v11"), 240, 240),
+    ] {
+        let d = match id {
+            Some(v) => doc.apply_version(v).unwrap(),
+            None => doc.clone(),
+        };
+        let sources = resolve_sources(&d, None);
+        let plan = plan::build_plan(&d, &sources).unwrap();
+        let out = dir.join(format!("{}.mp4", id.unwrap_or("master")));
+        run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+        let (ow, oh, _) = probe_meta(&out);
+        assert_eq!((ow, oh), (w, h), "version {id:?} wrong dims");
+    }
+}
+
+#[test]
+fn text_clip_renders_in_vertical_version() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    if !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("fmt_text");
+    let red = make_clip(&dir, "r.mp4", "red", 220, 1.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 1000, 0)]));
+    doc.timeline.tracks.push(Track {
+        id: "tt".into(),
+        kind: TrackKind::Text,
+        name: "T1".into(),
+        clips: vec![Clip {
+            id: "txt".into(),
+            media_ref: None,
+            start_ms: 0,
+            duration_ms: 1000,
+            source_in_ms: 0,
+            source_out_ms: None,
+            source_duration_ms: None,
+            transform: Transform::default(),
+            effects: vec![],
+            volume: 1.0,
+            speed: 1.0,
+            text: Some("HI".into()),
+            text_style: Some(TextStyle {
+                font_size_px: 60.0,
+                color: "#FFFFFF".into(),
+                align_h: "center".into(),
+                align_v: "middle".into(),
+                ..Default::default()
+            }),
+            keyframes: Default::default(),
+        }],
+        transitions: vec![],
+        locked: false,
+        visible: true,
+        muted: false,
+    });
+    add_media(&mut doc, "r", &red);
+    doc.versions.push(FormatVersion {
+        id: "v916".into(),
+        name: "v".into(),
+        preset_id: None,
+        canvas: Canvas {
+            width: 240,
+            height: 426,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: Default::default(),
+        export: ExportSettings::default(),
+    });
+    let merged = doc.apply_version("v916").unwrap();
+    let sources = resolve_sources(&merged, None);
+    let plan = plan::build_plan(&merged, &sources).unwrap();
+    let out = dir.join("v.mp4");
+    run_ffmpeg(&plan, &out, |_| {}, || false).unwrap();
+    let (w, h, _) = probe_meta(&out);
+    assert_eq!((w, h), (240, 426));
+    let f = grab_frame(&out, 0.5, 240, 426);
+    let mut white = 0u64;
+    for row in 180..250 {
+        for col in 60..180 {
+            let i = (row * 240 + col) * 3;
+            if f[i] > 200 && f[i + 1] > 200 && f[i + 2] > 200 {
+                white += 1;
+            }
+        }
+    }
+    assert!(
+        white > 200,
+        "expected text pixels in vertical version, got {white}"
+    );
+}
+
+#[test]
+fn versions_survive_save_reopen() {
+    use creatora_lib::project::document::*;
+    let dir = tmpdir("fmt_persist");
+    let mut doc = base_doc();
+    doc.versions.push(FormatVersion {
+        id: "v1".into(),
+        name: "A".into(),
+        preset_id: Some("ar-1x1".into()),
+        canvas: Canvas {
+            width: 640,
+            height: 640,
+            fps_num: 30,
+            fps_den: 1,
+            background: "#000".into(),
+        },
+        safe_zones: SafeZones::default(),
+        clip_overrides: Default::default(),
+        export: ExportSettings::default(),
+    });
+    let path = dir.join("p.creatora");
+    store::save(&path, &doc).unwrap();
+    let back = store::open(&path).unwrap();
+    assert_eq!(back.versions.len(), 1);
+    assert_eq!(back.versions[0].canvas.width, 640);
+    assert!(back.apply_version("v1").is_some());
+}

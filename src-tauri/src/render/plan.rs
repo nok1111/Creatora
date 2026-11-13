@@ -522,7 +522,7 @@ pub fn build_plan(
             let end_s = ms_to_s(seg.start_ms + seg.duration_ms);
             let out_lbl = lbl("o", overlay_idx + 1);
             filters.push(format!(
-                "{cur}{}overlay={x}:{y}:enable='between(t,{start_s},{end_s})'{out_lbl}",
+                "{cur}{}overlay='{x}':'{y}':enable='between(t,{start_s},{end_s})'{out_lbl}",
                 lbl("v", i + 1)
             ));
             cur = out_lbl;

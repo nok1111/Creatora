@@ -71,6 +71,8 @@ pub fn run() {
             media::commands::generate_proxies,
             media::commands::delete_proxy,
             render::commands::export_project,
+            render::commands::export_versions,
+            render::commands::analyze_subject,
             render::commands::preview_render_plan,
         ])
         .run(tauri::generate_context!())

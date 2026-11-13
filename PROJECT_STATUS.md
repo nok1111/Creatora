@@ -180,10 +180,23 @@ Audit → fix loop found and fixed **real bugs**: splitClip keyframe remap, orph
 
 **Stress measured** (not invented): 20 tracks × 100 clips on a 30-min timeline → `build_plan` well under budget, graph emitted; 50-clip render end-to-end in ~2s machine time, duration verified. 4K not yet benchmarked — planned.
 
+## Phase 4 — Multi-Format Studio (2026-11-13, checkpoint)
+
+ADR-021/022/023. `ProjectDoc.versions` (format v2, clean v1 migration): per-version canvas, safe zones, export settings, whitelisted clip overrides (transform / transform.* keyframes / textStyle). Shared timeline — versions can't diverge structurally. `apply_version`/`applyVersion` = single merge semantics for preview + render.
+
+Presets centralized (`format-presets.ts`): 4 aspects + 6 platform presets + safe-zone suggestions; platform = hint, not guarantee. Smart reframe: local motion-centroid via ffmpeg decode → editable keyframes; static → luma centroid → centered. Manual correction always possible — overrides are just keyframes.
+
+UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, auto-reframe per version, batch export → one job per version, independent cancel/fail). Inspector writes to overrides when a version is active (undo-safe). Export honors `versionId`.
+
+**Bug found by tests**: keyframed x/y expressions with commas broke `overlay=x:y` — fixed by quoting expr args (same in drawtext). Real animated pan now pixel-verified.
+
+**e2e**: square cover reframe (blue window), vertical center window (green), keyframed pan (red→blue over time), text in vertical, multi-format export dims, version persistence, real motion tracking on generated moving-subject video.
+
 ## Latest test results (2026-11-13)
 
 - `cargo test --lib`: **27/27**
-- `cargo test --test render_e2e`: **26/26** (prev 16 → +text pixels, keyframe parity vectors, fps matrix 23.976/29.97/59.94, VFR→CFR, long A/V sync, boundaries, multi-audio, mixed-res, z-order, long projects, 720p, stress 20×100 plan + 50-clip render)
+- `cargo test --test render_e2e`: **35/35** (+version merge, persistence, 1:1/9:16 pixel reframes, keyframed pan, batch export, text-in-vertical, motion tracking)
+- `npm test`: **40/40** (+version ops: isolation, applyVersion, dup/reset) (prev 16 → +text pixels, keyframe parity vectors, fps matrix 23.976/29.97/59.94, VFR→CFR, long A/V sync, boundaries, multi-audio, mixed-res, z-order, long projects, 720p, stress 20×100 plan + 50-clip render)
 - `npm test`: **37/37** (incl. 7 shared parity vectors mirroring Rust eval_at)
 - `cargo clippy --all-targets`: 0 warnings. `cargo fmt --check` clean. `vite build` clean.
 

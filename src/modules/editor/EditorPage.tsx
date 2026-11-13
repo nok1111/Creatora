@@ -28,6 +28,7 @@ import {
 import type { AssetSummary } from "@/lib/media-types";
 import { Button } from "@/components/ui/button";
 import { Preview } from "./Preview";
+import { VersionsPanel } from "./VersionsPanel";
 import { TimelinePanel } from "./TimelinePanel";
 import { MediaBin } from "./MediaBin";
 import { Inspector } from "./Inspector";
@@ -163,7 +164,7 @@ export function EditorPage() {
     if (!out) return;
     try {
       await save(); // render the saved file — export == persisted state
-      const jobId = await api.exportProject(filePath, out);
+      const jobId = await api.exportProject(filePath, out, useEditor.getState().activeVersionId ?? undefined);
       setExporting({ jobId, progress: 0 });
       const off = onJobProgress((p) => {
         if (p.jobId === jobId) setExporting({ jobId, progress: p.progress });
@@ -181,6 +182,10 @@ export function EditorPage() {
       toast.error(t("editor.exportFailed"), { description: String(e) });
     }
   };
+
+  const compareMode = useEditor((s) => s.compareMode);
+  const activeVersionId = useEditor((s) => s.activeVersionId);
+  const comparePane = compareMode && activeVersionId !== null;
 
   if (!doc) {
     return (
@@ -241,8 +246,18 @@ export function EditorPage() {
         <div className="w-56 shrink-0">
           <MediaBin assets={assetsQ.data ?? []} />
         </div>
-        <div className="relative min-w-0 flex-1">
-          <Preview assets={assetMap} />
+        <div className="relative flex min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1">
+            <Preview assets={assetMap} />
+          </div>
+          {comparePane && (
+            <div className="relative min-w-0 flex-1 border-l border-border">
+              <span className="absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-cyan-300">
+                {doc?.meta.name} · master
+              </span>
+              <Preview assets={assetMap} docOverride={doc ?? undefined} />
+            </div>
+          )}
           {/* Transport overlay */}
           <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1 backdrop-blur">
             <Button
@@ -259,6 +274,9 @@ export function EditorPage() {
           <Inspector />
         </div>
       </div>
+
+      {/* Multi-format versions */}
+      <VersionsPanel assets={assetMap} />
 
       {/* Timeline */}
       <div className="h-64 shrink-0">

@@ -7,7 +7,7 @@
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,9 +16,10 @@ pub struct ProjectDoc {
     pub meta: Meta,
     pub canvas: Canvas,
     pub timeline: Timeline,
-    /// Derived-format overrides keyed by format id ("shorts-9x16", ...). Phase 4.
+    /// Derived format versions — each carries its own canvas + per-clip
+    /// reframe overrides over the shared timeline (ADR-021). v2+.
     #[serde(default)]
-    pub formats: serde_json::Map<String, serde_json::Value>,
+    pub versions: Vec<FormatVersion>,
     /// Subtitle cues. Phase 5 — schema defined now so v1 files round-trip.
     #[serde(default)]
     pub subtitles: Vec<SubtitleCue>,
@@ -280,6 +281,101 @@ impl Default for Transform {
     }
 }
 
+/// A derived output format of this project — shares the timeline and media
+/// refs; only canvas + the whitelisted per-clip fields differ (ADR-021).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatVersion {
+    pub id: String,
+    pub name: String,
+    /// Preset id it was created from ("yt-16x9", "shorts-9x16", "custom"...).
+    /// Metadata only — canvas is authoritative.
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    /// Independent canvas. fps inherited from base unless overridden here.
+    pub canvas: Canvas,
+    /// Safe-area margins as canvas fractions (0..1) — UI guides + UI use;
+    /// render ignores them (they don't burn in).
+    #[serde(default)]
+    pub safe_zones: SafeZones,
+    /// Per-clip overrides keyed by clip id — ONLY reframe fields: transform,
+    /// keyframes on transform paths, textStyle. Timing/effects/audio are
+    /// shared and cannot diverge per version.
+    #[serde(default)]
+    pub clip_overrides: std::collections::BTreeMap<String, ClipOverride>,
+    #[serde(default)]
+    pub export: ExportSettings,
+}
+
+/// Whitelisted per-clip fields a version may override — present = replace.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipOverride {
+    #[serde(default)]
+    pub transform: Option<Transform>,
+    /// Replaces ONLY the listed keyframe paths; others inherit from base.
+    #[serde(default)]
+    pub keyframes: std::collections::BTreeMap<String, Vec<Keyframe>>,
+    #[serde(default)]
+    pub text_style: Option<TextStyle>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SafeZones {
+    /// Fractions of canvas kept clear on each edge (platform UI occlusion).
+    #[serde(default)]
+    pub top: f32,
+    #[serde(default)]
+    pub bottom: f32,
+    #[serde(default)]
+    pub left: f32,
+    #[serde(default)]
+    pub right: f32,
+}
+
+/// Per-version export settings — overrides base encoder defaults.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSettings {
+    #[serde(default = "default_codec")]
+    pub codec: String,
+    #[serde(default = "default_preset")]
+    pub preset: String,
+    #[serde(default = "default_crf")]
+    pub crf: u32,
+    #[serde(default = "default_abitrate")]
+    pub audio_bitrate: String,
+    /// Max duration cap (platform limit, e.g. Shorts 60s) — 0 = uncapped.
+    /// Metadata for UI warnings; render does NOT truncate.
+    #[serde(default)]
+    pub max_duration_ms: i64,
+}
+
+impl Default for ExportSettings {
+    fn default() -> Self {
+        ExportSettings {
+            codec: default_codec(),
+            preset: default_preset(),
+            crf: default_crf(),
+            audio_bitrate: default_abitrate(),
+            max_duration_ms: 0,
+        }
+    }
+}
+fn default_codec() -> String {
+    "libx264".into()
+}
+fn default_preset() -> String {
+    "veryfast".into()
+}
+fn default_crf() -> u32 {
+    20
+}
+fn default_abitrate() -> String {
+    "192k".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Marker {
@@ -339,12 +435,43 @@ impl ProjectDoc {
             },
             canvas,
             timeline: Timeline::default(),
-            formats: serde_json::Map::new(),
+            versions: Vec::new(),
             subtitles: Vec::new(),
             brand_kit_id: None,
             export_profiles: Vec::new(),
             media_refs: Vec::new(),
         }
+    }
+
+    /// Merge a format version over this doc → the doc preview/render see.
+    /// Shared semantics for BOTH paths (ADR-021): canvas replaced; per-clip
+    /// transform/keyframe-paths/textStyle replaced where overridden;
+    /// everything else identical — never a second engine.
+    pub fn apply_version(&self, version_id: &str) -> Option<ProjectDoc> {
+        let v = self.versions.iter().find(|v| v.id == version_id)?.clone();
+        let mut d = self.clone();
+        d.canvas = v.canvas;
+        d.versions.clear(); // a merged doc has no nested versions
+        for track in d.timeline.tracks.iter_mut() {
+            for clip in track.clips.iter_mut() {
+                if let Some(ov) = v.clip_overrides.get(&clip.id) {
+                    if let Some(t) = ov.transform {
+                        clip.transform = t;
+                    }
+                    for (path, kfs) in &ov.keyframes {
+                        clip.keyframes.insert(path.clone(), kfs.clone());
+                    }
+                    if let Some(ts) = &ov.text_style {
+                        clip.text_style = Some(ts.clone());
+                    }
+                }
+            }
+        }
+        Some(d)
+    }
+
+    pub fn version(&self, id: &str) -> Option<&FormatVersion> {
+        self.versions.iter().find(|v| v.id == id)
     }
 
     /// Parse + migrate a document. Errors on unsupported future versions.
@@ -367,11 +494,27 @@ impl ProjectDoc {
     }
 }
 
-/// Upgrade a raw document to FORMAT_VERSION. v1 is current — no-op today,
-/// but the chain exists so v2+ never silently corrupts older files.
+/// Upgrade a raw document to FORMAT_VERSION.
+/// v1→v2: `formats` (untyped placeholder map) → `versions` (typed list).
+/// v1 never wrote non-empty `formats`, so values are dropped safely.
 fn migrate(mut doc: serde_json::Value, mut version: u32) -> Result<serde_json::Value, AppError> {
     while version < FORMAT_VERSION {
         version += 1;
+        if version == 2 {
+            if let Some(obj) = doc.as_object_mut() {
+                let old = obj.remove("formats");
+                if !obj.contains_key("versions") {
+                    let v = match old {
+                        Some(serde_json::Value::Object(m)) if !m.is_empty() => {
+                            serde_json::Value::Array(m.into_values().collect())
+                        }
+                        Some(serde_json::Value::Array(a)) => serde_json::Value::Array(a),
+                        _ => serde_json::Value::Array(vec![]),
+                    };
+                    obj.insert("versions".into(), v);
+                }
+            }
+        }
         doc["format_version"] = serde_json::json!(version);
     }
     Ok(doc)

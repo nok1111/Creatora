@@ -16,11 +16,13 @@ import type {
   Timeline,
   Track,
   TrackKind,
+  ClipOverride,
+  FormatVersion,
   TextStyle,
   Transform,
   Transition,
 } from "@/lib/project-types";
-import { DEFAULT_TEXT_STYLE } from "@/lib/project-types";
+import { DEFAULT_EXPORT_SETTINGS, DEFAULT_TEXT_STYLE } from "@/lib/project-types";
 
 export const DEFAULT_TRANSFORM: Transform = {
   x: 0,
@@ -750,3 +752,110 @@ export function transitionAlpha(doc: ProjectDoc, clipId: string, tMs: number): n
   }
   return alpha;
 }
+
+// ---------- format versions (ADR-021) ----------
+
+/**
+ * Merge a version over the doc → what preview/render see.
+ * Mirror of document.rs::apply_version — MUST stay identical.
+ */
+export function applyVersion(doc: ProjectDoc, versionId: string): ProjectDoc | null {
+  const v = doc.versions.find((x) => x.id === versionId);
+  if (!v) return null;
+  const d = cloneDoc(doc);
+  d.canvas = { ...v.canvas };
+  d.versions = [];
+  for (const track of d.timeline.tracks) {
+    for (const clip of track.clips) {
+      const ov = v.clipOverrides[clip.id];
+      if (!ov) continue;
+      if (ov.transform) clip.transform = { ...ov.transform };
+      if (ov.keyframes) {
+        for (const [path, kfs] of Object.entries(ov.keyframes)) {
+          clip.keyframes[path] = kfs.map((k) => ({ ...k }));
+        }
+      }
+      if (ov.textStyle) clip.textStyle = { ...ov.textStyle };
+    }
+  }
+  return d;
+}
+
+/** The doc the UI/export should use for `versionId` (null → base). */
+export function effectiveDoc(doc: ProjectDoc, versionId: string | null): ProjectDoc {
+  return versionId ? (applyVersion(doc, versionId) ?? doc) : doc;
+}
+
+export function addVersion(
+  doc: ProjectDoc,
+  opts: { name: string; canvas: Canvas; presetId?: string; safeZones?: SafeZones },
+): { doc: ProjectDoc; versionId: string } {
+  const next = cloneDoc(doc);
+  const v: FormatVersion = {
+    id: uid(),
+    name: opts.name,
+    presetId: opts.presetId ?? null,
+    canvas: { ...opts.canvas },
+    safeZones: opts.safeZones ?? { top: 0, bottom: 0, left: 0, right: 0 },
+    clipOverrides: {},
+    export: { ...DEFAULT_EXPORT_SETTINGS },
+  };
+  next.versions.push(v);
+  return { doc: next, versionId: v.id };
+}
+
+export function removeVersion(doc: ProjectDoc, versionId: string): ProjectDoc {
+  const next = cloneDoc(doc);
+  next.versions = next.versions.filter((v) => v.id !== versionId);
+  return next;
+}
+
+export function renameVersion(doc: ProjectDoc, versionId: string, name: string): ProjectDoc {
+  const next = cloneDoc(doc);
+  const v = next.versions.find((x) => x.id === versionId);
+  if (v) v.name = name;
+  return next;
+}
+
+export function duplicateVersion(doc: ProjectDoc, versionId: string): { doc: ProjectDoc; versionId: string | null } {
+  const src = doc.versions.find((x) => x.id === versionId);
+  if (!src) return { doc, versionId: null };
+  const next = cloneDoc(doc);
+  const copy: FormatVersion = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  copy.name = `${src.name} copy`;
+  next.versions.push(copy);
+  return { doc: next, versionId: copy.id };
+}
+
+/** Reset a version's overrides to empty (keeps canvas/name/preset). */
+export function resetVersion(doc: ProjectDoc, versionId: string): ProjectDoc {
+  const next = cloneDoc(doc);
+  const v = next.versions.find((x) => x.id === versionId);
+  if (v) v.clipOverrides = {};
+  return next;
+}
+
+/**
+ * Write a reframe override for a clip in a version — the ONLY legitimate
+ * per-version mutation (transform / keyframe paths / textStyle).
+ */
+export function setVersionClipOverride(
+  doc: ProjectDoc,
+  versionId: string,
+  clipId: string,
+  ov: ClipOverride,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const v = next.versions.find((x) => x.id === versionId);
+  if (!v) return next;
+  const cur = v.clipOverrides[clipId] ?? {};
+  v.clipOverrides[clipId] = { ...cur, ...ov };
+  return next;
+}
+
+export function getVersion(doc: ProjectDoc, versionId: string): FormatVersion | undefined {
+  return doc.versions.find((v) => v.id === versionId);
+}
+
+import type { Canvas, SafeZones } from "@/lib/project-types";

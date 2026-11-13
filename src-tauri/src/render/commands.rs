@@ -167,6 +167,7 @@ pub fn export_project(
     db: State<'_, Arc<Db>>,
     project_path: String,
     out_path: String,
+    version_id: Option<String>,
 ) -> CmdResult<String> {
     let project_path = PathBuf::from(&project_path);
     let out_path = PathBuf::from(&out_path);
@@ -176,6 +177,12 @@ pub fn export_project(
     let db2 = (*db).clone();
     let job_id = jobs.spawn(app.clone(), "render.export", move |ctx: &JobCtx| {
         let doc = store::open(&project_path).map_err(|e| e.to_string())?;
+        let doc = match &version_id {
+            Some(id) => doc
+                .apply_version(id)
+                .ok_or_else(|| format!("unknown version: {id}"))?,
+            None => doc,
+        };
         let sources = resolve_sources(&doc, Some(&db2));
         let plan = plan::build_plan(&doc, &sources).map_err(|e| e.to_string())?;
         let clip_count = doc
@@ -202,6 +209,40 @@ pub fn export_project(
     Ok(job_id)
 }
 
+/// Batch export: one job per version (independent progress/cancel/error).
+/// `version_ids` empty → base doc only. Returns job ids in order.
+#[tauri::command]
+pub fn export_versions(
+    app: tauri::AppHandle,
+    jobs: State<'_, JobManager>,
+    db: State<'_, Arc<Db>>,
+    project_path: String,
+    out_dir: String,
+    version_ids: Vec<String>,
+) -> CmdResult<Vec<String>> {
+    let mut ids = Vec::new();
+    let targets: Vec<(Option<String>, String)> = if version_ids.is_empty() {
+        vec![(None, "master".into())]
+    } else {
+        version_ids
+            .into_iter()
+            .map(|v| (Some(v.clone()), v))
+            .collect()
+    };
+    for (vid, name) in targets {
+        let out = PathBuf::from(&out_dir).join(format!("{name}.mp4"));
+        ids.push(export_project(
+            app.clone(),
+            jobs.clone(),
+            db.clone(),
+            project_path.clone(),
+            out.to_string_lossy().into_owned(),
+            vid,
+        )?);
+    }
+    Ok(ids)
+}
+
 /// Validate + report render feasibility without running ffmpeg.
 /// Lets the UI warn about missing media before starting a job.
 #[tauri::command]
@@ -221,4 +262,26 @@ pub fn preview_render_plan(
         Err(AppError::InvalidInput(m)) => Ok(serde_json::json!({ "ok": false, "reason": m })),
         Err(e) => Err(e),
     }
+}
+
+/// Analyze a clip's source for subject tracking → motion samples the
+/// frontend maps to reframe keyframes (ADR-023). Job-based.
+#[tauri::command]
+pub fn analyze_subject(
+    app: tauri::AppHandle,
+    jobs: State<'_, JobManager>,
+    path: String,
+    in_ms: i64,
+    out_ms: i64,
+    samples: u32,
+) -> CmdResult<String> {
+    let job_id = jobs.spawn(app, "reframe.analyze", move |ctx: &JobCtx| {
+        ctx.progress(0.1, Some("Analyzing motion"));
+        let samples =
+            crate::render::reframe::analyze_motion(Path::new(&path), in_ms, out_ms, samples)
+                .map_err(|e| e.to_string())?;
+        ctx.progress(1.0, None);
+        serde_json::to_value(samples).map_err(|e| e.to_string())
+    });
+    Ok(job_id)
 }

@@ -5,11 +5,14 @@ import { useEditor } from "@/stores/editor";
 import {
   addEffect,
   addTransition,
+  effectiveDoc,
   findClip,
+  getVersion,
   removeEffect,
   removeKeyframe,
   removeTransition,
   setKeyframe,
+  setVersionClipOverride,
   transitionsFor,
   updateClip,
   updateEffect,
@@ -27,6 +30,7 @@ export function Inspector() {
   const selection = useEditor((s) => s.selection);
   const playheadMs = useEditor((s) => s.playheadMs);
   const mutate = useEditor((s) => s.mutate);
+  const activeVersionId = useEditor((s) => s.activeVersionId);
 
   if (!doc || selection.length !== 1) {
     return (
@@ -36,22 +40,52 @@ export function Inspector() {
     );
   }
   const clipId = selection[0];
-  const hit = findClip(doc, clipId);
+  // Version-aware: when a format version is active, reframe fields
+  // (transform + transform.* keyframes + textStyle) write to that
+  // version's overrides — never into the shared base (ADR-021).
+  const version = activeVersionId ? getVersion(doc, activeVersionId) : undefined;
+  const viewDoc = effectiveDoc(doc, activeVersionId);
+  const hit = findClip(viewDoc, clipId);
   if (!hit) return null;
   const { clip, track } = hit;
   const rel = playheadMs - clip.startMs;
+  // The clip's effective transform in this version = override ?? base.
+  const clipTransform = clip.transform;
 
-  const patchTransform = (k: keyof Clip["transform"], v: number) =>
-    mutate((d) => updateClip(d, clipId, { transform: { [k]: v } }));
+  const patchTransform = (k: keyof Clip["transform"], v: number) => {
+    if (version) {
+      mutate((d) =>
+        setVersionClipOverride(d, version.id, clipId, {
+          transform: { ...clipTransform, [k]: v },
+        }),
+      );
+    } else {
+      mutate((d) => updateClip(d, clipId, { transform: { [k]: v } }));
+    }
+  };
 
   const keyAt = (path: AnimatablePath) => clip.keyframes[path]?.some((k) => k.tMs === Math.round(rel));
 
   const toggleKey = (path: AnimatablePath, current: number) => {
-    mutate((d) =>
-      keyAt(path)
-        ? removeKeyframe(d, clipId, path, rel)
-        : setKeyframe(d, clipId, path, rel, current),
-    );
+    if (version && path.startsWith("transform.")) {
+      // Version-scoped keyframes: replace the path's list in overrides.
+      mutate((d) => {
+        const cur = clip.keyframes[path] ?? [];
+        const exists = cur.some((k) => k.tMs === Math.round(rel));
+        const next = exists
+          ? cur.filter((k) => k.tMs !== Math.round(rel))
+          : [...cur, { tMs: Math.round(rel), v: current, ease: "linear" }];
+        return setVersionClipOverride(d, version.id, clipId, {
+          keyframes: { [path]: next },
+        });
+      });
+    } else {
+      mutate((d) =>
+        keyAt(path)
+          ? removeKeyframe(d, clipId, path, rel)
+          : setKeyframe(d, clipId, path, rel, current),
+      );
+    }
   };
 
   const num = (
@@ -99,12 +133,17 @@ export function Inspector() {
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {t("editor.sectionTransform")}
         </div>
-        {num("X", clip.transform.x, (v) => patchTransform("x", v), "transform.x")}
-        {num("Y", clip.transform.y, (v) => patchTransform("y", v), "transform.y")}
-        {num("Scale X", clip.transform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
-        {num("Scale Y", clip.transform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
-        {num("Rotate°", clip.transform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
-        {num("Opacity", clip.transform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
+        {version && (
+          <p className="text-[9px] italic text-cyan-400/80">
+            {t("versions.editingVersion", { name: version.name })}
+          </p>
+        )}
+        {num("X", clipTransform.x, (v) => patchTransform("x", v), "transform.x")}
+        {num("Y", clipTransform.y, (v) => patchTransform("y", v), "transform.y")}
+        {num("Scale X", clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
+        {num("Scale Y", clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
+        {num("Rotate°", clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
+        {num("Opacity", clipTransform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
       </section>
 
       <section className="space-y-1.5">

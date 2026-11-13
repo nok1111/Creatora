@@ -6,4 +6,5 @@ pub mod commands;
 pub mod effects;
 pub mod keyframes;
 pub mod plan;
+pub mod reframe;
 pub mod text;

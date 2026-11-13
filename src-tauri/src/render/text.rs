@@ -83,7 +83,7 @@ pub fn drawtext_opts(style: &TextStyle, text: &str, x_expr: &str, y_expr: &str) 
             style.background_pad_px.max(0.0)
         ));
     }
-    o.push_str(&format!(":x={x_expr}:y={y_expr}"));
+    o.push_str(&format!(":x='{x_expr}':y='{y_expr}'"));
     o
 }
 
