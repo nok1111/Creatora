@@ -4,6 +4,57 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
 
 ## [Unreleased]
 
+### Added — Phase 7: Text & Graphics Studio + Brand Kit
+- Generated-layer compositor (ADR-027): every text/graphics clip compiles to
+  a transparent `color` source → `drawbox` (shapes) → `drawtext`(s) →
+  keyframed `scale`/`rotate` → single `geq` alpha pass → gated overlay.
+- `Clip.shape` (rect/line, fill+outline in canvas px), `Clip.textFx`
+  (typewriter | wipe | blur with `out` exit variants), `Clip.hidden`,
+  `Clip.brandBindings` — all `serde(default)` back-compatible.
+- `TextStyle.shadowColor/X/Y` and `TextStyle.lineSpacingPx` — real on both
+  renderers (drawtext shadowcolor/line_spacing ↔ CSS text-shadow/line-height).
+- Animation preset catalog (`anim-presets.ts`): entrances, exits, emphasis,
+  transitions (in+out combos), continuous — keyframe presets bake eased
+  samples; procedural kinds render via gated drawtexts / geq masks /
+  gblur+geq branch fork. Nothing is preview-only.
+- `ClipOverride.hidden` + `ClipOverride.textFx` — per-version visibility and
+  animation, merged by `apply_version` on BOTH sides; `clearVersionClipOverrides`
+  re-syncs a clip to the shared base (re-sync button in the inspector).
+- Templates: canonical `Clip` JSON under `app_data/templates/*.json` —
+  save-from-selection with category, apply with text-replace prompt,
+  duplicate, delete, hover preview, import/export.
+- Brand Kit: `app_data/brandkits/*.json` store (multiple kits, colors,
+  fonts, logos, title style); doc embeds a snapshot; per-clip slot
+  bindings apply on bind / explicit "apply brand" — unbinding keeps
+  values, custom fields are never overwritten; import/export; logo
+  insert imports the file and drops an image clip at playhead.
+- Preview: direct drag of text/shape elements (version-aware writes),
+  shadow/line-spacing parity, blur/wipe-out/typewriter-out rendering.
+- GraphicsBin (left-panel tab): quick-add title/lower-third/shape,
+  templates, brand kits; GraphicsSection in the Inspector: align tools,
+  shape editor, animation presets, copy/paste style, brand bindings,
+  per-clip + per-version hide.
+- `resolve_font` chain: configured → arial → segoeui → omit `fontfile` —
+  a missing font degrades instead of failing the render.
+- Tests: 8 render e2e pixel tests (shape fill, wipe ltr/out, typewriter,
+  blur reveal, shadow, hidden, scale keyframes) + 2 graphics serde tests +
+  2 drawtext-opts tests + 11 graphics vitest (ops, version isolation,
+  brand apply/unbind, re-sync, roundtrip).
+
+### Fixed — Phase 7
+- `drawbox` writes RGB but not alpha — shape coverage is composed into
+  the shared `geq` pass (`max(alpha, mask*fillAlpha)`); without it the
+  box rendered invisible (found by pixel test).
+- drawbox expressions see the box's own `w/h` — anchors now emitted in
+  geq-space (`W`/`H`) and translated to `in_w`/`in_h` for drawbox (was
+  painting at 0,0 with an opaque-black geq center).
+- `applyAnimationPreset` silently dropped `textFx` when a version was
+  active — now serialized via `ClipOverride.textFx` (both Rust + TS
+  `apply_version` merge it).
+- Keyframe expressions on text layers used global `t` as clip-relative —
+  scale/opacity/rotate animations now offset by `clip.start_ms` (the
+  x/y path already did).
+
 ### Added
 - Phase 0: repository/environment audit, complete documentation set (architecture, DB schema v1, dev plan, ADRs, testing strategy, API capability matrix, licensing audit).
 - Decision record set ADR-001…ADR-012 (Tauri 2, two-path media engine, FFmpeg-as-subprocess, `.creatora` format, keyring secrets, loopback OAuth, whisper.cpp, job engine, i18n, Zustand+Query, offline-first).

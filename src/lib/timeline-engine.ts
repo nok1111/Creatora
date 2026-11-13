@@ -9,6 +9,7 @@
  * timeline t = sourceInMs + (t - startMs) * speed.
  */
 
+import { animPreset, supportsTextFx } from "@/lib/anim-presets";
 import type {
   Clip,
   Effect,
@@ -389,7 +390,7 @@ export function removeClip(doc: ProjectDoc, clipId: string): ProjectDoc {
 export function updateClip(
   doc: ProjectDoc,
   clipId: string,
-  patch: Partial<Pick<Clip, "volume" | "speed" | "text" | "textStyle" | "pan" | "fadeInMs" | "fadeOutMs">> & {
+  patch: Partial<Pick<Clip, "volume" | "speed" | "text" | "textStyle" | "pan" | "fadeInMs" | "fadeOutMs" | "shape" | "textFx" | "hidden" | "brandBindings">> & {
     transform?: Partial<Transform>;
   },
 ): ProjectDoc {
@@ -791,6 +792,8 @@ export function applyVersion(doc: ProjectDoc, versionId: string): ProjectDoc | n
       }
       if (ov.textStyle) clip.textStyle = { ...ov.textStyle };
       if (ov.text !== undefined) clip.text = ov.text;
+      if (ov.hidden !== undefined) clip.hidden = ov.hidden;
+      if (ov.textFx !== undefined) clip.textFx = ov.textFx ? { ...ov.textFx } : null;
     }
   }
   return d;
@@ -1067,6 +1070,210 @@ export function applySilenceCut(
     };
   });
   tr.clips.splice(i, 1, ...newClips);
+  return next;
+}
+
+
+// ---------- graphics studio (ADR-027) ----------
+
+/** Insert a generated clip (title/shape) onto a text or graphics track. */
+export function addGeneratedClip(
+  doc: ProjectDoc,
+  kind: "text" | "graphics",
+  fields: {
+    startMs: number;
+    durationMs: number;
+    text?: string;
+    textStyle?: TextStyle;
+    shape?: import("@/lib/project-types").ShapeSpec;
+    transform?: Partial<import("@/lib/project-types").Transform>;
+  },
+): { doc: ProjectDoc; clipId: string } {
+  const next = cloneDoc(doc);
+  const track = ensureTrack(next.timeline, kind, kind === "text" ? "T" : "G");
+  const clip: Clip = {
+    id: uid(),
+    mediaRef: null,
+    startMs: Math.max(0, Math.round(fields.startMs)),
+    durationMs: Math.max(1, Math.round(fields.durationMs)),
+    sourceInMs: 0,
+    transform: {
+      ...DEFAULT_TRANSFORM,
+      ...(fields.transform ?? {}),
+    },
+    effects: [],
+    volume: 1,
+    pan: 0,
+    fadeInMs: 0,
+    fadeOutMs: 0,
+    speed: 1,
+    text: fields.text ?? null,
+    textStyle: fields.textStyle ?? null,
+    keyframes: {},
+    shape: fields.shape ?? null,
+    textFx: null,
+    hidden: false,
+    brandBindings: null,
+  };
+  track.clips.push(clip);
+  track.clips.sort((a, b) => a.startMs - b.startMs);
+  return { doc: next, clipId: clip.id };
+}
+
+/** Apply an animation preset — bakes eased keyframes / sets textFx.
+ *  When a version is active, writes into that version's keyframe
+ *  overrides so other versions stay untouched. */
+export function applyAnimationPreset(
+  doc: ProjectDoc,
+  clipId: string,
+  presetId: string,
+  opts: { durationMs: number; delayMs?: number; intensity?: number; direction?: string; easing?: string; versionId?: string | null },
+): ProjectDoc {
+  const preset = animPreset(presetId);
+  const hit = findClip(doc, clipId);
+  if (!preset || !hit) return doc;
+  const built = preset.build(hit.clip, doc.canvas, {
+    durationMs: Math.max(50, opts.durationMs),
+    delayMs: opts.delayMs ?? 0,
+    intensity: opts.intensity ?? 160,
+    direction: opts.direction ?? "left",
+    easing: (opts.easing as never) ?? "easeOut",
+  });
+  if (built.textFx !== undefined && !supportsTextFx(doc, clipId)) return doc;
+  if (opts.versionId) {
+    const v = doc.versions.find((vv) => vv.id === opts.versionId);
+    if (!v) return doc;
+    const next = cloneDoc(doc);
+    const vv = next.versions.find((x) => x.id === opts.versionId)!;
+    const ov = (vv.clipOverrides[clipId] ??= {});
+    ov.keyframes = { ...(ov.keyframes ?? {}) };
+    for (const [path, kfs] of Object.entries(built.keyframes)) ov.keyframes[path] = kfs;
+    if (built.textFx !== undefined) ov.textFx = built.textFx;
+    return next;
+  }
+  const next = cloneDoc(doc);
+  const c = findClip(next, clipId)!;
+  const kf = { ...c.clip.keyframes };
+  for (const [path, kfs] of Object.entries(built.keyframes)) kf[path] = kfs;
+  c.clip.keyframes = kf;
+  if (built.textFx !== undefined) c.clip.textFx = built.textFx;
+  return next;
+}
+
+/** Drop ALL version overrides for one clip — re-syncs it to the shared
+ *  base (the "link" half of per-version link/unlink, ADR-021/027). */
+export function clearVersionClipOverrides(
+  doc: ProjectDoc,
+  versionId: string,
+  clipId: string,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const v = next.versions.find((x) => x.id === versionId);
+  if (v) delete v.clipOverrides[clipId];
+  return next;
+}
+
+/** Copy a clip's visual style (textStyle/shape/effects) for paste-style. */
+export function clipStylePayload(clip: Clip): { textStyle?: TextStyle | null; shape?: Clip["shape"]; effects: Clip["effects"] } {
+  return {
+    textStyle: clip.textStyle ? { ...clip.textStyle } : null,
+    shape: clip.shape ? { ...clip.shape } : null,
+    effects: clip.effects.map((e) => ({ ...e, params: { ...e.params } })),
+  };
+}
+
+/** Paste style payload onto a clip (undo-safe via mutate). */
+export function applyClipStyle(
+  doc: ProjectDoc,
+  clipId: string,
+  style: { textStyle?: TextStyle | null; shape?: Clip["shape"]; effects?: Clip["effects"] },
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  if (!hit) return next;
+  if (style.textStyle !== undefined) hit.clip.textStyle = style.textStyle ? { ...style.textStyle } : null;
+  if (style.shape !== undefined) hit.clip.shape = style.shape ? { ...style.shape } : null;
+  if (style.effects) hit.clip.effects = style.effects.map((e) => ({ ...e, params: { ...e.params } }));
+  return next;
+}
+
+/** Anchor a clip inside the canvas via transform.x/y (align tools). */
+export function alignClipTo(
+  doc: ProjectDoc,
+  clipId: string,
+  anchor: "left" | "center" | "right" | "top" | "middle" | "bottom",
+  marginPx = 0,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  if (!hit) return next;
+  const { width, height } = next.canvas;
+  switch (anchor) {
+    case "left": hit.clip.transform.x = -width / 2 + marginPx; break;
+    case "center": hit.clip.transform.x = 0; break;
+    case "right": hit.clip.transform.x = width / 2 - marginPx; break;
+    case "top": hit.clip.transform.y = -height / 2 + marginPx; break;
+    case "middle": hit.clip.transform.y = 0; break;
+    case "bottom": hit.clip.transform.y = height / 2 - marginPx; break;
+  }
+  return next;
+}
+
+// ---------- brand kit ops (ADR-027) ----------
+
+/** Embed a kit snapshot into the doc and set it active. */
+export function setDocBrandKit(
+  doc: ProjectDoc,
+  kit: import("@/lib/project-types").BrandKit | null,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  next.brandKitId = kit?.id ?? null;
+  next.brandKit = kit ? { ...kit } : null;
+  return next;
+}
+
+/** Bind clip color/font slots to the doc's brand snapshot and APPLY the
+ *  current values (undo-safe). Unbind with both slots null. */
+export function bindClipBrand(
+  doc: ProjectDoc,
+  clipId: string,
+  slots: { colorSlot?: number | null; fontSlot?: number | null },
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  if (!hit) return next;
+  const kit = next.brandKit;
+  const bound = { colorSlot: slots.colorSlot ?? null, fontSlot: slots.fontSlot ?? null };
+  hit.clip.brandBindings = bound.colorSlot === null && bound.fontSlot === null ? null : bound;
+  if (kit) {
+    if (bound.colorSlot !== null && kit.colors[bound.colorSlot]) {
+      const col = kit.colors[bound.colorSlot];
+      if (hit.clip.shape) hit.clip.shape.fill = col;
+      else hit.clip.textStyle = { ...(hit.clip.textStyle ?? DEFAULT_TEXT_STYLE), color: col };
+    }
+    if (bound.fontSlot !== null && kit.fonts[bound.fontSlot]) {
+      hit.clip.textStyle = {
+        ...(hit.clip.textStyle ?? DEFAULT_TEXT_STYLE),
+        fontFile: kit.fonts[bound.fontSlot].path,
+      };
+    }
+  }
+  return next;
+}
+
+/** Re-apply the embedded snapshot to every bound clip — explicit user
+ *  action; bound clips only, custom/unbound values never touched. */
+export function applyBrandToBoundClips(doc: ProjectDoc): ProjectDoc {
+  const kit = doc.brandKit;
+  if (!kit) return doc;
+  let next = doc;
+  for (const t of doc.timeline.tracks) {
+    for (const c of t.clips) {
+      const b = c.brandBindings;
+      if (!b) continue;
+      next = bindClipBrand(next, c.id, b);
+    }
+  }
   return next;
 }
 

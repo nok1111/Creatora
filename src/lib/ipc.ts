@@ -162,6 +162,23 @@ export const api = {
   suggestNormalize: (path: string, targetLufs: number, tpCeiling: number) =>
     cmd<NormalizeSuggestion>("suggest_normalize", { path, targetLufs, tpCeiling }),
 
+
+  // ---------- graphics studio (ADR-027) ----------
+  listTemplates: () => cmd<Template[]>("list_templates"),
+  saveTemplate: (template: Template) => cmd<void>("save_template", { template }),
+  deleteTemplate: (id: string) => cmd<void>("delete_template", { id }),
+  exportTemplate: (id: string, outPath: string) =>
+    cmd<void>("export_template", { id, outPath }),
+  importTemplate: (path: string) => cmd<Template>("import_template", { path }),
+  listBrandKits: () => cmd<import("./project-types").BrandKit[]>("list_brand_kits"),
+  saveBrandKit: (kit: import("./project-types").BrandKit) =>
+    cmd<void>("save_brand_kit", { kit }),
+  deleteBrandKit: (id: string) => cmd<void>("delete_brand_kit", { id }),
+  exportBrandKit: (id: string, outPath: string) =>
+    cmd<void>("export_brand_kit", { id, outPath }),
+  importBrandKit: (path: string) =>
+    cmd<import("./project-types").BrandKit>("import_brand_kit", { path }),
+
   generateProxies: (assetIds: string[]) =>
     cmd<string>("generate_proxies", { assetIds }),
   deleteProxy: (assetId: string) =>
@@ -197,4 +214,12 @@ export interface NormalizeSuggestion {
   lraLu: number;
   gainDb: number;
   needsLimiter: boolean;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  category: string;
+  clip: import("./project-types").Clip;
+  brandKitId?: string | null;
 }

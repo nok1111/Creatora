@@ -50,6 +50,15 @@ import {
   upsertDuckingRule,
   removeDuckingRule,
   applySilenceCut,
+  addGeneratedClip,
+  applyAnimationPreset,
+  applyClipStyle,
+  alignClipTo,
+  bindClipBrand,
+  applyBrandToBoundClips,
+  clearVersionClipOverrides,
+  clipStylePayload,
+  setDocBrandKit,
 } from "@/lib/timeline-engine";
 import { evalKeyframes } from "@/lib/effects";
 import type { ProjectDoc } from "@/lib/project-types";
@@ -646,3 +655,188 @@ describe("audio studio ops (ADR-026)", () => {
     expect(applySilenceCut(r.doc, "nope", [{ startMs: 0, endMs: 5 }], 100)).toBeNull();
   });
 });
+
+describe("graphics studio (ADR-027)", () => {
+  const mkTitle = (d: ProjectDoc) =>
+    addGeneratedClip(d, "text", { startMs: 1000, durationMs: 3000, text: "Hi" });
+
+  it("addGeneratedClip places on matching track with defaults", () => {
+    const d = doc();
+    const { doc: d1, clipId } = mkTitle(d);
+    const t = d1.timeline.tracks.find((t) => t.kind === "text")!;
+    expect(t.clips[0].id).toBe(clipId);
+    expect(t.clips[0].text).toBe("Hi");
+    expect(t.clips[0].hidden).toBe(false);
+    // shape clip on graphics track
+    const { doc: d2, clipId: sid } = addGeneratedClip(d1, "graphics", {
+      startMs: 0,
+      durationMs: 1000,
+      shape: { kind: "rect", fill: "#FF0000", outlineColor: null, outlineWidth: 0, widthPx: 100, heightPx: 50 },
+    });
+    const g = d2.timeline.tracks.find((t) => t.kind === "graphics")!;
+    expect(g.clips[0].id).toBe(sid);
+    expect(g.clips[0].shape?.fill).toBe("#FF0000");
+  });
+
+  it("applyAnimationPreset bakes keyframes on base when no version", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const d2 = applyAnimationPreset(d1, clipId, "fadeIn", { durationMs: 500 });
+    const c = findClip(d2, clipId)!.clip;
+    const kfs = c.keyframes["transform.opacity"];
+    expect(kfs.length).toBeGreaterThan(3);
+    expect(kfs[0].v).toBe(0);
+    expect(kfs[kfs.length - 1].v).toBe(1);
+  });
+
+  it("applyAnimationPreset writes into version overrides — other versions untouched", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const { doc: d2, versionId } = addVersion(d1, {
+      name: "9x16",
+      canvas: { width: 1080, height: 1920, fpsNum: 30, fpsDen: 1, background: "#000" },
+    });
+    const d3 = applyAnimationPreset(d2, clipId, "slideIn", {
+      durationMs: 400,
+      versionId,
+    });
+    const v = d3.versions.find((x) => x.id === versionId)!;
+    const ov = v.clipOverrides[clipId];
+    expect(ov.keyframes?.["transform.x"]?.length).toBeGreaterThan(3);
+    // base clip untouched
+    expect(findClip(d3, clipId)!.clip.keyframes["transform.x"]).toBeUndefined();
+    // merged version applies them
+    const merged = applyVersion(d3, versionId)!;
+    expect(findClip(merged, clipId)!.clip.keyframes["transform.x"]!.length).toBeGreaterThan(3);
+  });
+
+  it("textFx preset is versioned via clipOverrides.textFx", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const { doc: d2, versionId } = addVersion(d1, {
+      name: "sq",
+      canvas: { width: 1080, height: 1080, fpsNum: 30, fpsDen: 1, background: "#000" },
+    });
+    const d3 = applyAnimationPreset(d2, clipId, "typewriter", { durationMs: 1000, versionId });
+    const ov = d3.versions[0].clipOverrides[clipId];
+    expect(ov.textFx?.kind).toBe("typewriter");
+    // base has no textFx
+    expect(findClip(d3, clipId)!.clip.textFx).toBeNull();
+    const merged = applyVersion(d3, versionId)!;
+    expect(findClip(merged, clipId)!.clip.textFx?.kind).toBe("typewriter");
+  });
+
+  it("textFx preset is a no-op on non-text/graphics clips", () => {
+    const { doc: d1, clipId } = addClip(doc(), { mediaRef: "a1", startMs: 0, durationMs: 2000 });
+    const d2 = applyAnimationPreset(d1, clipId, "typewriter", { durationMs: 1000 });
+    expect(findClip(d2, clipId)!.clip.textFx ?? null).toBeNull();
+    // keyframe presets still work on media clips
+    const d3 = applyAnimationPreset(d1, clipId, "fadeIn", { durationMs: 300 });
+    expect(findClip(d3, clipId)!.clip.keyframes["transform.opacity"].length).toBeGreaterThan(0);
+  });
+
+  it("clipStylePayload + applyClipStyle copy style across clips", () => {
+    const { doc: d1, clipId: a } = mkTitle(doc());
+    const d2 = updateClip(d1, a, {
+      textStyle: { ...d1.timeline.tracks[0].clips[0].textStyle!, color: "#FF0000", shadowColor: "#000000CC", shadowX: 4, shadowY: 4 },
+    });
+    const { doc: d3, clipId: b } = addGeneratedClip(d2, "text", { startMs: 0, durationMs: 1000, text: "B" });
+    const payload = clipStylePayload(findClip(d3, a)!.clip);
+    const d4 = applyClipStyle(d3, b, payload);
+    const bc = findClip(d4, b)!.clip;
+    expect(bc.textStyle?.color).toBe("#FF0000");
+    expect(bc.textStyle?.shadowColor).toBe("#000000CC");
+    expect(bc.text).toBe("B"); // text content NOT replaced by style paste
+  });
+
+  it("alignClipTo positions around canvas edges/center", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const d2 = alignClipTo(d1, clipId, "right", 100);
+    expect(findClip(d2, clipId)!.clip.transform.x).toBe(1920 / 2 - 100);
+    const d3 = alignClipTo(d2, clipId, "middle");
+    expect(findClip(d3, clipId)!.clip.transform.y).toBe(0);
+  });
+
+  it("brand bind applies color/font from snapshot; unbind clears bindings", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const kit = {
+      id: "k1",
+      name: "Acme",
+      colors: ["#123456"],
+      fonts: [{ name: "A", path: "C:/Windows/Fonts/arial.ttf" }],
+      logos: [],
+      titleStyle: d1.subtitleStyle.text,
+    };
+    const d2 = setDocBrandKit(d1, kit);
+    const d3 = bindClipBrand(d2, clipId, { colorSlot: 0, fontSlot: 0 });
+    const c = findClip(d3, clipId)!.clip;
+    expect(c.brandBindings?.colorSlot).toBe(0);
+    expect(c.textStyle?.color).toBe("#123456");
+    expect(c.textStyle?.fontFile).toBe("C:/Windows/Fonts/arial.ttf");
+    // unbind keeps the applied values, drops the slots
+    const d4 = bindClipBrand(d3, clipId, { colorSlot: null, fontSlot: null });
+    const c4 = findClip(d4, clipId)!.clip;
+    expect(c4.brandBindings).toBeNull();
+    expect(c4.textStyle?.color).toBe("#123456");
+  });
+
+  it("applyBrandToBoundClips re-applies only bound slots, leaves custom values", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const kit = {
+      id: "k1",
+      name: "Acme",
+      colors: ["#AAAAAA", "#BBBBBB"],
+      fonts: [],
+      logos: [],
+      titleStyle: d1.subtitleStyle.text,
+    };
+    let d = setDocBrandKit(d1, kit);
+    d = bindClipBrand(d, clipId, { colorSlot: 0 });
+    // user recolors manually — bound slots get re-applied on explicit apply
+    d = updateClip(d, clipId, {
+      textStyle: { ...findClip(d, clipId)!.clip.textStyle!, fontSizePx: 99 },
+    });
+    const kit2 = { ...kit, colors: ["#CCCCCC", "#BBBBBB"] };
+    d = setDocBrandKit(d, kit2);
+    d = applyBrandToBoundClips(d);
+    const c = findClip(d, clipId)!.clip;
+    expect(c.textStyle?.color).toBe("#CCCCCC"); // re-applied from slot
+    expect(c.textStyle?.fontSizePx).toBe(99); // custom field untouched
+  });
+
+  it("per-version hidden merges; clearVersionClipOverrides re-syncs", () => {
+    const { doc: d1, clipId } = mkTitle(doc());
+    const { doc: d2, versionId } = addVersion(d1, {
+      name: "sq",
+      canvas: { width: 1080, height: 1080, fpsNum: 30, fpsDen: 1, background: "#000" },
+    });
+    const d3 = setVersionClipOverride(d2, versionId, clipId, { hidden: true });
+    const merged = applyVersion(d3, versionId)!;
+    expect(findClip(merged, clipId)!.clip.hidden).toBe(true);
+    // base still visible
+    expect(findClip(d3, clipId)!.clip.hidden).toBe(false);
+    const d4 = clearVersionClipOverrides(d3, versionId, clipId);
+    expect(d4.versions[0].clipOverrides[clipId]).toBeUndefined();
+    const merged2 = applyVersion(d4, versionId)!;
+    expect(findClip(merged2, clipId)!.clip.hidden).toBe(false);
+  });
+
+  it("new clip fields survive JSON serialize/deserialize", () => {
+    const { doc: d1, clipId } = addGeneratedClip(doc(), "graphics", {
+      startMs: 0,
+      durationMs: 2000,
+      text: "Branded",
+      shape: { kind: "rect", fill: "#FF0000", outlineColor: "#000000", outlineWidth: 2, widthPx: 100, heightPx: 50 },
+    });
+    let d = updateClip(d1, clipId, {
+      textFx: { kind: "wipe", rate: 0, direction: "ltr", durationMs: 500, out: true },
+      brandBindings: { colorSlot: 1, fontSlot: null },
+      hidden: true,
+    });
+    const rt: ProjectDoc = JSON.parse(JSON.stringify(d));
+    const c = findClip(rt, clipId)!.clip;
+    expect(c.shape?.kind).toBe("rect");
+    expect(c.shape?.outlineWidth).toBe(2);
+    expect(c.textFx?.out).toBe(true);
+    expect(c.brandBindings?.colorSlot).toBe(1);
+    expect(c.hidden).toBe(true);
+  });
+});
+

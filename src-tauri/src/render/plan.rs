@@ -73,6 +73,10 @@ pub struct TextSeg {
     pub style: crate::project::document::TextStyle,
     pub transform: crate::project::document::Transform,
     pub keyframes: std::collections::BTreeMap<String, Vec<crate::project::document::Keyframe>>,
+    /// Graphic shape drawn on the same canvas layer (ADR-027).
+    pub shape: Option<crate::project::document::ShapeSpec>,
+    /// Procedural text animation (typewriter/wipe).
+    pub text_fx: Option<crate::project::document::TextFx>,
 }
 
 #[derive(Debug)]
@@ -112,25 +116,27 @@ fn lbl(prefix: &str, i: usize) -> String {
 fn collect_text_segments(doc: &ProjectDoc) -> Vec<TextSeg> {
     let mut out = Vec::new();
     for track in &doc.timeline.tracks {
-        if track.kind != TrackKind::Text || !track.visible {
+        if !matches!(track.kind, TrackKind::Text | TrackKind::Graphics) || !track.visible {
             continue;
         }
         for clip in &track.clips {
-            if clip.duration_ms <= 0 {
+            if clip.duration_ms <= 0 || clip.hidden {
                 continue;
             }
-            let Some(text) = &clip.text else { continue };
-            if text.is_empty() {
+            let text = clip.text.clone().unwrap_or_default();
+            if text.is_empty() && clip.shape.is_none() {
                 continue;
             }
             out.push(TextSeg {
                 clip_id: clip.id.clone(),
                 start_ms: clip.start_ms.max(0),
                 duration_ms: clip.duration_ms,
-                text: text.clone(),
+                text,
                 style: clip.text_style.clone().unwrap_or_default(),
                 transform: clip.transform,
                 keyframes: clip.keyframes.clone(),
+                shape: clip.shape.clone(),
+                text_fx: clip.text_fx.clone(),
             });
         }
     }
@@ -153,7 +159,7 @@ fn collect_segments(
             continue;
         }
         for clip in &track.clips {
-            if clip.duration_ms <= 0 {
+            if clip.duration_ms <= 0 || clip.hidden {
                 continue;
             }
             let Some(media_ref) = &clip.media_ref else {
@@ -710,43 +716,273 @@ pub fn build_plan_with(
         }
     }
 
-    // Text segments: generated transparent canvas + drawtext, overlaid like
+    // Text/graphics segments: generated transparent canvas + drawbox +
+    // drawtext(s), then scale/rotate/opacity on the layer — overlaid like
     // any other visual layer (z = after all media tracks — text on top).
+    // NOTE: layer `t`/`T` is GLOBAL output time; keyframe exprs offset by
+    // ts.start_s (clip-relative samples → absolute eval). ADR-027.
     for (j, ts) in text_segments.iter().enumerate() {
         let (w, h) = (doc.canvas.width, doc.canvas.height);
-        let (px, py) = crate::render::text::pos_exprs(
+        let start_s = ts.start_ms as f64 / 1000.0;
+        let (px, py) = crate::render::text::pos_exprs_at(
             &ts.keyframes,
             ts.transform.x as f64,
             ts.transform.y as f64,
+            start_s,
         );
         let (x, y) = crate::render::text::anchor_exprs(&ts.style, &px, &py);
         let mut c = format!(
-            "color=c=black@0.0:size={}x{}:rate={},format=rgba,{}",
+            "color=c=black@0.0:size={}x{}:rate={},format=rgba",
             w,
             h,
             fps_string(doc),
-            crate::render::text::drawtext_opts(&ts.style, &ts.text, &x, &y),
         );
-        let ko = ts.keyframes.get("transform.opacity");
-        if let Some(k) = ko {
-            let e = crate::render::keyframes::expr_var(k, 0.0, ts.transform.opacity as f64, 'T');
+        // Shape: drawbox on the same layer — its own anchor math (drawbox
+        // has no text_w/text_h vars; the box is the measured element).
+        let mut shape_alpha_mask: Option<String> = None;
+        if let Some(sh) = &ts.shape {
+            let sw = sh.width_px.max(1.0);
+            let shh = sh.height_px.max(1.0);
+            let shape_a = {
+                let h = sh.fill.trim_start_matches('#');
+                if h.len() == 8 {
+                    u8::from_str_radix(&h[6..8], 16).unwrap_or(255) as f64 / 255.0
+                } else {
+                    1.0
+                }
+            };
+            // Anchors in geq-space (W/H = input dims). drawbox has no W/H —
+            // there `w`/`h` are the BOX dims; input dims are `in_w`/`in_h`.
+            let ax = match ts.style.align_h.as_str() {
+                "left" => format!("0+({px})"),
+                "right" => format!("W-{sw}+({px})"),
+                _ => format!("(W-{sw})/2+({px})"),
+            };
+            let ay = match ts.style.align_v.as_str() {
+                "top" => format!("0+({py})"),
+                "bottom" => format!("H-{shh}+({py})"),
+                _ => format!("(H-{shh})/2+({py})"),
+            };
+            let bx = ax.replace('W', "in_w");
+            let by = ay.replace('H', "in_h");
             c.push_str(&format!(
-                ",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({e})'"
+                ",drawbox=x='{bx}':y='{by}':w={}:h={}:c={}:t=fill",
+                sw,
+                shh,
+                crate::render::text::color(&sh.fill),
+            ));
+            if let Some(oc) = &sh.outline_color {
+                if sh.outline_width > 0.0 {
+                    let ow = sh.outline_width;
+                    c.push_str(&format!(
+                        ",drawbox=x='{bx}-{ow}':y='{by}-{ow}':w={}:h={}:c={}:t={}",
+                        sw + 2.0 * ow,
+                        shh + 2.0 * ow,
+                        crate::render::text::color(oc),
+                        ow.max(1.0),
+                    ));
+                }
+            }
+            // drawbox does NOT write alpha — compose the shape's coverage
+            // into the geq pass below (outer bounds incl. outline).
+            let ow = if sh.outline_width > 0.0 && sh.outline_color.is_some() {
+                sh.outline_width
+            } else {
+                0.0
+            };
+            let (gbx, gby) = (ax, ay);
+            shape_alpha_mask = Some(format!(
+                "between(X,{gbx}-{ow},{gbx}+{sw}+{ow})*between(Y,{gby}-{ow},{gby}+{shh}+{ow})*{}",
+                shape_a * 255.0
+            ));
+        }
+        if !ts.text.is_empty() {
+            let fx = ts.text_fx.as_ref();
+            match fx.map(|f| f.kind.as_str()) {
+                Some("typewriter") => {
+                    // N drawtexts: prefix k visible in its char window.
+                    // `out` erases from the end over the clip's tail.
+                    // Parity: preview shows the same prefix count.
+                    let chars: Vec<char> = ts.text.chars().collect();
+                    let n = chars.len().min(128);
+                    let cps = fx.map(|f| f.rate).unwrap_or(12.0).max(0.1);
+                    if fx.is_some_and(|f| f.out) {
+                        let end_s = start_s + ts.duration_ms as f64 / 1000.0;
+                        // Window k∈[0,n): show prefix (n-k) in [t_k, t_{k+1})
+                        // where t_k = end - (n-k)/cps — nothing after t_n.
+                        for k in 0..n {
+                            let m = n - k;
+                            let prefix: String = chars[..m].iter().collect();
+                            let t0 = end_s - (m as f64) / cps;
+                            let t1 = end_s - ((m - 1) as f64) / cps;
+                            c.push(',');
+                            c.push_str(&crate::render::text::drawtext_opts(
+                                &ts.style, &prefix, &x, &y,
+                            ));
+                            c.push_str(&format!(":enable='between(t,{t0:.3},{t1:.3})'"));
+                        }
+                    } else {
+                        for k in 1..=n {
+                            let prefix: String = chars[..k].iter().collect();
+                            let t0 = start_s + (k - 1) as f64 / cps;
+                            let t1 = if k == n {
+                                f64::INFINITY
+                            } else {
+                                start_s + k as f64 / cps
+                            };
+                            let en = if t1.is_infinite() {
+                                format!("gte(t,{t0:.3})")
+                            } else {
+                                format!("between(t,{t0:.3},{t1:.3})")
+                            };
+                            c.push(',');
+                            c.push_str(&crate::render::text::drawtext_opts(
+                                &ts.style, &prefix, &x, &y,
+                            ));
+                            c.push_str(&format!(":enable='{en}'"));
+                        }
+                    }
+                }
+                _ => {
+                    c.push(',');
+                    c.push_str(&crate::render::text::drawtext_opts(
+                        &ts.style, &ts.text, &x, &y,
+                    ));
+                }
+            }
+        }
+        // Scale (eval=frame, clip-relative offset → global t) then rotate —
+        // pivot = canvas center (preview wraps text in a canvas-sized div).
+        let kx = ts.keyframes.get("transform.scaleX");
+        let ky = ts.keyframes.get("transform.scaleY");
+        let sx = ts.transform.scale_x as f64;
+        let sy = ts.transform.scale_y as f64;
+        if kx.is_some() || ky.is_some() {
+            let ex = kx
+                .map(|k| crate::render::keyframes::expr(k, start_s, sx))
+                .unwrap_or_else(|| format!("{sx}"));
+            let ey = ky
+                .map(|k| crate::render::keyframes::expr(k, start_s, sy))
+                .unwrap_or_else(|| format!("{sy}"));
+            c.push_str(&format!(
+                ",scale=w='iw*({ex})':h='ih*({ey})':eval=frame:flags=lanczos"
+            ));
+        } else if sx != 1.0 || sy != 1.0 {
+            c.push_str(&format!(",scale=w=iw*{sx}:h=ih*{sy}:flags=lanczos"));
+        }
+        let kr = ts.keyframes.get("transform.rotationDeg");
+        let rot = ts.transform.rotation_deg as f64;
+        if kr.is_some() || rot != 0.0 {
+            let a = kr
+                .map(|k| {
+                    format!(
+                        "({})*PI/180",
+                        crate::render::keyframes::expr(k, start_s, rot)
+                    )
+                })
+                .unwrap_or_else(|| format!("{rot}*PI/180"));
+            c.push_str(&format!(",rotate=a='{a}':ow=iw:oh=ih:fillcolor=none"));
+        }
+        // Alpha: opacity keyframes (or static) × optional wipe mask — one
+        // geq pass so both compose (ADR-027).
+        let ko = ts.keyframes.get("transform.opacity");
+        let mut alpha_terms: Vec<String> = Vec::new();
+        if let Some(k) = ko {
+            alpha_terms.push(crate::render::keyframes::expr_var(
+                k,
+                start_s,
+                ts.transform.opacity as f64,
+                'T',
             ));
         } else if ts.transform.opacity < 1.0 {
-            c.push_str(&format!(",colorchannelmixer=aa={}", ts.transform.opacity));
+            alpha_terms.push(format!("{}", ts.transform.opacity));
         }
-        c.push_str(&lbl("vt", j + 1));
-        filters.push(c);
+        if let Some(fx) = &ts.text_fx {
+            if fx.kind == "wipe" {
+                let d = (fx.duration_ms.max(1) as f64) / 1000.0;
+                let end_s_f = start_s + ts.duration_ms as f64 / 1000.0;
+                // out anchors the window at the clip tail and complements
+                // the mask (the revealed region SHRINKS instead of growing).
+                let t0 = if fx.out { end_s_f - d } else { start_s };
+                let prog = format!("min(1,max(0,(T-{t0:.3})/{d:.3}))");
+                let mask = match fx.direction.as_str() {
+                    "rtl" => format!("gte(X,W*(1-{prog}))"),
+                    "ttb" => format!("lt(Y,H*{prog})"),
+                    "btt" => format!("gte(Y,H*(1-{prog}))"),
+                    _ => format!("lt(X,W*{prog})"),
+                };
+                if fx.out {
+                    alpha_terms.push(format!("1-({mask})"));
+                } else {
+                    alpha_terms.push(mask);
+                }
+            }
+        }
+        // Compose the geq alpha pass for `extra` weight terms — shared by
+        // the single-layer path and the two blur branches.
+        let geq_tail = |extra: &str| -> String {
+            let mut base = "alpha(X,Y)".to_string();
+            if let Some(m) = &shape_alpha_mask {
+                base = format!("max({base},{m})");
+            }
+            let mut e = base;
+            if !alpha_terms.is_empty() {
+                e = format!("{e}*({})", alpha_terms.join("*"));
+            }
+            if !extra.is_empty() {
+                e = format!("{e}*({extra})");
+            }
+            format!(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{e}'")
+        };
+        let blur_fx = ts.text_fx.as_ref().filter(|f| f.kind == "blur");
         let start_s = ms_to_s(ts.start_ms);
         let end_s = ms_to_s(ts.start_ms + ts.duration_ms);
-        let out_lbl = lbl("o", overlay_idx + 1);
-        filters.push(format!(
-            "{cur}{}overlay=0:0:enable='between(t,{start_s},{end_s})'{out_lbl}",
-            lbl("vt", j + 1)
-        ));
-        cur = out_lbl;
-        overlay_idx += 1;
+        let mut overlays: Vec<String> = Vec::new();
+        if let Some(fx) = blur_fx {
+            // Blur reveal/dissolve: the WHOLE layer (text+shape, post
+            // transform) forks into a gblur branch and a sharp branch; an
+            // alpha crossfade on each does the reveal. Real ffmpeg work —
+            // preview mirrors it with CSS blur+opacity (ADR-027).
+            let d = (fx.duration_ms.max(1) as f64) / 1000.0;
+            let end_f = start_s.parse::<f64>().unwrap_or(0.0) + ts.duration_ms as f64 / 1000.0;
+            let t0 = if fx.out {
+                end_f - d
+            } else {
+                start_s.parse::<f64>().unwrap_or(0.0)
+            };
+            let p = format!("min(1,max(0,(T-{t0:.3})/{d:.3}))");
+            let (blur_w, sharp_w) = if fx.out {
+                (format!("min(1,{p})*(1-{p})"), format!("(1-{p})"))
+            } else {
+                (format!("(1-{p})"), p.clone())
+            };
+            let sigma = if fx.rate > 0.0 { fx.rate } else { 12.0 };
+            let mut blur_chain = c.clone();
+            blur_chain.push_str(&format!(",gblur=sigma={sigma}"));
+            blur_chain.push_str(&geq_tail(&blur_w));
+            blur_chain.push_str(&lbl("vtb", j + 1));
+            filters.push(blur_chain);
+            overlays.push(lbl("vtb", j + 1));
+            c.push_str(&geq_tail(&sharp_w));
+            c.push_str(&lbl("vt", j + 1));
+            filters.push(c);
+            overlays.push(lbl("vt", j + 1));
+        } else {
+            if !alpha_terms.is_empty() || shape_alpha_mask.is_some() {
+                c.push_str(&geq_tail(""));
+            }
+            c.push_str(&lbl("vt", j + 1));
+            filters.push(c);
+            overlays.push(lbl("vt", j + 1));
+        }
+        for ov in overlays {
+            let out_lbl = lbl("o", overlay_idx + 1);
+            filters.push(format!(
+                "{cur}{ov}overlay=0:0:enable='between(t,{start_s},{end_s})'{out_lbl}",
+            ));
+            cur = out_lbl;
+            overlay_idx += 1;
+        }
     }
 
     // Subtitle burn-in last — after all visual layers (ADR-025).
@@ -1009,6 +1245,10 @@ mod tests {
                 text: None,
                 text_style: None,
                 keyframes: Default::default(),
+                shape: None,
+                text_fx: None,
+                hidden: false,
+                brand_bindings: None,
             }],
             transitions: vec![],
             locked: false,

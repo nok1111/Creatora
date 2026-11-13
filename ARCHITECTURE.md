@@ -90,6 +90,37 @@ Creatora/
 - Analysis commands (`audio/`): waveform peaks (job + xxh3 disk cache),
   `loudnorm` JSON parse, `silencedetect` → reviewable proposals only.
 
+## Graphics & text compositor (ADR-027)
+
+- **Generated layer per clip.** Every text/graphics clip compiles to a
+  transparent `color` source → `drawbox` (shapes) → `drawtext`(s) →
+  `scale eval=frame` → `rotate` → `geq` alpha → gated `overlay`. Preview
+  uses a canvas-sized wrapper carrying scale/rotation (same pivot), DOM
+  span/div for text/shape.
+- **Alpha is composed in ONE `geq` pass** — shape coverage
+  (`drawbox` cannot write alpha), opacity keyframes and wipe masks all
+  multiply/max into `a=`.
+- **Animations.** Presets bake eased keyframe samples onto canonical
+  transform paths (real in both renderers). Procedural kinds live in
+  `Clip.textFx` (typewriter/wipe/blur + `out` variants): implemented as
+  gated drawtexts / geq masks / gblur+geq branch fork in render, and as
+  prefix-slice / clip-path / CSS-blur dual-div in preview. No
+  preview-only animations exist.
+- **Version independence.** `ClipOverride` carries transform, keyframes,
+  textStyle, text, `hidden`, `textFx` — `apply_version` merges;
+  `clearVersionClipOverrides` re-syncs a clip to base.
+- **Brand kit.** App-side `app_data/brandkits/*.json` + a snapshot
+  embedded in the doc; `Clip.brandBindings` slot indices apply on bind /
+  explicit "apply brand" only — never auto-overwrites custom values.
+- **Templates.** `app_data/templates/*.json` store a canonical `Clip`
+  payload (+ optional `brandKitId`) — applicable to any project,
+  import/export as files.
+- **Fonts.** `resolve_font`: configured → arial → segoeui → omit
+  `fontfile`; missing files degrade instead of killing the render.
+- `graphics.rs` owns template/kit file stores (atomic `.part`→rename);
+  `anim-presets.ts` is the single preset catalog shared by inspector UI
+  and the engine.
+
 ## Data flow
 
 - Frontend → backend: typed Tauri commands (`#[tauri::command]`), all return `Result<T, AppError>`; `AppError` serializes to `{code, message, details?}`.

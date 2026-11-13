@@ -32,6 +32,7 @@ import { VersionsPanel } from "./VersionsPanel";
 import { TimelinePanel } from "./TimelinePanel";
 import { SubtitlesPanel } from "./SubtitlesPanel";
 import { MediaBin } from "./MediaBin";
+import { GraphicsBin } from "./GraphicsBin";
 import { Inspector } from "./Inspector";
 
 /**
@@ -59,6 +60,7 @@ export function EditorPage() {
 
   const [exporting, setExporting] = useState<{ jobId: string; progress: number } | null>(null);
   const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">("timeline");
+  const [leftTab, setLeftTab] = useState<"media" | "graphics">("media");
 
   const assetsQ = useQuery({
     queryKey: ["assets"],
@@ -245,8 +247,23 @@ export function EditorPage() {
 
       {/* Middle: bin + preview */}
       <div className="flex min-h-0 flex-1">
-        <div className="w-56 shrink-0">
-          <MediaBin assets={assetsQ.data ?? []} />
+        <div className="flex w-56 shrink-0 flex-col">
+          <div className="flex gap-1 border-b border-r border-border px-1.5 py-0.5">
+            {(["media", "graphics"] as const).map((tb) => (
+              <button
+                key={tb}
+                onClick={() => setLeftTab(tb)}
+                className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                  leftTab === tb ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tb}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1">
+            {leftTab === "media" ? <MediaBin assets={assetsQ.data ?? []} /> : <GraphicsBin />}
+          </div>
         </div>
         <div className="relative flex min-w-0 flex-1">
           <div className="relative min-w-0 flex-1">

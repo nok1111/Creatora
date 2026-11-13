@@ -53,6 +53,14 @@ inspect the output file itself. Skipped only when ffmpeg is absent.
 | `ducking_ducks_music_under_voice` | sidechaincompress: music RMS drops during voice, releases after |
 | `waveform_peaks_match_source` | generated peaks ≈ decoded PCM min/max per bucket |
 | `loudness_and_silence_parse` | loudnorm JSON fields + silencedetect regions on known signal |
+| `shape_rect_renders_filled_box` | drawbox+geq alpha: blue px only inside shape rect, none outside |
+| `wipe_reveals_left_to_right` | geq mask: left revealed at mid-wipe, right still hidden |
+| `wipe_out_erases_at_tail` | complemented mask at clip tail: visible before, ~gone at end |
+| `typewriter_grows_text_over_time` | gated drawtexts: white-px count grows with elapsed time |
+| `blur_reveal_sharpens` | gblur+sharp branch crossfade: full-white px lower early than late |
+| `shadow_offsets_dark_pixels` | drawtext shadowcolor: dark px offset down-right of red glyphs |
+| `hidden_clip_is_not_rendered` | `clip.hidden` filters segment from plan — zero white px |
+| `text_scale_keyframes_grow_on_canvas` | `scale eval=frame` on text layer: glyph bbox grows with kf |
 
 Fixtures are generated on the fly by ffmpeg lavfi (`color=` + `sine=`) into
 `%TEMP%/creatora_e2e_*` — deterministic pixels and known frequencies, no

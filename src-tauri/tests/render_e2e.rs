@@ -147,6 +147,10 @@ fn clip(id: &str, asset: &str, start_ms: i64, dur_ms: i64, src_in_ms: i64) -> Cl
         text: None,
         text_style: None,
         keyframes: Default::default(),
+        shape: None,
+        text_fx: None,
+        hidden: false,
+        brand_bindings: None,
     }
 }
 
@@ -1113,6 +1117,10 @@ fn text_clip_renders_glyphs_on_canvas() {
                 ..Default::default()
             }),
             keyframes: Default::default(),
+            shape: None,
+            text_fx: None,
+            hidden: false,
+            brand_bindings: None,
         }],
         transitions: vec![],
         locked: false,
@@ -1744,6 +1752,10 @@ fn text_clip_renders_in_vertical_version() {
                 ..Default::default()
             }),
             keyframes: Default::default(),
+            shape: None,
+            text_fx: None,
+            hidden: false,
+            brand_bindings: None,
         }],
         transitions: vec![],
         locked: false,
@@ -1941,6 +1953,10 @@ fn version_text_override_independent_copy() {
             text: Some("YouTube Title".into()),
             text_style: Some(TextStyle::default()),
             keyframes: Default::default(),
+            shape: None,
+            text_fx: None,
+            hidden: false,
+            brand_bindings: None,
         }],
         transitions: vec![],
         locked: false,
@@ -2551,4 +2567,431 @@ fn loudness_and_silence_analysis_work() {
         "len={}",
         mid.end_ms - mid.start_ms
     );
+}
+
+// ---------- Phase 7: graphics studio (ADR-027) ----------
+
+fn gfx_clip(id: &str, start: i64, dur: i64) -> Clip {
+    Clip {
+        id: id.into(),
+        media_ref: None,
+        start_ms: start,
+        duration_ms: dur,
+        source_in_ms: 0,
+        source_out_ms: None,
+        source_duration_ms: None,
+        transform: Transform::default(),
+        effects: vec![],
+        volume: 1.0,
+        pan: 0.0,
+        fade_in_ms: 0,
+        fade_out_ms: 0,
+        speed: 1.0,
+        text: None,
+        text_style: None,
+        keyframes: Default::default(),
+        shape: None,
+        text_fx: None,
+        hidden: false,
+        brand_bindings: None,
+    }
+}
+
+fn gfx_track(clips: Vec<Clip>) -> Track {
+    Track {
+        id: "g1".into(),
+        kind: TrackKind::Graphics,
+        name: "G1".into(),
+        clips,
+        transitions: vec![],
+        locked: false,
+        visible: true,
+        muted: false,
+        volume: 1.0,
+        solo: false,
+    }
+}
+
+fn white_px(f: &[u8], w: usize, r0: usize, r1: usize, c0: usize, c1: usize) -> u64 {
+    let mut n = 0;
+    for row in r0..r1 {
+        for col in c0..c1 {
+            let i = (row * w + col) * 3;
+            if f[i] > 200 && f[i + 1] > 200 && f[i + 2] > 200 {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+fn chan_px(f: &[u8], w: usize, r0: usize, r1: usize, c0: usize, c1: usize, ch: usize) -> u64 {
+    let mut n = 0;
+    for row in r0..r1 {
+        for col in c0..c1 {
+            let i = (row * w + col) * 3;
+            if f[i + ch] > 200 && f[i] < 80 && f[i + 1] < 80 {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+#[test]
+fn shape_rect_renders_filled_box() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("shape");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 2.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 2000, 0)]));
+    let mut sh = gfx_clip("shp", 0, 2000);
+    sh.shape = Some(ShapeSpec {
+        kind: "rect".into(),
+        fill: "#0000FF".into(),
+        outline_color: None,
+        outline_width: 0.0,
+        width_px: 160.0,
+        height_px: 120.0,
+    });
+    doc.timeline.tracks.push(gfx_track(vec![sh]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "shape.mp4");
+    let f = grab_frame(&out, 1.0, 320, 240);
+    // 160x120 box centered on 320x240 → rows 60-180, cols 80-240 blue.
+    assert!(
+        chan_px(&f, 320, 105, 135, 130, 190, 2) > 1500,
+        "blue shape missing at canvas center"
+    );
+    assert_eq!(
+        chan_px(&f, 320, 10, 40, 10, 40, 2),
+        0,
+        "blue leaked outside the shape"
+    );
+}
+
+#[test]
+fn typewriter_grows_text_over_time() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    if !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("typew");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 4000, 0)]));
+    let mut t = gfx_clip("tw", 0, 4000);
+    t.text = Some("HELLO".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 80.0,
+        color: "#FFFFFF".into(),
+        align_h: "center".into(),
+        align_v: "middle".into(),
+        ..Default::default()
+    });
+    t.text_fx = Some(TextFx {
+        kind: "typewriter".into(),
+        rate: 2.0, // 2 chars/sec → 'H' at 0.25s, 'HELLO' at 2.5s
+        direction: String::new(),
+        duration_ms: 0,
+        out: false,
+    });
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "tw.mp4");
+    // Early: ~1 char ("H") — narrow strip; late: all 5 — more white px.
+    let early = white_px(&grab_frame(&out, 0.3, 320, 240), 320, 90, 150, 40, 280);
+    let late = white_px(&grab_frame(&out, 3.5, 320, 240), 320, 90, 150, 40, 280);
+    assert!(early > 50, "no glyph visible early (got {early})");
+    assert!(
+        late > early * 2,
+        "typewriter didn't grow text: early={early} late={late}"
+    );
+}
+
+#[test]
+fn wipe_reveals_left_to_right() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    if !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("wipe");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 4000, 0)]));
+    let mut t = gfx_clip("wp", 0, 4000);
+    t.text = Some("WIPE".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 70.0,
+        color: "#FFFFFF".into(),
+        align_h: "center".into(),
+        align_v: "middle".into(),
+        ..Default::default()
+    });
+    t.text_fx = Some(TextFx {
+        kind: "wipe".into(),
+        rate: 0.0,
+        direction: "ltr".into(),
+        duration_ms: 2000,
+        out: false,
+    });
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "wipe.mp4");
+    // At t=1.0 (50%): left half shows text, right half doesn't.
+    let mid = grab_frame(&out, 1.0, 320, 240);
+    let left = white_px(&mid, 320, 90, 150, 60, 160);
+    let right = white_px(&mid, 320, 90, 150, 200, 300);
+    assert!(left > 50, "wipe: left not revealed (got {left})");
+    assert!(
+        left > right * 4 + 20,
+        "wipe: right already visible mid-reveal (l={left} r={right})"
+    );
+}
+
+#[test]
+fn hidden_clip_is_not_rendered() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    if !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("hidden");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 2.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 2000, 0)]));
+    let mut t = gfx_clip("hd", 0, 2000);
+    t.text = Some("GHOST".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 80.0,
+        color: "#FFFFFF".into(),
+        ..Default::default()
+    });
+    t.hidden = true;
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "hid.mp4");
+    assert_eq!(
+        white_px(&grab_frame(&out, 1.0, 320, 240), 320, 0, 240, 0, 320),
+        0,
+        "hidden clip still rendered"
+    );
+}
+
+#[test]
+fn text_scale_keyframes_grow_on_canvas() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    if !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("tscale");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 4000, 0)]));
+    let mut t = gfx_clip("sc", 1000, 3000); // starts at 1s — catches the
+                                            // clip-relative keyframe offset
+    t.text = Some("BIG".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 40.0,
+        color: "#FFFFFF".into(),
+        ..Default::default()
+    });
+    use creatora_lib::project::document::Keyframe;
+    t.keyframes.insert(
+        "transform.scaleX".into(),
+        vec![
+            Keyframe {
+                t_ms: 0,
+                v: 0.2,
+                ease: "linear".into(),
+            },
+            Keyframe {
+                t_ms: 2000,
+                v: 1.5,
+                ease: "linear".into(),
+            },
+        ],
+    );
+    t.keyframes.insert(
+        "transform.scaleY".into(),
+        vec![
+            Keyframe {
+                t_ms: 0,
+                v: 0.2,
+                ease: "linear".into(),
+            },
+            Keyframe {
+                t_ms: 2000,
+                v: 1.5,
+                ease: "linear".into(),
+            },
+        ],
+    );
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "tscale.mp4");
+    // t=1.1 → scale ~0.2 (small text); t=3.8 → ~1.4 (big text).
+    let early = white_px(&grab_frame(&out, 1.2, 320, 240), 320, 60, 180, 60, 260);
+    let late = white_px(&grab_frame(&out, 3.8, 320, 240), 320, 60, 180, 60, 260);
+    assert!(
+        late > early * 2 + 50,
+        "scale kf didn't grow text: early={early} late={late}"
+    );
+}
+
+#[test]
+fn wipe_out_erases_at_tail() {
+    if ffmpeg().is_none() || !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("wipeout");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 4000, 0)]));
+    let mut t = gfx_clip("wo", 0, 4000);
+    t.text = Some("WIPE".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 70.0,
+        color: "#FFFFFF".into(),
+        align_h: "center".into(),
+        align_v: "middle".into(),
+        ..Default::default()
+    });
+    t.text_fx = Some(TextFx {
+        kind: "wipe".into(),
+        rate: 0.0,
+        direction: "ltr".into(),
+        duration_ms: 1500,
+        out: true,
+    });
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "wo.mp4");
+    // Before the window (t=1.0): fully visible. Window = [2.5s, 4s].
+    let early = white_px(&grab_frame(&out, 1.0, 320, 240), 320, 90, 150, 60, 260);
+    let late = white_px(&grab_frame(&out, 3.8, 320, 240), 320, 90, 150, 60, 260);
+    assert!(early > 100, "text should be visible pre-wipe-out ({early})");
+    assert!(
+        late < early / 5,
+        "wipe-out should erase most of the text: early={early} late={late}"
+    );
+}
+
+#[test]
+fn blur_reveal_sharpens() {
+    if ffmpeg().is_none() || !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("blurfx");
+    let red = make_clip(&dir, "r.mp4", "red", 440, 4.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "r", 0, 4000, 0)]));
+    let mut t = gfx_clip("bl", 0, 4000);
+    t.text = Some("FOCUS".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 70.0,
+        color: "#FFFFFF".into(),
+        align_h: "center".into(),
+        align_v: "middle".into(),
+        ..Default::default()
+    });
+    t.text_fx = Some(TextFx {
+        kind: "blur".into(),
+        rate: 14.0,
+        direction: String::new(),
+        duration_ms: 2000,
+        out: false,
+    });
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "r", &red);
+    let out = render(&dir, &doc, "blur.mp4");
+    // Late: fully sharp — strong white core pixels.
+    let late = white_px(&grab_frame(&out, 3.5, 320, 240), 320, 80, 160, 40, 280);
+    assert!(late > 200, "sharp text missing after blur reveal ({late})");
+    // Early: blurred copy only — dimmer peak coverage than sharp.
+    let early = white_px(&grab_frame(&out, 0.2, 320, 240), 320, 80, 160, 40, 280);
+    assert!(
+        early < late,
+        "blurred start should have fewer full-white px than sharp end ({early} vs {late})"
+    );
+}
+
+#[test]
+fn shadow_offsets_dark_pixels() {
+    if ffmpeg().is_none() || !std::path::Path::new("C:/Windows/Fonts/arial.ttf").exists() {
+        return;
+    }
+    let dir = tmpdir("shadow");
+    let white = make_clip(&dir, "w.mp4", "white", 440, 2.0);
+    let mut doc = base_doc();
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "w", 0, 2000, 0)]));
+    let mut t = gfx_clip("sh", 0, 2000);
+    t.text = Some("SHADOW".into());
+    t.text_style = Some(TextStyle {
+        font_size_px: 70.0,
+        color: "#FF0000".into(),
+        shadow_color: Some("#000000".into()),
+        shadow_x: 30.0,
+        shadow_y: 30.0,
+        align_h: "center".into(),
+        align_v: "middle".into(),
+        ..Default::default()
+    });
+    doc.timeline.tracks.push(gfx_track(vec![t]));
+    add_media(&mut doc, "w", &white);
+    let out = render(&dir, &doc, "sh.mp4");
+    let f = grab_frame(&out, 1.0, 320, 240);
+    // Red text present at center (R high, G/B low — chan_px only fits blue).
+    let red_px = {
+        let mut n = 0u64;
+        for row in 100..140 {
+            for col in 120..200 {
+                let i = (row * 320 + col) * 3;
+                if f[i] > 200 && f[i + 1] < 80 && f[i + 2] < 80 {
+                    n += 1;
+                }
+            }
+        }
+        n
+    };
+    assert!(red_px > 50, "red text missing ({red_px})");
+    // Shadow = dark pixels offset down-right of glyphs on white bg.
+    let dark = {
+        let mut n = 0u64;
+        for row in 130..170 {
+            for col in 140..230 {
+                let i = (row * 320 + col) * 3;
+                if f[i] < 60 && f[i + 1] < 60 && f[i + 2] < 60 {
+                    n += 1;
+                }
+            }
+        }
+        n
+    };
+    assert!(dark > 30, "no shadow pixels detected ({dark})");
 }

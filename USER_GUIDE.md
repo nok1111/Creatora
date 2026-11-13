@@ -74,6 +74,41 @@ Open a project, then:
   music. Music ducks while voice is active and releases after, with
   adjustable threshold/reduction/attack/release/hold.
 
+## Text & Graphics Studio
+
+- **Add elements** (left panel → Graphics tab): Title, Lower third, Shape.
+  Elements land as clips on text/graphics tracks at the playhead — move,
+  trim, duplicate, keyframe them like any clip.
+- **Drag on the canvas** to position. With a Format version active, the
+  drag writes a per-version override — the base and other versions are
+  untouched.
+- **Inspector → Text**: content, font size, color, alignment, outline,
+  background box, **shadow** (color + X/Y), **line spacing**. All changes
+  export exactly as previewed.
+- **Inspector → Graphics**: hide (per-clip, or per-version when a version
+  is active), align-to-canvas buttons, shape fill/outline/size,
+  copy/paste style between elements.
+- **Animation presets**: entrances, exits, emphasis, transitions, loops —
+  fade, slide, scale/pop, rotate, shake, pulse, float, typewriter,
+  wipe, blur reveal/dissolve. Configure duration, direction, intensity,
+  easing. Everything exports — no preview-only animations.
+- **Shapes**: rectangles and lines (fill, outline, px size). Ellipses are
+  not supported (documented engine limitation, not a bug).
+- **Templates**: select an element → "+" in the Templates list saves it
+  (with category). Click a template to insert it — you're asked for the
+  replacement text first; design and animation are preserved. Templates
+  live app-side and apply to every project; import/export as `.json`.
+- **Brand Kit**: create kits (colors, fonts, logos, title style) in the
+  Graphics tab; pick the active kit to embed a snapshot in the project.
+  Bind a clip's color/font to kit slots in the Inspector — "Apply brand
+  to bound elements" re-syncs them after a kit edit. Unbinding keeps the
+  current values. Logos insert at playhead via one click (the file is
+  imported to the Library automatically).
+- **Multi-format**: position, scale, text, visibility and animation can
+  diverge per version via overrides. The "re-sync" button (Inspector →
+  Graphics, shown when a clip has version overrides) drops them and
+  returns the element to the shared base.
+
 ## Where is my data?
 
 - Projects: `.creatora` files wherever you saved them (default: `Documents\Creatora\Projects`).

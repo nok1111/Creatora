@@ -2,6 +2,7 @@ pub mod audio;
 mod commands;
 pub mod db;
 pub mod error;
+pub mod graphics;
 pub mod jobs;
 pub mod media;
 pub mod project;
@@ -83,6 +84,16 @@ pub fn run() {
             audio::commands::analyze_loudness,
             audio::commands::detect_silence,
             audio::commands::suggest_normalize,
+            graphics::list_templates,
+            graphics::save_template,
+            graphics::delete_template,
+            graphics::export_template,
+            graphics::import_template,
+            graphics::list_brand_kits,
+            graphics::save_brand_kit,
+            graphics::delete_brand_kit,
+            graphics::export_brand_kit,
+            graphics::import_brand_kit,
             render::commands::preview_render_plan,
         ])
         .run(tauri::generate_context!())

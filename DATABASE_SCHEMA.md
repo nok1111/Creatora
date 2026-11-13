@@ -166,6 +166,29 @@ CREATE TABLE jobs (
 );
 ```
 
+## App-data file stores (no schema — JSON files)
+
+Phase 7 stores are per-user files under `%APPDATA%/Creatora/` (the same
+root as this DB), NOT SQLite tables — they are shared across projects:
+
+- `templates/*.json` — one file per graphics template; payload is a
+  canonical `Clip` (style, shape, keyframes, textFx, effects) + `name`,
+  `category`, optional `brandKitId`. Atomic write via `.part`→rename.
+- `brandkits/*.json` — one file per Brand Kit: `id`, `name`, `colors[]`,
+  `fonts[]` (name+path), `logos[]` (name+path+role), `titleStyle`.
+  Projects embed a snapshot (`doc.brandKit`) so a project survives kit
+  deletion; `doc.brandKitId` marks the active kit.
+
+The `.creatora` document itself gained (all `#[serde(default)]`,
+back-compatible, no format_version bump required):
+
+- `Clip.shape` — generated rect/line spec (fill, outline, px size).
+- `Clip.textFx` — procedural animation (typewriter|wipe|blur, out flag).
+- `Clip.hidden`, `Clip.brandBindings` — per-clip visibility + brand slots.
+- `ClipOverride.hidden`, `ClipOverride.textFx` — per-version overrides.
+- `TextStyle.shadowColor/X/Y`, `TextStyle.lineSpacingPx`.
+- `doc.brandKitId`, `doc.brandKit` — active kit snapshot.
+
 ## Migration policy
 
 - File naming: `NNNN_name.sql` starting at `0001_init.sql`.

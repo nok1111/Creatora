@@ -19,6 +19,7 @@ import {
 } from "@/lib/timeline-engine";
 import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
 import { AudioTools } from "@/modules/editor/AudioTools";
+import { GraphicsSection } from "@/modules/editor/GraphicsInspector";
 import type { Clip } from "@/lib/project-types";
 
 /**
@@ -180,6 +181,8 @@ export function Inspector() {
         <AudioTools clipId={clipId} trackId={track.id} />
       </section>
 
+      <GraphicsSection clipId={clipId} />
+
       <section className="space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -337,6 +340,25 @@ export function Inspector() {
                     onChange={(e) => patchStyle("backgroundColor", e.target.value + "AA")} />
                 )}
               </div>
+              <div className="flex items-center gap-1">
+                <span className="w-14 text-[10px] text-muted-foreground">Shadow</span>
+                <input type="checkbox" checked={!!clipStyle.shadowColor}
+                  onChange={(e) => patchStyle("shadowColor", e.target.checked ? "#000000CC" : null)} />
+                {clipStyle.shadowColor && (
+                  <>
+                    <input type="color" className="h-5 w-10"
+                      value={clipStyle.shadowColor.slice(0, 7)}
+                      onChange={(e) => patchStyle("shadowColor", e.target.value + "CC")} />
+                    <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
+                      value={clipStyle.shadowX ?? 0} title="shadow X px"
+                      onChange={(e) => patchStyle("shadowX", Number(e.target.value))} />
+                    <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
+                      value={clipStyle.shadowY ?? 0} title="shadow Y px"
+                      onChange={(e) => patchStyle("shadowY", Number(e.target.value))} />
+                  </>
+                )}
+              </div>
+              {num("Line spc", clipStyle.lineSpacingPx ?? 0, (v) => patchStyle("lineSpacingPx", v))}
             </div>
           )}
         </section>

@@ -79,7 +79,11 @@ Sub-phased per product review — vertical slice first, then depth, then perform
 
 **Acceptance criteria**: one master produces N derived projects; editing master then syncing preserves per-format customizations flagged as overridden; exports of each format are correct.
 
-## PHASE 5 — Subtitle & audio studio
+## PHASE 5 — Subtitle & audio studio ✅ DONE (split as shipped)
+
+> Executed as two phases: Phase 5 = Subtitle Studio (transcription, cue
+> editor, burn-in), Phase 6 = Audio Studio (waveforms, mixer, ducking,
+> loudness, silence tools). Voice-over recording remains open (below).
 
 - Transcription engine trait + whisper.cpp sidecar (model download manager with progress/cancel).
 - Subtitle editor: cues on timeline, split/merge, styling (font/size/color/bg/outline/shadow), word-level karaoke, templates, SRT/VTT import/export, burn-in via subtitles filter + styled ASS.
@@ -87,7 +91,13 @@ Sub-phased per product review — vertical slice first, then depth, then perform
 
 **Acceptance criteria**: transcription produces timed cues editable and burnable; exported video contains chosen subtitle rendering; audio adjustments audible in export.
 
-## PHASE 6 — Thumbnails, graphics, brand kit
+## PHASE 6 — Thumbnails, graphics, brand kit ⏳ PARTIAL (executed as Phase 7)
+
+> Executed as Phase 7 = Text & Graphics Studio + Brand Kit (titles,
+> shapes, animation presets, templates, brand kits) — the timeline-side
+> half of this phase. Still open: standalone **thumbnail designer**
+> (canvas → PNG/JPEG/WebP export) — the graphics compositor built for
+> Phase 7 is the render substrate for it.
 
 - Canvas-based graphic editor (fabric.js or custom Konva-like layer engine): text/shapes/images/adjustments/layers/templates; export PNG/JPEG/WebP.
 - Brand kits CRUD + one-click apply to graphics/subtitle styles/watermarks.

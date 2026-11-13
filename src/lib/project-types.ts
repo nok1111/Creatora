@@ -11,6 +11,8 @@ export interface ProjectDoc {
   /** Master subtitle presentation — versions may override. */
   subtitleStyle: SubtitleStyle;
   brandKitId: string | null;
+  /** Embedded snapshot — self-contained (ADR-027). */
+  brandKit?: BrandKit | null;
   exportProfiles: unknown[];
   mediaRefs: MediaRef[];
   /** Auto-duck rules (ADR-026). */
@@ -102,6 +104,12 @@ export interface TextStyle {
   alignH: string;
   /** "top" | "middle" | "bottom" */
   alignV: string;
+  /** Drop shadow — drawtext shadowcolor/x/y ↔ CSS text-shadow. ADR-027. */
+  shadowColor?: string | null;
+  shadowX?: number;
+  shadowY?: number;
+  /** Extra px between wrapped lines (drawtext line_spacing). */
+  lineSpacingPx?: number;
 }
 
 export interface SafeZones {
@@ -168,6 +176,10 @@ export interface ClipOverride {
   textStyle?: TextStyle;
   /** Independent copy per version. */
   text?: string;
+  /** Per-version visibility (true = hidden in this version). ADR-027. */
+  hidden?: boolean;
+  /** Per-version procedural animation (typewriter/wipe/blur). ADR-027. */
+  textFx?: TextFx | null;
 }
 
 export interface FormatVersion {
@@ -205,6 +217,10 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
   backgroundPadPx: 8,
   alignH: "center",
   alignV: "middle",
+  shadowColor: null,
+  shadowX: 0,
+  shadowY: 0,
+  lineSpacingPx: 0,
 };
 
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
@@ -245,6 +261,61 @@ export interface Clip {
   textStyle?: TextStyle | null;
   /** property path ("transform.x", "volume", …) → samples, clip-relative ms. */
   keyframes: Record<string, Keyframe[]>;
+  shape?: ShapeSpec | null;
+  textFx?: TextFx | null;
+  hidden?: boolean;
+  brandBindings?: BrandBindings | null;
+}
+
+/** Generated shape on a graphics clip (ADR-027). */
+export interface ShapeSpec {
+  /** "rect" | "line" — ellipse intentionally unsupported (drawbox). */
+  kind: string;
+  fill: string;
+  outlineColor?: string | null;
+  outlineWidth: number;
+  widthPx: number;
+  heightPx: number;
+}
+
+/** Procedural text animation beyond keyframes (ADR-027). */
+export interface TextFx {
+  /** "typewriter" | "wipe" | "blur" */
+  kind: string;
+  /** typewriter: chars/second · blur: max sigma px */
+  rate: number;
+  /** wipe: "ltr" | "rtl" | "ttb" | "btt" */
+  direction: string;
+  /** wipe/blur: window length, clip-relative ms */
+  durationMs: number;
+  /** true = exit variant anchored at the clip tail. */
+  out?: boolean;
+}
+
+export interface BrandBindings {
+  colorSlot?: number | null;
+  fontSlot?: number | null;
+}
+
+export interface BrandFont {
+  name: string;
+  path: string;
+}
+
+export interface BrandLogo {
+  name: string;
+  path: string;
+  role?: string;
+}
+
+/** Brand kit — stored app-side, snapshotted into the doc (ADR-027). */
+export interface BrandKit {
+  id: string;
+  name: string;
+  colors: string[];
+  fonts: BrandFont[];
+  logos: BrandLogo[];
+  titleStyle: TextStyle;
 }
 
 export interface Transform {

@@ -237,3 +237,65 @@ effect registry (duplicate schema for no gain).
 
 **Measured.** 60 s stereo WAV: waveform decode 63 ms, loudnorm 1.4 s,
 silencedetect 77 ms — all far faster than realtime on a modest CPU.
+
+## ADR-027 — Graphics Studio: generated layer per clip, geq-composited alpha, snapshotted brand kits
+
+**Context.** Phase 7 needs titles/shapes/animations/brand identity that
+render identically in the DOM preview and in ffmpeg exports, without a
+second compositor and without preview-only effects.
+
+**Decision.**
+- **One transparent layer per generated clip.** Every text/graphics clip
+  emits `color=c=black@0.0:size=WxH` → `drawbox` (shape) → `drawtext`(s)
+  → `scale eval=frame` (keyframed scale, canvas-center pivot) → `rotate`
+  → `geq` alpha pass → `overlay` gated by `enable=between(t,start,end)`.
+  The preview mirrors this with a canvas-sized wrapper carrying
+  scale/rotation so pivots match exactly. ADR-020 established the
+  drawtext↔DOM parity rule; this extends it to transforms and alpha.
+- **`drawbox` does not write alpha** (verified empirically): a filled
+  box on a transparent layer stays invisible. Shape coverage is composed
+  into the same `geq` pass as a `max(alpha, between-mask * fillAlpha)`
+  term — one filter expresses shape + opacity + wipe masks together.
+- **Anchor constants differ per filter.** `drawtext` anchors use
+  `w/h/text_w/text_h`; `drawbox` expressions see the *box's own* `w/h`
+  (input dims are `in_w`/`in_h`); `geq` sees plane `W/H`. The planner
+  emits anchors in geq-space and translates for drawbox — getting this
+  wrong silently paints the box at (0,0) with an opaque-black center.
+- **Animation presets bake canonical keyframes** (10 eased samples per
+  ramp; render's piecewise-linear eval ≈ the curve). What keyframes can't
+  express is `Clip.textFx` — procedural kinds implemented on BOTH sides:
+  `typewriter` (N drawtexts gated per char window ↔ prefix slice),
+  `wipe` (geq mask `lt(X,W*p)` etc. ↔ CSS clip-path inset), `blur`
+  (layer fork: `gblur` branch + sharp branch, alpha crossfade ↔ CSS
+  blur+opacity dual div). `textFx.out=true` anchors the window at the
+  clip tail with the mask complemented — real exit anims, not reversed
+  playback.
+- **Per-version animation.** `ClipOverride.textFx` (and `hidden`)
+  serialize into the version's override map; `apply_version` merges them
+  exactly like transform/textStyle — one version's wipe never leaks into
+  another. `clearVersionClipOverrides` is the explicit re-sync op.
+- **Brand kit = app-side store + project snapshot.** Kits live in
+  `app_data/brandkits/*.json`; selecting one embeds a *copy* into the
+  doc so the project stays self-contained. `Clip.brandBindings` are slot
+  indices, applied on bind and re-applied ONLY by the explicit "apply
+  brand" action — custom edits on unbound slots are never touched, and
+  unlinking keeps the current values.
+- **Templates = canonical `Clip` JSON** in `app_data/templates/*.json`
+  (optional `brandKitId`). Self-contained, importable/exportable as
+  files, applicable to any project — the clip IS the template, no
+  secondary schema.
+- **Font handling.** `resolve_font` picks configured → arial → segoeui;
+  a missing configured font falls back instead of failing the render.
+  `fontfile` is omitted entirely if no candidate exists.
+
+**Alternatives rejected.** SVG/HTML overlay pipeline (breaks parity and
+pulls a browser dependency into render); ellipse/circle shapes (drawbox
+can't do them — unsupported rather than faked); auto-rewriting bound
+clips on kit edit (silent overwrite of user styling); preview-only
+CSS animations (violates the ADR-020 rule).
+
+**Verified.** Pixel tests: `shape_rect_renders_filled_box` (drawbox+geq
+alpha), `wipe_reveals_left_to_right`, `wipe_out_erases_at_tail`,
+`typewriter_grows_text_over_time`, `blur_reveal_sharpens`,
+`shadow_offsets_dark_pixels`, `text_scale_keyframes_grow_on_canvas`,
+`hidden_clip_is_not_rendered`.

@@ -28,6 +28,10 @@ pub struct ProjectDoc {
     pub subtitle_style: SubtitleStyle,
     #[serde(default)]
     pub brand_kit_id: Option<String>,
+    /// Embedded snapshot — self-contained even if the kit is deleted
+    /// app-side. Refreshed only on explicit "apply brand". ADR-027.
+    #[serde(default)]
+    pub brand_kit: Option<BrandKit>,
     #[serde(default)]
     pub export_profiles: Vec<serde_json::Value>,
     /// Media referenced by this project (asset ids; resolved via catalog).
@@ -171,6 +175,90 @@ pub enum TrackKind {
     Graphics,
 }
 
+/// Generated shape for graphic clips (ADR-027). Rendered as drawbox on
+/// the clip's canvas layer; preview draws a styled div.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShapeSpec {
+    /// "rect" | "line" (thin rect). Ellipse is intentionally unsupported
+    /// (drawbox limitation — documented, not faked).
+    pub kind: String,
+    /// Fill "#RRGGBB"/"#RRGGBBAA".
+    pub fill: String,
+    #[serde(default)]
+    pub outline_color: Option<String>,
+    #[serde(default)]
+    pub outline_width: f64,
+    /// Element size in canvas px (transform.scale applies on top).
+    pub width_px: f64,
+    pub height_px: f64,
+}
+
+/// Procedural text animation that keyframes cannot express (ADR-027).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextFx {
+    /// "typewriter" | "wipe"
+    pub kind: String,
+    /// typewriter: chars/second.
+    #[serde(default)]
+    pub rate: f64,
+    /// wipe: "ltr" | "rtl" | "ttb" | "btt".
+    #[serde(default)]
+    pub direction: String,
+    /// wipe: reveal duration in ms (clip-relative).
+    #[serde(default)]
+    pub duration_ms: i64,
+    /// true = exit variant (wipe-out shrinks the region, typewriter-out
+    /// erases from the end, blur-out dissolves into blur).
+    #[serde(default)]
+    pub out: bool,
+}
+
+/// Slot bindings into the embedded BrandKit snapshot — sync-on-apply,
+/// never auto-rewritten (ADR-027).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandBindings {
+    #[serde(default)]
+    pub color_slot: Option<u8>,
+    #[serde(default)]
+    pub font_slot: Option<u8>,
+}
+
+/// Brand identity — stored app-side per kit AND snapshotted inside the
+/// project doc so projects stay self-contained (ADR-027).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandKit {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub colors: Vec<String>,
+    #[serde(default)]
+    pub fonts: Vec<BrandFont>,
+    #[serde(default)]
+    pub logos: Vec<BrandLogo>,
+    #[serde(default)]
+    pub title_style: TextStyle,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandFont {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrandLogo {
+    pub name: String,
+    pub path: String,
+    #[serde(default)]
+    pub role: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Clip {
@@ -218,6 +306,18 @@ pub struct Clip {
     /// Times are ms relative to the clip's start.
     #[serde(default)]
     pub keyframes: std::collections::BTreeMap<String, Vec<Keyframe>>,
+    /// Generated shape (graphic elements — rect/line). ADR-027.
+    #[serde(default)]
+    pub shape: Option<ShapeSpec>,
+    /// Procedural text animation (typewriter/wipe). ADR-027.
+    #[serde(default)]
+    pub text_fx: Option<TextFx>,
+    /// Hide this clip (any track) — also the per-version visibility flag.
+    #[serde(default)]
+    pub hidden: bool,
+    /// Brand slots this element follows on explicit "apply brand".
+    #[serde(default)]
+    pub brand_bindings: Option<BrandBindings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,6 +366,18 @@ pub struct TextStyle {
     /// "top" | "middle" | "bottom"
     #[serde(default = "default_middle")]
     pub align_v: String,
+    /// Drop shadow — real both sides (drawtext shadowcolor/x/y ↔ CSS
+    /// text-shadow). None = no shadow. ADR-027.
+    #[serde(default)]
+    pub shadow_color: Option<String>,
+    #[serde(default)]
+    pub shadow_x: f64,
+    #[serde(default)]
+    pub shadow_y: f64,
+    /// Extra px between wrapped lines (drawtext line_spacing ↔ CSS
+    /// line-height delta). 0 = font default.
+    #[serde(default)]
+    pub line_spacing_px: f64,
 }
 
 fn default_font_size() -> f64 {
@@ -296,6 +408,10 @@ impl Default for TextStyle {
             background_pad_px: 8.0,
             align_h: "center".into(),
             align_v: "middle".into(),
+            shadow_color: None,
+            shadow_x: 0.0,
+            shadow_y: 0.0,
+            line_spacing_px: 0.0,
         }
     }
 }
@@ -390,6 +506,13 @@ pub struct ClipOverride {
     /// Independent copy per version ("YouTube title" vs "TikTok title").
     #[serde(default)]
     pub text: Option<String>,
+    /// Per-version visibility (true = hidden in this version). ADR-027.
+    #[serde(default)]
+    pub hidden: Option<bool>,
+    /// Per-version procedural animation (typewriter/wipe/blur). Some
+    /// replaces the base value; clearing needs resetVersion. ADR-027.
+    #[serde(default)]
+    pub text_fx: Option<TextFx>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
@@ -586,6 +709,7 @@ impl ProjectDoc {
             subtitles: Vec::new(),
             subtitle_style: SubtitleStyle::default(),
             brand_kit_id: None,
+            brand_kit: None,
             export_profiles: Vec::new(),
             media_refs: Vec::new(),
             ducking: Vec::new(),
@@ -618,6 +742,12 @@ impl ProjectDoc {
                     }
                     if let Some(txt) = &ov.text {
                         clip.text = Some(txt.clone());
+                    }
+                    if let Some(h) = ov.hidden {
+                        clip.hidden = h;
+                    }
+                    if let Some(fx) = &ov.text_fx {
+                        clip.text_fx = Some(fx.clone());
                     }
                 }
             }

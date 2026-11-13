@@ -196,13 +196,19 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 
 **Audio chain**: per-clip `atrim→atempo→afx→volume(+kf)→track gain→afade→pan→adelay` → per-track buses → `sidechaincompress` ducking (apad-extended) → `amix` → master `alimiter`. Preview mirrors via WebAudio (analyser-driven duck, ±3 dB). Silence/normalize are reviewable proposals — never auto-destructive. Measured (60 s stereo): waveform 63 ms, loudnorm 1.4 s, silencedetect 77 ms.
 
-## Phase 5 done (Subtitle Studio: whisper.cpp transcription, cue editor, ASS/libass burn-in, SRT/VTT/ASS export, per-version styles, karaoke/pop from real word timing). Prior phase: Phase 4.1 — Multi-Format completion (2026-11-13)
+## Phase 7 done (Text & Graphics Studio + Brand Kit: generated-layer compositor, shapes, real animation presets in preview+render, templates, brand kits with linked elements, per-version graphics independence). Previous: Phase 6 — Audio Studio; Phase 5 done (Subtitle Studio: whisper.cpp transcription, cue editor, ASS/libass burn-in, SRT/VTT/ASS export, per-version styles, karaoke/pop from real word timing). Prior phase: Phase 4.1 — Multi-Format completion (2026-11-13)
 
 **Export settings real**: per-version codec/preset/CRF|bitrate/audio/container validated (reject-not-ignore) and emitted by `ffmpeg_args`; extension corrected to container. e2e: same project → hevc/mkv + h264/mp4 verified via ffprobe codec_name.
 
 **Per-version text**: `ClipOverride.text` + full style override; Inspector text section (content, size, color, align, outline, box) writes to version overrides when active — undo-safe, preview/render identical.
 
 **Reframe audit (ADR-023 addendum)**: EMA smoothing, scene-cut reset, hold-on-exit. Verified: moving subject tracks, static → centered fallback, exit/re-entry holds position (no snap-back). Documented limits: multi-subject → midpoint; no semantics; ONNX extension point recorded.
+
+## Latest test results (2026-11-13, Phase 7)
+
+- `cargo test`: **102 total** — lib 38 (+2 graphics serde, +2 text opts/fallback), media_import 4, render_e2e **58** (+8 graphics: shape fill/outline alpha, wipe ltr/out, typewriter growth, blur reveal, shadow, hidden clip, scale keyframes)
+- `npm test`: **63/63** (+11 graphics: generated clips, preset baking base+version, textFx versioning, style copy/paste, align, brand bind/apply/unlink, per-version hidden + re-sync, serde roundtrip)
+- `cargo clippy --all-targets`: 0 warnings. `cargo fmt --check` clean. `tsc --noEmit` clean. `vite build` clean.
 
 ## Latest test results (2026-11-13, Phase 6)
 
@@ -221,6 +227,7 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 
 | Date | Session summary |
 |---|---|
+| 2026-11-13 | Phase 7: Text & Graphics Studio — generated layer compositor (drawbox+drawtext+geq), shapes, anim presets (in/out/emphasis/transition/loop) real in render, templates + brand kits w/ snapshot+slot bindings, per-version graphics overrides, font fallback, preview drag. 102 rust + 63 vitest green. |
 | 2026-11-13 | Phase 0: audit + 10 docs committed (f2169b9). |
 | 2026-11-13 | Phase 1: app foundation — shell/theme/i18n/settings/SQLite/autosave; verified + committed (4bbef32). |
 | 2026-11-13 | Phase 2 partial: `.creatora` format + project CRUD + autosave/recovery + New Project dialog + recents UI; ffmpeg provisioned (9.0.2 GPL); job engine; media import + library UI + missing/relink; integration tests vs real ffmpeg pass. |

@@ -6,8 +6,11 @@ import { useEditor } from "@/stores/editor";
 import {
   activeClipsAt,
   clipRect,
+  findClip,
+  setVersionClipOverride,
   timelineDuration,
   transitionAlpha,
+  updateClip,
 } from "@/lib/timeline-engine";
 import { cssFilterFor, evalKeyframes, svgMatrixFor } from "@/lib/effects";
 import {
@@ -61,6 +64,9 @@ export function Preview({
   const rmsBuf = useRef(new Uint8Array(new ArrayBuffer(512)));
   const dtMs = useRef(16);
   const previewQuality = useEditor((s) => s.previewQuality);
+  const mutate = useEditor((s) => s.mutate);
+  const select = useEditor((s) => s.select);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   // Master clock: advance playhead while playing. Also monitors real frame
   // times — if the rAF cadence stays ≥1.5× the project's frame budget for a
@@ -124,8 +130,45 @@ export function Preview({
     };
   };
 
+  /** Drag a text/graphics element on the canvas → transform.x/y. Writes
+      into the active version's override when one is set (ADR-021/027). */
+  const dragClip = (clipId: string, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    select([clipId]);
+    const stage = stageRef.current;
+    const hit = findClip(viewDoc, clipId);
+    if (!stage || !hit) return;
+    const rect = stage.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const base = hit.clip.transform;
+    const scaleX = viewDoc.canvas.width / Math.max(1, rect.width);
+    const scaleY = viewDoc.canvas.height / Math.max(1, rect.height);
+    const move = (ev: PointerEvent) => {
+      const nx = base.x + (ev.clientX - startX) * scaleX;
+      const ny = base.y + (ev.clientY - startY) * scaleY;
+      const d = useProject.getState().doc;
+      if (!d) return;
+      const versionId = useEditor.getState().activeVersionId;
+      mutate((dd) =>
+        versionId
+          ? setVersionClipOverride(dd, versionId, clipId, {
+              transform: { ...base, x: nx, y: ny },
+            })
+          : updateClip(dd, clipId, { transform: { x: nx, y: ny } }),
+      );
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   const active = activeClipsAt(viewDoc, playheadMs);
-  const visual = active.filter((a) => a.track.visible && a.track.kind !== "audio");
+  const visual = active.filter((a) => a.track.visible && a.track.kind !== "audio" && !a.clip.hidden);
 
   // Sync every mounted element to the model: seek on drift, rate, volume,
   // play/pause. Runs every playhead update — cheap for v1 clip counts.
@@ -192,6 +235,7 @@ export function Preview({
   return (
     <div className="flex h-full items-center justify-center bg-black/60 p-4">
       <div
+        ref={stageRef}
         className="relative max-h-full overflow-hidden rounded border border-border bg-black"
         style={{
           aspectRatio: `${viewDoc.canvas.width} / ${viewDoc.canvas.height}`,
@@ -313,46 +357,159 @@ export function Preview({
             );
           })}
 
-        {/* Text clips — same anchor model as render/text.rs drawtext:
-            block positioned on canvas + transform.x/y offset (ADR-020). */}
+        {/* Text/graphics clips — the canvas-sized wrapper carries
+            scale/rotation so the pivot = canvas center, matching the
+            render's scale+rotate on the layer (ADR-027). textFx:
+            typewriter = prefix chars, wipe = clip-path reveal. */}
         {active
-          .filter((a) => a.track.kind === "text" && a.track.visible && a.clip.text)
+          .filter(
+            (a) =>
+              (a.track.kind === "text" || a.track.kind === "graphics") &&
+              a.track.visible &&
+              !a.clip.hidden &&
+              (a.clip.text || a.clip.shape),
+          )
           .map(({ clip }) => {
             const st = clip.textStyle;
-            if (!st) return null;
             const evalT = evalTransform(clip);
             const justify =
-              st.alignH === "left" ? "flex-start" : st.alignH === "right" ? "flex-end" : "center";
+              st?.alignH === "left" ? "flex-start" : st?.alignH === "right" ? "flex-end" : "center";
             const align =
-              st.alignV === "top" ? "flex-start" : st.alignV === "bottom" ? "flex-end" : "center";
+              st?.alignV === "top" ? "flex-start" : st?.alignV === "bottom" ? "flex-end" : "center";
+            const rel = playheadMs - clip.startMs;
+            const fx = clip.textFx;
+            let shown = clip.text ?? "";
+            if (fx?.kind === "typewriter") {
+              const cps = Math.max(0.1, fx.rate);
+              const n = fx.out
+                ? Math.ceil(((clip.durationMs - rel) / 1000) * cps)
+                : Math.ceil((rel / 1000) * cps);
+              shown = [...(clip.text ?? "")].slice(0, Math.max(0, n)).join("");
+            }
+            let clipPath: string | undefined;
+            if (fx?.kind === "wipe") {
+              const d0 = Math.max(1, fx.durationMs);
+              const p = fx.out
+                ? Math.max(0, Math.min(1, (rel - (clip.durationMs - d0)) / d0))
+                : Math.max(0, Math.min(1, rel / d0));
+              const d = fx.direction;
+              clipPath = fx.out
+                ? d === "rtl"
+                  ? `inset(0 ${p * 100}% 0 0)`
+                  : d === "ttb"
+                    ? `inset(${p * 100}% 0 0 0)`
+                    : d === "btt"
+                      ? `inset(0 0 ${p * 100}% 0)`
+                      : `inset(0 0 0 ${p * 100}%)`
+                : d === "rtl"
+                  ? `inset(0 0 0 ${(1 - p) * 100}%)`
+                  : d === "ttb"
+                    ? `inset(0 0 ${(1 - p) * 100}% 0)`
+                    : d === "btt"
+                      ? `inset(${(1 - p) * 100}% 0 0 0)`
+                      : `inset(0 ${(1 - p) * 100}% 0 0)`;
+            }
+            // blur fx: mirrored dual branch (CSS blur + opacity weights) —
+            // render forks the layer into gblur + geq alpha crossfade.
+            let blurW = 0;
+            let sharpW = 1;
+            if (fx?.kind === "blur") {
+              const d0 = Math.max(1, fx.durationMs);
+              const p = fx.out
+                ? Math.max(0, Math.min(1, (rel - (clip.durationMs - d0)) / d0))
+                : Math.max(0, Math.min(1, rel / d0));
+              if (fx.out) {
+                sharpW = 1 - p;
+                blurW = Math.min(1, p) * (1 - p);
+              } else {
+                blurW = 1 - p;
+                sharpW = p;
+              }
+            }
+            const sh = clip.shape;
+            const textSpan = st && shown && (
+              <span
+                style={{
+                  fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
+                  color: st.color,
+                  WebkitTextStroke:
+                    st.outlineWidth > 0 && st.outlineColor
+                      ? `${(st.outlineWidth / viewDoc.canvas.height) * 100}cqh ${st.outlineColor}`
+                      : undefined,
+                  textShadow:
+                    st.shadowColor && (st.shadowX || st.shadowY)
+                      ? `${((st.shadowX ?? 0) / viewDoc.canvas.width) * 100}cqw ${((st.shadowY ?? 0) / viewDoc.canvas.height) * 100}cqh 0 ${st.shadowColor}`
+                      : undefined,
+                  lineHeight: st.lineSpacingPx
+                    ? `calc(1em + ${(st.lineSpacingPx / viewDoc.canvas.height) * 100}cqh)`
+                    : undefined,
+                  background: st.backgroundColor ?? undefined,
+                  padding: st.backgroundColor
+                    ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`
+                    : undefined,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {shown}
+              </span>
+            );
+            const shapeDiv = sh && (
+              <div
+                className="absolute"
+                style={{
+                  width: `${(sh.widthPx / viewDoc.canvas.width) * 100}cqw`,
+                  height: `${(sh.heightPx / viewDoc.canvas.height) * 100}cqh`,
+                  background: sh.fill,
+                  border:
+                    sh.outlineWidth > 0 && sh.outlineColor
+                      ? `${(sh.outlineWidth / viewDoc.canvas.height) * 100}cqh solid ${sh.outlineColor}`
+                      : undefined,
+                }}
+              />
+            );
             return (
               <div
                 key={clip.id}
-                className="absolute inset-0 flex"
+                className="absolute inset-0"
                 style={{
-                  justifyContent: justify,
-                  alignItems: align,
                   opacity: Math.max(0, Math.min(1, evalT.opacity)),
-                  transform: `translate(${pct(evalT.x, viewDoc.canvas.width)}, ${pct(evalT.y, viewDoc.canvas.height)})`,
+                  transform: `scale(${evalT.scaleX}, ${evalT.scaleY})${
+                    evalT.rotationDeg !== 0 ? ` rotate(${evalT.rotationDeg}deg)` : ""
+                  }`,
+                  clipPath,
                 }}
               >
-                <span
+                {fx?.kind === "blur" && (
+                  <div
+                    className="absolute inset-0 flex"
+                    style={{
+                      justifyContent: justify,
+                      alignItems: align,
+                      transform: `translate(${pct(evalT.x, viewDoc.canvas.width)}, ${pct(evalT.y, viewDoc.canvas.height)})`,
+                      filter: `blur(${((fx.rate || 12) / viewDoc.canvas.height) * 100}cqh)`,
+                      opacity: Math.max(0, Math.min(1, blurW)),
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {shapeDiv}
+                    {textSpan}
+                  </div>
+                )}
+                <div
+                  className="absolute inset-0 flex"
                   style={{
-                    fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
-                    color: st.color,
-                    WebkitTextStroke:
-                      st.outlineWidth > 0 && st.outlineColor
-                        ? `${(st.outlineWidth / viewDoc.canvas.height) * 100}cqh ${st.outlineColor}`
-                        : undefined,
-                    background: st.backgroundColor ?? undefined,
-                    padding: st.backgroundColor
-                      ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`
-                      : undefined,
-                    whiteSpace: "pre-wrap",
+                    justifyContent: justify,
+                    alignItems: align,
+                    transform: `translate(${pct(evalT.x, viewDoc.canvas.width)}, ${pct(evalT.y, viewDoc.canvas.height)})`,
+                    opacity: fx?.kind === "blur" ? Math.max(0, Math.min(1, sharpW)) : 1,
+                    pointerEvents: "auto",
+                    cursor: "move",
                   }}
+                  onPointerDown={(e) => dragClip(clip.id, e)}
                 >
-                  {clip.text}
-                </span>
+                  {shapeDiv}
+                  {textSpan}
+                </div>
               </div>
             );
           })}
@@ -436,7 +593,11 @@ export function Preview({
 
         {/* Audio-track elements (no visual). */}
         {active
-          .filter((a) => a.track.kind === "audio" || (a.track.kind === "video" && !a.track.visible))
+          .filter(
+            (a) =>
+              !a.clip.hidden &&
+              (a.track.kind === "audio" || (a.track.kind === "video" && !a.track.visible)),
+          )
           .map(({ clip }) => {
             const asset = clip.mediaRef ? assets.get(clip.mediaRef) : undefined;
             if (!asset || asset.status === "missing") return null;
