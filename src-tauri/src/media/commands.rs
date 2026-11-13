@@ -26,6 +26,8 @@ pub struct AssetSummary {
     pub codec: Option<String>,
     pub thumbnail_path: Option<String>,
     pub status: String,
+    /// Low-res mezzanine for preview (`proxies/<id>.mp4`), if generated.
+    pub proxy_path: Option<String>,
     /// Set when a different existing asset has the same content hash.
     pub duplicate_of: Option<String>,
     pub is_favorite: bool,
@@ -128,7 +130,7 @@ fn existing_by_path(db: &Db, path: &Path) -> Result<Option<AssetSummary>, AppErr
     db.with(|c| {
         let p = path.to_string_lossy().to_string();
         let mut stmt = c.prepare(
-            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status, is_favorite
+            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status, is_favorite, proxy_path
              FROM media_assets WHERE file_path = ?1",
         )?;
         let mut rows = stmt.query_map([p], row_to_asset)?;
@@ -162,6 +164,7 @@ fn row_to_asset(r: &rusqlite::Row) -> rusqlite::Result<AssetSummary> {
         status: r.get(9)?,
         duplicate_of: None,
         is_favorite: r.get::<_, i64>(10)? != 0,
+        proxy_path: r.get(11)?,
     })
 }
 
@@ -276,6 +279,7 @@ pub fn import_one(thumbs_dir: &Path, db: &Db, path: &Path) -> Result<AssetSummar
         status: "ok".into(),
         duplicate_of,
         is_favorite: false,
+        proxy_path: None,
     })
 }
 
@@ -335,7 +339,7 @@ pub fn list_assets(
     db.with(|c| {
         let mut sql = String::from(
             "SELECT DISTINCT a.id, a.kind, a.file_path, a.name, a.width, a.height,
-                    a.duration_ms, a.codec, a.thumbnail_path, a.status, a.is_favorite
+                    a.duration_ms, a.codec, a.thumbnail_path, a.status, a.is_favorite, a.proxy_path
              FROM media_assets a WHERE 1=1",
         );
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -391,6 +395,7 @@ pub fn list_assets(
                     status: r.get(9)?,
                     duplicate_of: None,
                     is_favorite: r.get::<_, i64>(10)? != 0,
+                    proxy_path: r.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -630,3 +635,101 @@ trait Pipe: Sized {
     }
 }
 impl<T> Pipe for T {}
+
+// ---------- proxies (preview performance) ----------
+
+/// Transcode one asset to a lightweight preview proxy:
+/// H.264 ≤960×540 CRF30 + AAC96k — fast decode, same duration/timing so the
+/// preview's source-time math is unchanged (proxies are only ever a
+/// *display* source; render always reads originals).
+pub fn proxy_one(proxies_dir: &Path, db: &Db, asset_id: &str) -> Result<String, String> {
+    let (kind, src) = db
+        .with(|c| {
+            Ok(c.query_row(
+                "SELECT kind, file_path FROM media_assets WHERE id = ?1",
+                [asset_id],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )?)
+        })
+        .map_err(|e| e.to_string())?;
+    if kind != "video" {
+        return Err("proxies only apply to video assets".into());
+    }
+    if !PathBuf::from(&src).is_file() {
+        return Err("source file missing".into());
+    }
+    std::fs::create_dir_all(proxies_dir).map_err(|e| e.to_string())?;
+    let out = proxies_dir.join(format!("{asset_id}.mp4"));
+    let status = std::process::Command::new(crate::media::ffmpeg_path().ok_or("ffmpeg not found")?)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            &src,
+            "-vf",
+            "scale='min(960,iw)':-2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "30",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "96k",
+            "-movflags",
+            "+faststart",
+        ])
+        .arg(&out)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        let _ = std::fs::remove_file(&out);
+        return Err("proxy transcode failed".into());
+    }
+    let p = out.to_string_lossy().into_owned();
+    db.with(|c| {
+        Ok(c.execute(
+            "UPDATE media_assets SET proxy_path = ?1 WHERE id = ?2",
+            rusqlite::params![p, asset_id],
+        )?)
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(p)
+}
+
+#[tauri::command]
+pub fn generate_proxies(
+    app: tauri::AppHandle,
+    jobs: State<'_, JobManager>,
+    db: State<'_, Arc<Db>>,
+    asset_ids: Vec<String>,
+) -> CmdResult<String> {
+    let db = (*db).clone();
+    let proxies_dir = data_dir(&app)?.join("proxies");
+    let job_id = jobs.spawn(app, "media.proxies", move |ctx: &JobCtx| {
+        let total = asset_ids.len().max(1) as f32;
+        let mut done: Vec<String> = Vec::new();
+        let mut errors: Vec<(String, String)> = Vec::new();
+        for (i, id) in asset_ids.iter().enumerate() {
+            if ctx.is_cancelled() {
+                break;
+            }
+            ctx.progress(i as f32 / total, Some(id));
+            match proxy_one(&proxies_dir, &db, id) {
+                Ok(_) => done.push(id.clone()),
+                Err(e) => errors.push((id.clone(), e)),
+            }
+        }
+        ctx.progress(1.0, None);
+        serde_json::to_value(serde_json::json!({
+            "done": done,
+            "errors": errors,
+        }))
+        .map_err(|e| e.to_string())
+    });
+    Ok(job_id)
+}

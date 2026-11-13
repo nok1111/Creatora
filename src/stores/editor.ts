@@ -27,6 +27,8 @@ interface EditorState {
   snapEnabled: boolean;
   /** Clipboard of copied/cut clips (with origin track kind). */
   clipboard: { kind: TrackKind; clip: Clip }[];
+  /** Preview decode source: original files or generated proxies. */
+  previewQuality: "full" | "proxy";
 
   past: ProjectDoc[];
   future: ProjectDoc[];
@@ -40,6 +42,7 @@ interface EditorState {
   setZoom: (pxPerSec: number) => void;
   setSnapEnabled: (v: boolean) => void;
   setClipboard: (entries: { kind: TrackKind; clip: Clip }[]) => void;
+  setPreviewQuality: (q: "full" | "proxy") => void;
 
   /** Apply an edit: fn receives a doc draft and returns the new doc. */
   mutate: (fn: (doc: ProjectDoc) => ProjectDoc) => void;
@@ -69,6 +72,7 @@ export const useEditor = create<EditorState>((set, get) => {
     pxPerSec: 120,
     snapEnabled: true,
     clipboard: [],
+    previewQuality: "proxy",
     past: [],
     future: [],
     gestureBase: null,
@@ -85,6 +89,7 @@ export const useEditor = create<EditorState>((set, get) => {
     setZoom: (px) => set({ pxPerSec: Math.min(600, Math.max(20, px)) }),
     setSnapEnabled: (v) => set({ snapEnabled: v }),
     setClipboard: (entries) => set({ clipboard: entries }),
+    setPreviewQuality: (q) => set({ previewQuality: q }),
 
     mutate: (fn) => {
       const doc = useProject.getState().doc;

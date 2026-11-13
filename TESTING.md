@@ -33,7 +33,7 @@ npm run tauri build
 
 ## Real-media render verification (`src-tauri/tests/render_e2e.rs`)
 
-These tests verify *exported media*, not mocks: they build a `ProjectDoc`,
+These tests verify *exported media*, not mocks: they build a `ProjectDoc`, render through ffmpeg, then decode the result and assert on pixels (rgb24 means), PCM RMS, ffprobe duration/stream metadata. Coverage: trim duration, reorder, transform, audio delay, image clips, save/reopen, cancel cleanup, brightness/saturation effects, xfade mid-blend, opacity/volume keyframe ramps, mixed res/FPS, z-order stacking, 16-clip project, 720p canvas, proxy transcode.
 render through the same `build_plan` + `run_ffmpeg` path the app uses, then
 inspect the output file itself. Skipped only when ffmpeg is absent.
 

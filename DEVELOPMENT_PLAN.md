@@ -61,14 +61,14 @@ Order rationale: nothing works without foundation; library needs import; editor 
 
 ## PHASE 3 — Video engine & editor
 
-- Timeline model (tracks/clips/keyframes) in shared TS types + mirror serde types in Rust.
-- Preview compositor: WebGL2, HTMLVideoElement decode, transform/opacity/effects; Canvas2D fallback.
-- Timeline UI: multi-track, trim/split/reorder/ripple, snapping, zoom, markers, undo/redo, frame stepping.
-- Clip properties: transform, opacity, volume, speed, fades, filters (brightness/contrast/saturation/exposure/temp/tint/blur/sharpen/vignette), transitions, keyframe interpolation.
-- RenderPlan → ffmpeg filter_complex; render a real export proving preview/export parity.
-- Proxy generation + preview quality settings.
+Sub-phased per product review — vertical slice first, then depth, then performance, then commercial validation. No other modules advance until the editor is solid.
 
-**Acceptance criteria**: a real project with cuts, overlays, text, filters and keyframes plays back and exports to a file whose duration/resolution/visuals match the preview (validated by ffprobe + frame diff on key frames).
+- **3A — Editing completeness** ✅ tracks CRUD/lock/hide/mute/reorder; multi-select, multi-move, copy/cut/paste/duplicate; configurable snapping + indicators; zoom/nav/auto-scroll; keyboard shortcuts; architectural undo/redo on every op.
+- **3B — Effects & compositor** ✅ canonical param registry (ADR-016) with CSS/SVG↔ffmpeg pairs — brightness/contrast/saturation/exposure/temperature/blur/opacity; transitions via overlap model → xfade/afade (ADR-018); keyframes with shared linear evaluator → ffmpeg expressions (ADR-017); inspector panel.
+- **3C — Performance** ✅ proxy generation job + proxy/full preview toggle (ADR-019), 3s prefetch window, preload=auto, bounded active-element set. Deferred: WebGL compositor (DOM/CSS suffices for the current effect set), frame cache, memory watchdog.
+- **3D — Commercial validation** ✅ real-media suite: mixed res/FPS normalization, multi-layer z-order, 16-clip long project, 720p export, effect/transition/keyframe pixel & PCM checks.
+
+**Acceptance criteria**: a real project with cuts, overlays, transitions, filters and keyframes plays back and exports matching preview within verified tolerances (16 real-media e2e assertions via decoded pixels/RMS, not mocks).
 
 ## PHASE 4 — Multi-format studio
 

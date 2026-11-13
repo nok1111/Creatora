@@ -83,3 +83,27 @@
 **Decision:** The Rust render plan turns each clip into an independent segment: `trim/setpts` video fed into `overlay` at `(x,y)` gated by `enable='between(t,start,end)'` over a `color` base; audio via `atrim/asetpts/volume/adelay(startMs)` into `amix`. No `concat` filter.
 **Why:** Absolute placement treats sequential, overlapping, reordered and gapped arrangements *identically* — the graph structure doesn't change when clips move, which makes the model identical to the preview's compositor (one layer per active clip at time T). Concat would force per-track contiguous packing and a separate enable-mapping pass.
 **Consequence:** Graph size grows linearly with clip count (fine; ffmpeg graphs handle thousands of nodes). A/V sync is guaranteed by construction: video gate and audio delay consume the *same* `startMs`.
+
+## ADR-016 — Effects: canonical param registry mirrored in CSS/SVG and ffmpeg
+
+**Decision:** Effects live on `Clip.effects` as ordered `{type, enabled, params}` entries. Two registries consume the *same* canonical params: `src/lib/effects.ts` (preview → CSS `filter:` / SVG `feColorMatrix`) and `src-tauri/src/render/effects.rs` (export → ffmpeg filter fragments chosen to be *exactly* expressible in both worlds, e.g. saturation uses the W3C matrix via `colorchannelmixer`, not `hue=s=`).
+**Why:** "Preview looks like export" is a commercial requirement. Restricting v1 to effects with exact closed-form equivalence (multiply/gain, affine curves, linear matrices, gaussian blur) makes parity provable with pixel tests rather than aspiration.
+**Consequence:** New effects enter only when a matched pair exists; unknown kinds are ignored both sides (forward-compat). DOM/CSS compositor suffices for this set — WebGL deferred to when GPU-only effects (e.g. LUTs, warp) land.
+
+## ADR-017 — Keyframes: piecewise-linear, clip-relative ms, dual evaluator
+
+**Decision:** `Clip.keyframes: path → [{tMs,v,ease}]`, clip-relative ms, linear interpolation, clamped at both ends. Identical evaluator exists in TS (`evalKeyframes`) and Rust (`eval_at` + `expr`/`expr_var` generating nested `if(lt(t,…))` ffmpeg expressions). Animatable paths are an explicit allow-list (`transform.*`, `volume`).
+**Why:** One interpolation definition shared by preview and render eliminates the classic "looks different after export" class of bugs; expressions evaluate per-frame inside ffmpeg so ramps are sample-accurate. Linear-only v1 keeps the math provably identical; `ease` field is reserved for future curves.
+**Consequence:** geq uses `T` not `t` — `expr_var` parameterizes the variable name. UI keyframes are set at the playhead via the inspector ◆ toggles.
+
+## ADR-018 — Transitions consume overlap (ripple model), xfade/afade render
+
+**Decision:** `Track.transitions` records `{type,durationMs,clipA,clipB}`; creating one shifts clip B so `B.start = A.end − duration` (the standard non-linear editor overlap model). Render groups linked clips per track into maximal runs → `xfade` chains (canvas-padded inputs) for video and symmetric `afade` in/out for audio; preview applies the equivalent alpha ramp (`transitionAlpha`) over the overlap.
+**Why:** Overlap-based transitions keep clips as independent timeline objects — moving or trimming either side just re-derives the overlap. Ripple-insert semantics (B does not move) were rejected: they make "extend a transition" ambiguous.
+**Consequence:** `dipToBlack`/`dipToWhite` render as alpha-half-fades (fadeblack/fadewhite xfade); unknown kinds cut. E2E verifies the midpoint blend has both sources' pixels.
+
+## ADR-019 — Preview proxies: display-only mezzanine, never a render input
+
+**Decision:** `generate_proxies` (job engine) transcodes video assets to `proxies/<id>.mp4` (H.264 ≤960w CRF30 + AAC96k, faststart) recorded in `media_assets.proxy_path`. The preview swaps to the proxy when `previewQuality == "proxy"` (default); **export always reads originals** — `media_refs` paths are untouched.
+**Why:** Preview smoothness must never trade against export fidelity. Because a proxy is a pure decode substitution (same duration, same timeline), the single source-time model is unaffected — no dual-path sync logic.
+**Consequence:** Along with `preload="auto"` on active elements and a 3s look-ahead prefetch window of hidden decoders, multi-clip playback stays smooth; memory stays bounded because only active+prefetch elements exist at any time.

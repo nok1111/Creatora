@@ -106,3 +106,64 @@ fn import_end_to_end() {
     std::fs::remove_dir_all(&dir).ok();
     std::fs::remove_dir_all(&dir2).ok();
 }
+
+#[test]
+fn proxy_generation_produces_playable_downscaled_file() {
+    if creatora_lib::media::ffmpeg_path().is_none() {
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("creatora_proxy_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // Source clip at 1920x1080 so the downscale is observable.
+    let src = dir.join("src.mp4");
+    let status = std::process::Command::new(creatora_lib::media::ffmpeg_path().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=1920x1080:d=2:r=30",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let db = creatora_lib::db::Db::open(&dir.join("test.db")).unwrap();
+    let thumbs = dir.join("thumbs");
+    let asset = creatora_lib::media::commands::import_one(&thumbs, &db, &src).unwrap();
+
+    let proxies = dir.join("proxies");
+    let path = creatora_lib::media::commands::proxy_one(&proxies, &db, &asset.id).unwrap();
+    let proxy = std::path::PathBuf::from(&path);
+    assert!(proxy.is_file());
+    // Proxy probes as video: downscaled to <=960 wide, duration preserved.
+    let info = creatora_lib::media::probe::probe(&proxy).unwrap();
+    assert!(info.duration_ms.unwrap() > 1500);
+    assert_eq!(info.width, Some(960));
+    // DB persisted the path.
+    let listed = db
+        .with(|c| {
+            Ok(c.query_row(
+                "SELECT proxy_path FROM media_assets WHERE id = ?1",
+                [&asset.id],
+                |r| r.get::<_, Option<String>>(0),
+            )?)
+        })
+        .unwrap();
+    assert_eq!(listed.as_deref(), Some(path.as_str()));
+}

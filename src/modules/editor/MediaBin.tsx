@@ -1,7 +1,10 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Music, Film, Image as ImageIcon, Plus, AlertTriangle } from "lucide-react";
+import { Music, Film, Image as ImageIcon, Plus, AlertTriangle, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/ipc";
+import { awaitJob } from "@/services/jobs";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import { addClip } from "@/lib/timeline-engine";
@@ -14,6 +17,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
   const playheadMs = useEditor((s) => s.playheadMs);
   const mutate = useEditor((s) => s.mutate);
   const select = useEditor((s) => s.select);
+  const qc = useQueryClient();
 
   if (!doc) return null;
 
@@ -45,8 +49,25 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
 
   return (
     <div className="flex h-full flex-col border-r border-border bg-card">
-      <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
         {t("editor.mediaBin")}
+        {usable.some((a) => a.kind === "video" && !a.proxyPath) && (
+          <button
+            className="rounded p-1 hover:bg-accent"
+            title={t("editor.genProxies")}
+            onClick={async () => {
+              const ids = usable
+                .filter((a) => a.kind === "video" && !a.proxyPath)
+                .map((a) => a.id);
+              const jobId = await api.generateProxies(ids);
+              await awaitJob(jobId);
+              await qc.invalidateQueries({ queryKey: ["assets"] });
+              toast.success(t("editor.proxiesDone"));
+            }}
+          >
+            <Zap className="size-3.5" />
+          </button>
+        )}
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
         {usable.map((a) => (

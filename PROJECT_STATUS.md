@@ -5,10 +5,10 @@
 
 ## Current state
 
-- **Current phase:** PHASE 3 — vertical slice COMPLETE and verified (import → timeline → preview → trim/move → save/reopen → ffmpeg export). Phase 3 continues with effects/keyframes/transitions/track controls per plan.
-- **Current task:** Phase-3 follow-ups (see audit section) or Phase 4
-- **Build status:** `npm run build` ✓ · `cargo test` 17+3+7 ✓ · `npm test` 11/11 ✓ · `tsc` clean
-- **Next exact action:** Phase 3 continuation — track controls UI (mute/visible/lock), clip name display, playhead-step snapping indicator, then effects pipeline (shared param model → GLSL + ffmpeg).
+- **Current phase:** PHASE 3 — editor sub-phases 3A–3D COMPLETE: full track/clip editing, effects+keyframes+transitions pipeline with preview/render parity, proxies+prefetch, real-media validation.
+- **Current task:** Phase 3 audit + docs, then Phase 4 (multi-format) — user gate required before new modules.
+- **Build status:** `npm run build` ✓ · `cargo test` 24+4+16 ✓ · `npm test` 23 ✓ · `tsc` clean · clippy clean
+- **Next exact action:** Phase 4 multi-format studio — OR editor depth (WebGL compositor, wipe transitions, easing curves, frame cache) if review asks for more polish first.
 
 ## PHASE 0 — Repository Audit (COMPLETE)
 
@@ -128,6 +128,40 @@ Implemented: Vite 8 + React 18 + TS strict + Tauri 2 + Tailwind 3 scaffold; Crea
 - Text/graphics tracks are skipped by export; `ExportResult.skippedClips` reports the count.
 - VFR sources conform to project CFR via the `fps` filter.
 - One transient `invoke` error was observed from a non-webview Vite client (external browser tab); the Tauri webview itself is healthy (catalog + IPC verified).
+
+## PHASE 3B/3C/3D — Editor completeness, effects pipeline, performance (COMPLETE — 2026-11-13)
+
+### Delivered
+
+- **Track & batch editing (3A)** — `timeline-engine.ts`: `addTrack`/`removeTrack`/`renameTrack`/`setTrackFlag` (locked/visible/muted)/`moveTrackOrder`; batch ops `moveClips`, `extractClips`/`pasteClips`, `duplicateClips`, `removeClips` — all lock-aware. TimelinePanel: track headers with controls, multi-selection, clipboard, configurable snap, zoom-to-fit, snap/auto-scroll indicators. Store: clipboard + snap config + `previewQuality`.
+- **Effects pipeline (3B)** — canonical params shared by `src/lib/effects.ts` (CSS filter/SVG matrix) and `render/effects.rs` (ffmpeg): brightness, exposure, contrast, saturation, temperature, blur — plus transform/opacity. Order-preserved stacks; ADR-016.
+- **Keyframes (3B)** — `Clip.keyframes` (clip-relative ms, linear); TS `evalKeyframes` == Rust `eval_at`; ffmpeg `expr`/`expr_var` per-frame expressions on scale/rotate/opacity/x/y/volume; inspector ◆ toggles at playhead; ADR-017.
+- **Transitions (3B)** — `Track.transitions`, overlap model; render groups → chained `xfade` (+`afade` audio parity); preview `transitionAlpha` ramp; crossfade/dipToBlack/dipToWhite; ADR-018.
+- **Inspector panel** — transform/audio numbers with keyframe toggles, effect stack (add/enable/param sliders/remove), transitions list + crossfade creation.
+- **Performance (3C)** — `generate_proxies` job → `proxies/<id>.mp4` (≤960w CRF30 + faststart, `media_assets.proxy_path`, migration 0003); proxy/original quality toggle (default proxy); `preload="auto"` + 3s hidden prefetch window; bounded active-element set; ADR-019.
+
+### Real-media verification — `tests/render_e2e.rs` 16/16, `tests/media_import.rs` 4/4
+
+| Scenario | Assertion |
+|---|---|
+| Brightness effect | pixels brighten ×1.5 vs baseline render |
+| Saturation −1 | red→gray (R≈G≈B <12) |
+| Crossfade | pure red → blended mid (R&B>50) → pure blue |
+| Opacity keyframe | monotonic ramp on black (0.25t<0.75t) |
+| Volume keyframe | PCM RMS ramps ×2 |
+| Mixed 160×120@15 + 640×480@60 | normalized to 320×240@30, correct content |
+| 2-layer z-order | top 50% blue over full red, center/corner pixels |
+| 16-clip project | 16.0s duration + order spot-checks |
+| 1280×720 canvas | exact dims + content |
+| Proxy generation | 1920→960w playable, duration preserved, DB row |
+
+### Remaining limitations (honest)
+
+- Preview is DOM/CSS compositing (not WebGL): sufficient for the current closed-form effect set (ADR-016); rotation preview still approximates ffmpeg's expanded-`rotw` box.
+- Transitions: only linear-ramp kinds (crossfade/dips); no wipes/slides yet.
+- Keyframe easing is linear-only (`ease` field reserved); no curve editor UI.
+- No frame cache or memory watchdog yet; prefetch window is time-based, not scene-aware.
+- `speed` still render-graph-only (no UI); text/graphics tracks still skipped at export.
 
 ## Known bugs
 

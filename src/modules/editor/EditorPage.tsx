@@ -52,6 +52,8 @@ export function EditorPage() {
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
+  const previewQuality = useEditor((s) => s.previewQuality);
+  const setPreviewQuality = useEditor((s) => s.setPreviewQuality);
 
   const [exporting, setExporting] = useState<{ jobId: string; progress: number } | null>(null);
 
@@ -208,6 +210,15 @@ export function EditorPage() {
           <Redo2 className="size-4" />
         </Button>
         <div className="flex-1" />
+        <button
+          className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"
+          title={t("editor.qualityHint")}
+          onClick={() =>
+            setPreviewQuality(previewQuality === "proxy" ? "full" : "proxy")
+          }
+        >
+          {previewQuality === "proxy" ? t("editor.qualityProxy") : t("editor.qualityFull")}
+        </button>
         {exporting ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <div className="h-1.5 w-36 overflow-hidden rounded bg-secondary">

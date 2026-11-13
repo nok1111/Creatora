@@ -111,6 +111,11 @@ export const en = {
     sectionTransitions: "Transitions",
     addTransition: "Crossfade →",
     noTransitions: "No transitions on this clip.",
+    qualityProxy: "Preview: proxy",
+    qualityFull: "Preview: original",
+    qualityHint: "Toggle preview decode quality (export always uses originals)",
+    genProxies: "Generate preview proxies",
+    proxiesDone: "Proxies ready",
   },
   library: {
     title: "Media Library",

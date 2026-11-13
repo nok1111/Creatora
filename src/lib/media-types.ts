@@ -19,6 +19,7 @@ export interface AssetSummary {
   durationMs: number | null;
   codec: string | null;
   thumbnailPath: string | null;
+  proxyPath: string | null;
   status: "ok" | "missing" | "processing";
   duplicateOf: string | null;
   isFavorite: boolean;

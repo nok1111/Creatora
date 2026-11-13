@@ -114,6 +114,11 @@ export const es: typeof en = {
     sectionTransitions: "Transiciones",
     addTransition: "Crossfade →",
     noTransitions: "Sin transiciones en este clip.",
+    qualityProxy: "Preview: proxy",
+    qualityFull: "Preview: original",
+    qualityHint: "Calidad de decodificación del preview (exportar usa originales)",
+    genProxies: "Generar proxies de preview",
+    proxiesDone: "Proxies listos",
   },
   library: {
     title: "Biblioteca de medios",

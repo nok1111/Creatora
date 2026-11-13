@@ -62,6 +62,51 @@ fn make_clip(dir: &Path, name: &str, color: &str, freq: u32, secs: f64) -> PathB
     out
 }
 
+/// Same as `make_clip` with explicit size/fps — mixed-input validation.
+#[allow(clippy::too_many_arguments)]
+fn make_clip_sz(
+    dir: &Path,
+    name: &str,
+    color: &str,
+    freq: u32,
+    secs: f64,
+    w: u32,
+    h: u32,
+    r: u32,
+) -> PathBuf {
+    let out = dir.join(name);
+    if out.is_file() {
+        return out;
+    }
+    let status = Command::new(ffmpeg().unwrap())
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("color=c={color}:s={w}x{h}:d={secs}:r={r}"),
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("sine=frequency={freq}:duration={secs}"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+        ])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    out
+}
+
 fn render(dir: &Path, doc: &ProjectDoc, out_name: &str) -> PathBuf {
     let sources = resolve_sources(doc, None);
     let plan = plan::build_plan(doc, &sources).unwrap();
@@ -613,4 +658,156 @@ fn volume_keyframe_ramps_audio() {
     let early = audio_rms(&out, 0.1, 0.4);
     let late = audio_rms(&out, 1.6, 1.9);
     assert!(late > early * 2.0, "volume ramp missing: {early} vs {late}");
+}
+
+// ---------- Phase 3D: realistic commercial scenarios ----------
+
+/// ffprobe stream summary "WxH fps" for the first video stream.
+fn probe_meta(path: &Path) -> (u32, u32, f64) {
+    let out = Command::new(media::ffprobe_path().unwrap())
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(path)
+        .output()
+        .unwrap();
+    let s = String::from_utf8_lossy(&out.stdout);
+    let f = s.trim().split(',').collect::<Vec<_>>();
+    let rate: Vec<&str> = f[2].split('/').collect();
+    let fps = rate[0].parse::<f64>().unwrap() / rate.get(1).unwrap_or(&"1").parse::<f64>().unwrap();
+    (f[0].parse().unwrap(), f[1].parse().unwrap(), fps)
+}
+
+#[test]
+fn mixed_resolution_and_fps_normalize_to_canvas() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("mixed");
+    // Small slow source + large fast source on the same 320x240@30 canvas.
+    let small = make_clip_sz(&dir, "small.mp4", "red", 440, 2.0, 160, 120, 15);
+    let big = make_clip_sz(&dir, "big.mp4", "blue", 440, 2.0, 640, 480, 60);
+
+    let mut doc = base_doc();
+    doc.timeline.tracks.push(video_track(vec![
+        clip("a", "s", 0, 1000, 0),
+        clip("b", "b", 1000, 1000, 0),
+    ]));
+    add_media(&mut doc, "s", &small);
+    add_media(&mut doc, "b", &big);
+    let out = render(&dir, &doc, "mixed.mp4");
+
+    let (w, h, fps) = probe_meta(&out);
+    assert_eq!((w, h), (320, 240));
+    assert!((fps - 30.0).abs() < 0.01, "fps={fps}");
+    // Both fill the canvas (AR 4:3 == canvas): correct color each half.
+    let f1 = grab_frame(&out, 0.5, 320, 240);
+    assert!(frame_mean(&f1, 320, 240, 0) > 120.0 && frame_mean(&f1, 320, 240, 2) < 40.0);
+    let f2 = grab_frame(&out, 1.5, 320, 240);
+    assert!(frame_mean(&f2, 320, 240, 2) > 120.0 && frame_mean(&f2, 320, 240, 0) < 40.0);
+}
+
+#[test]
+fn stacked_tracks_composite_in_z_order() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("zorder");
+    let red = make_clip(&dir, "red.mp4", "red", 440, 2.0);
+    let blue = make_clip(&dir, "blue.mp4", "blue", 440, 2.0);
+
+    // Bottom: full red. Top: blue at 50% scale centered → center blue, edge red.
+    let mut doc = base_doc();
+    let mut top = clip("top", "b", 0, 2000, 0);
+    top.transform.scale_x = 0.5;
+    top.transform.scale_y = 0.5;
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("bot", "r", 0, 2000, 0)]));
+    doc.timeline.tracks.push(Track {
+        id: "v2".into(),
+        kind: TrackKind::Video,
+        name: "V2".into(),
+        clips: vec![top],
+        transitions: vec![],
+        locked: false,
+        visible: true,
+        muted: false,
+    });
+    add_media(&mut doc, "r", &red);
+    add_media(&mut doc, "b", &blue);
+    let out = render(&dir, &doc, "z.mp4");
+
+    let f = grab_frame(&out, 1.0, 320, 240);
+    // Center must be blue, corners red (z-order: later track on top).
+    let center = mean_channel(&f, 320, 140, 100, 40, 40, 2);
+    let corner = mean_channel(&f, 320, 5, 5, 40, 40, 0);
+    assert!(center > 120.0, "center blue={center}");
+    assert!(corner > 120.0, "corner red={corner}");
+}
+
+#[test]
+fn long_project_many_clips_renders_full_duration() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("long");
+    let colors = ["red", "green", "blue", "yellow"];
+    let mut paths = Vec::new();
+    for (i, c) in colors.iter().enumerate() {
+        paths.push(make_clip(&dir, &format!("c{i}.mp4"), c, 440, 2.0));
+    }
+    // 16 sequential 1s clips = 16s timeline.
+    let mut doc = base_doc();
+    let mut clips = Vec::new();
+    for i in 0..16 {
+        clips.push(clip(
+            &format!("k{i}"),
+            &format!("m{}", i % 4),
+            i * 1000,
+            1000,
+            0,
+        ));
+    }
+    doc.timeline.tracks.push(video_track(clips));
+    for (i, p) in paths.iter().enumerate() {
+        add_media(&mut doc, &format!("m{i}"), p);
+    }
+    let out = render(&dir, &doc, "long.mp4");
+    let d = duration_s(&out);
+    assert!((d - 16.0).abs() < 0.4, "duration {d}");
+    // Spot-check order survived: clip 0 red ~0.5s, clip 12 red ~12.5s,
+    // clip 5 = green ~5.5s.
+    let f0 = grab_frame(&out, 0.5, 320, 240);
+    assert!(frame_mean(&f0, 320, 240, 0) > 120.0);
+    let f5 = grab_frame(&out, 5.5, 320, 240);
+    assert!(frame_mean(&f5, 320, 240, 1) > 80.0, "clip5 not green");
+}
+
+#[test]
+fn high_res_canvas_renders_at_full_size() {
+    if ffmpeg().is_none() {
+        return;
+    }
+    let dir = tmpdir("hires");
+    let src = make_clip(&dir, "src.mp4", "red", 440, 1.0);
+    let mut doc = base_doc();
+    doc.canvas.width = 1280;
+    doc.canvas.height = 720;
+    doc.timeline
+        .tracks
+        .push(video_track(vec![clip("c1", "s", 0, 800, 0)]));
+    add_media(&mut doc, "s", &src);
+    let out = render(&dir, &doc, "hd.mp4");
+    let (w, h, _fps) = probe_meta(&out);
+    assert_eq!((w, h), (1280, 720));
+    let f = grab_frame(&out, 0.4, 1280, 720);
+    assert!(frame_mean(&f, 1280, 720, 0) > 120.0);
 }

@@ -37,6 +37,7 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setPlaying = useEditor((s) => s.setPlaying);
   const mediaEls = useRef(new Map<string, HTMLMediaElement>());
+  const previewQuality = useEditor((s) => s.previewQuality);
 
   // Master clock: advance playhead while playing.
   useEffect(() => {
@@ -186,7 +187,13 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
             objectFit: "fill",
             position: "absolute",
           };
-          const url = convertFileSrc(asset.filePath);
+          // Preview decodes the proxy when available + enabled; export always
+          // reads originals — a proxy is display-only by design.
+          const srcPath =
+            previewQuality === "proxy" && asset.proxyPath
+              ? asset.proxyPath
+              : asset.filePath;
+          const url = convertFileSrc(srcPath);
           return isImg ? (
             <img key={clip.id} src={url} style={style} alt={asset.name} draggable={false} />
           ) : (
@@ -201,6 +208,34 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
           );
         })}
 
+        {/* Prefetch window: clips starting within 3s get hidden decoders so
+            activation doesn't stall on container open. Not synced — load-only. */}
+        {doc.timeline.tracks
+          .flatMap((t) => t.clips)
+          .filter(
+            (c) =>
+              c.startMs >= playheadMs &&
+              c.startMs < playheadMs + 3000 &&
+              !active.some((a) => a.clip.id === c.id),
+          )
+          .map((c) => {
+            const asset = c.mediaRef ? assets.get(c.mediaRef) : undefined;
+            if (!asset || asset.status === "missing") return null;
+            const srcPath =
+              previewQuality === "proxy" && asset.proxyPath
+                ? asset.proxyPath
+                : asset.filePath;
+            return (
+              <video
+                key={`pf-${c.id}`}
+                src={convertFileSrc(srcPath)}
+                preload="auto"
+                muted
+                style={{ display: "none" }}
+              />
+            );
+          })}
+
         {/* Audio-track elements (no visual). */}
         {active
           .filter((a) => a.track.kind === "audio" || (a.track.kind === "video" && !a.track.visible))
@@ -211,7 +246,11 @@ export function Preview({ assets }: { assets: Map<string, AssetSummary> }) {
               <audio
                 key={clip.id}
                 ref={(el) => syncEl(clip.id, el)}
-                src={convertFileSrc(asset.filePath)}
+                src={convertFileSrc(
+                  previewQuality === "proxy" && asset.proxyPath
+                    ? asset.proxyPath
+                    : asset.filePath,
+                )}
                 preload="auto"
               />
             );
