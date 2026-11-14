@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Copy,
+  CopyPlus,
   Eye,
   EyeOff,
   Film,
@@ -8,6 +10,7 @@ import {
   Magnet,
   Maximize,
   Music,
+  Pencil,
   Plus,
   Scissors,
   Trash2,
@@ -22,6 +25,8 @@ import { useEditor } from "@/stores/editor";
 import {
   addClip,
   addTrack,
+  duplicateClips,
+  extractClips,
   findClip,
   moveClips,
   moveClipToTrack,
@@ -39,6 +44,11 @@ import {
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { Button } from "@/components/ui/button";
+import {
+  AnchoredMenu,
+  AnchoredMenuItem,
+  AnchoredMenuSeparator,
+} from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
 import type { Clip, Track, ProjectDoc } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
@@ -77,6 +87,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingTrack, setEditingTrack] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track; clip: Clip } | null>(null);
 
   const msToPx = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec]);
   const pxToMs = useCallback((px: number) => (px / pxPerSec) * 1000, [pxPerSec]);
@@ -240,6 +251,43 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const deleteSelected = () => {
     mutate((d) => removeClips(d, selection).doc);
     select([]);
+  };
+
+  // --- clip context menu (AnchoredMenu: portal → never clipped by the
+  // scroll container, Escape/outside-click/arrow keys handled inside) ---
+  const onClipContextMenu = (e: React.MouseEvent, track: Track, clip: Clip) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!useEditor.getState().selection.includes(clip.id)) select([clip.id]);
+    setCtxMenu({ x: e.clientX, y: e.clientY, track, clip });
+  };
+
+  const ctxSplit = () => {
+    for (const id of useEditor.getState().selection) {
+      mutate((d) => {
+        const r = splitClip(d, id, playheadNow());
+        return r ? r.doc : d;
+      });
+    }
+  };
+
+  const ctxCopy = () => {
+    const es = useEditor.getState();
+    if (!es.selection.length || !doc) return;
+    es.setClipboard(extractClips(doc, es.selection));
+    toast.success(t("editor.copied", { count: es.selection.length }));
+  };
+
+  const ctxDuplicate = () => {
+    const es = useEditor.getState();
+    if (!es.selection.length) return;
+    let ids: string[] = [];
+    mutate((d) => {
+      const r = duplicateClips(d, es.selection);
+      ids = r.clipIds;
+      return r.doc;
+    });
+    select(ids);
   };
 
   const onDrop = (e: React.DragEvent, track: Track) => {
@@ -508,6 +556,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                         height: TRACK_H - 8,
                       }}
                       onPointerDown={(e) => onClipPointerDown(e, track, clip, "move")}
+                      onContextMenu={(e) => onClipContextMenu(e, track, clip)}
                     >
                       <div
                         className="w-2 shrink-0 cursor-ew-resize bg-primary/40"
@@ -570,6 +619,74 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           </div>
         </div>
       </div>
+
+      {/* Clip context menu */}
+      <AnchoredMenu
+        open={!!ctxMenu}
+        onClose={() => setCtxMenu(null)}
+        anchor={ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null}
+        side="bottom"
+        align="start"
+        offset={2}
+        className="min-w-44"
+      >
+        {ctxMenu &&
+          (() => {
+            const ph = playheadNow();
+            const inClip =
+              ph > ctxMenu.clip.startMs && ph < ctxMenu.clip.startMs + ctxMenu.clip.durationMs;
+            const locked = ctxMenu.track.locked;
+            return (
+              <>
+                <AnchoredMenuItem
+                  disabled={locked || !inClip}
+                  onClick={() => {
+                    ctxSplit();
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Scissors className="size-3.5" /> {t("editor.split")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  onClick={() => {
+                    ctxCopy();
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Copy className="size-3.5" /> {t("editor.copy")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  disabled={locked}
+                  onClick={() => {
+                    ctxDuplicate();
+                    setCtxMenu(null);
+                  }}
+                >
+                  <CopyPlus className="size-3.5" /> {t("editor.duplicate")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  destructive
+                  disabled={locked}
+                  onClick={() => {
+                    deleteSelected();
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Trash2 className="size-3.5" /> {t("editor.delete")}
+                </AnchoredMenuItem>
+                <AnchoredMenuSeparator />
+                <AnchoredMenuItem
+                  onClick={() => {
+                    setEditingTrack(ctxMenu.track.id);
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Pencil className="size-3.5" /> {t("editor.renameTrack")}
+                </AnchoredMenuItem>
+              </>
+            );
+          })()}
+      </AnchoredMenu>
     </div>
   );
 }

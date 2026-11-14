@@ -4,6 +4,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { Plus, Trash2, Download, Upload, Palette, Type, Square, RectangleHorizontal, BadgeCheck, MessageSquare, Heading } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { PromptDialog } from "@/components/PromptDialog";
+import { AnchoredPopup } from "@/components/ui/anchored-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -47,6 +48,7 @@ export function GraphicsBin() {
   const [saveTpl, setSaveTpl] = useState(false);
   const [tplName, setTplName] = useState("");
   const [tplCat, setTplCat] = useState("title");
+  const [tplPreview, setTplPreview] = useState<{ tpl: Template; el: HTMLElement } | null>(null);
 
   const templatesQ = useQuery({ queryKey: ["templates"], queryFn: api.listTemplates });
   const kitsQ = useQuery({ queryKey: ["brandkits"], queryFn: api.listBrandKits });
@@ -321,7 +323,12 @@ export function GraphicsBin() {
           <div key={cat}>
             <div className="text-[9px] uppercase text-muted-foreground/70">{cat}</div>
             {tpls.map((tpl) => (
-              <div key={tpl.id} className="group relative flex items-center justify-between rounded px-1 py-0.5 hover:bg-accent">
+              <div
+                key={tpl.id}
+                className="group relative flex items-center justify-between rounded px-1 py-0.5 hover:bg-accent"
+                onMouseEnter={(e) => setTplPreview({ tpl, el: e.currentTarget })}
+                onMouseLeave={() => setTplPreview((p) => (p?.tpl.id === tpl.id ? null : p))}
+              >
                 <button
                   className="flex min-w-0 items-center gap-1.5 truncate text-left"
                   title={tpl.clip.text ?? tpl.clip.shape?.kind ?? "template"}
@@ -356,33 +363,6 @@ export function GraphicsBin() {
                   </span>
                   <span className="truncate">{tpl.name}</span>
                 </button>
-                {/* hover preview — same render model as the canvas */}
-                <div className="pointer-events-none absolute left-full top-0 z-20 ml-1 hidden h-[54px] w-[96px] overflow-hidden rounded border border-border bg-black group-hover:block">
-                  <div className="relative h-full w-full">
-                    {tpl.clip.shape && (
-                      <div
-                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                        style={{
-                          width: `${Math.min(90, (tpl.clip.shape.widthPx / doc.canvas.width) * 100)}%`,
-                          height: `${Math.min(90, (tpl.clip.shape.heightPx / doc.canvas.height) * 100)}%`,
-                          background: tpl.clip.shape.fill,
-                        }}
-                      />
-                    )}
-                    {tpl.clip.text && (
-                      <div
-                        className="absolute inset-0 flex items-center justify-center overflow-hidden px-1 text-center"
-                        style={{
-                          color: tpl.clip.textStyle?.color ?? "#fff",
-                          fontSize: `${Math.max(6, ((tpl.clip.textStyle?.fontSizePx ?? 48) / doc.canvas.height) * 54)}px`,
-                          background: tpl.clip.textStyle?.backgroundColor ?? undefined,
-                        }}
-                      >
-                        {tpl.clip.text}
-                      </div>
-                    )}
-                  </div>
-                </div>
                 <span className="invisible flex gap-0.5 group-hover:visible">
                   <button
                     className="text-muted-foreground hover:text-foreground"
@@ -536,6 +516,44 @@ export function GraphicsBin() {
           </div>
         )}
       </div>
+
+      {/* Template hover preview — portalled so the bin's overflow-y-auto
+          can't clip it (same render model as the canvas). */}
+      <AnchoredPopup
+        open={!!tplPreview}
+        anchor={tplPreview?.el ?? null}
+        side="right"
+        align="start"
+        offset={6}
+        className="pointer-events-none h-[54px] w-[96px] overflow-hidden rounded border border-border bg-black shadow-md"
+      >
+        {tplPreview && (
+          <div className="relative h-full w-full">
+            {tplPreview.tpl.clip.shape && (
+              <div
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{
+                  width: `${Math.min(90, (tplPreview.tpl.clip.shape.widthPx / doc.canvas.width) * 100)}%`,
+                  height: `${Math.min(90, (tplPreview.tpl.clip.shape.heightPx / doc.canvas.height) * 100)}%`,
+                  background: tplPreview.tpl.clip.shape.fill,
+                }}
+              />
+            )}
+            {tplPreview.tpl.clip.text && (
+              <div
+                className="absolute inset-0 flex items-center justify-center overflow-hidden px-1 text-center"
+                style={{
+                  color: tplPreview.tpl.clip.textStyle?.color ?? "#fff",
+                  fontSize: `${Math.max(6, ((tplPreview.tpl.clip.textStyle?.fontSizePx ?? 48) / doc.canvas.height) * 54)}px`,
+                  background: tplPreview.tpl.clip.textStyle?.backgroundColor ?? undefined,
+                }}
+              >
+                {tplPreview.tpl.clip.text}
+              </div>
+            )}
+          </div>
+        )}
+      </AnchoredPopup>
 
       {/* Text override when applying a text template */}
       <PromptDialog

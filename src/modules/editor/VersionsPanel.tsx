@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Copy,
   FolderDown,
@@ -30,6 +30,7 @@ import type { ExportSettings } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import type { FormatVersion, Keyframe } from "@/lib/project-types";
 import { Button } from "@/components/ui/button";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { PromptDialog } from "@/components/PromptDialog";
 
 interface MotionSample {
@@ -59,6 +60,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
   const [batching, setBatching] = useState(false);
   const [showExportCfg, setShowExportCfg] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
   if (!doc) return null;
@@ -302,18 +304,25 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
         </div>
       ))}
 
-      {/* Add from preset — visual aspect-ratio cards (Phase 10.5B). */}
+      {/* Add from preset — visual aspect-ratio cards (Phase 10.5B). Menu is
+          portalled (AnchoredMenu): the strip's overflow-x-auto would clip an
+          absolute popover regardless of z-index. */}
       <div className="relative shrink-0">
         <button
+          ref={addBtnRef}
           className="rounded border border-border bg-background px-1.5 py-1 text-[10px] hover:bg-accent"
           onClick={() => setShowAdd(!showAdd)}
         >
           + {t("versions.addFormat")}
         </button>
-        {showAdd && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setShowAdd(false)} />
-            <div className="absolute bottom-full left-0 z-40 mb-1 flex w-[420px] flex-wrap gap-2 rounded-xl border border-border bg-card p-3 shadow-xl">
+        <AnchoredMenu
+          open={showAdd}
+          onClose={() => setShowAdd(false)}
+          anchor={addBtnRef}
+          side="top"
+          align="start"
+          className="flex w-[420px] flex-wrap gap-2 rounded-xl bg-card p-3 shadow-xl"
+        >
               {FORMAT_PRESETS.map((p) => {
                 const portrait = p.canvas.height > p.canvas.width;
                 const bw = portrait ? 26 : 44;
@@ -342,9 +351,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
                   </button>
                 );
               })}
-            </div>
-          </>
-        )}
+        </AnchoredMenu>
       </div>
 
       <div className="mx-1 h-4 w-px shrink-0 bg-border" />
