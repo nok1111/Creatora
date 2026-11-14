@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Clapperboard, Smartphone, Square, Settings2, ArrowRight } from "lucide-react";
 import { useProject } from "@/stores/project";
@@ -20,11 +20,16 @@ const FORMATS = [
 
 export function CreatePage() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const createNew = useProject((s) => s.createNew);
-  const [fmt, setFmt] = useState<(typeof FORMATS)[number]["id"]>("vert");
+  const initial = FORMATS.some((f) => f.id === params.get("format"))
+    ? (params.get("format") as (typeof FORMATS)[number]["id"])
+    : "vert";
+  const [fmt, setFmt] = useState<(typeof FORMATS)[number]["id"]>(initial);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [fps, setFps] = useState(30);
 
   const selected = FORMATS.find((f) => f.id === fmt)!;
   const dims = fmt === "custom" && size ? size : { w: selected.w, h: selected.h };
@@ -33,7 +38,7 @@ export function CreatePage() {
     const n = name.trim() || "Untitled project";
     setBusy(true);
     try {
-      await createNew({ name: n, width: dims.w, height: dims.h, fpsNum: 30, fpsDen: 1 });
+      await createNew({ name: n, width: dims.w, height: dims.h, fpsNum: fps, fpsDen: 1 });
       nav("/editor");
     } catch (e) {
       toast.error(String(e));
@@ -93,6 +98,21 @@ export function CreatePage() {
       )}
 
       <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 rounded-xl border border-border bg-surface-1 p-1">
+          {[24, 30, 60].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFps(f)}
+              className={cn(
+                "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                fps === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {f}
+            </button>
+          ))}
+          <span className="pr-1.5 text-[10px] text-muted-foreground">fps</span>
+        </div>
         <input
           autoFocus
           value={name}

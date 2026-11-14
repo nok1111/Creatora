@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePlus2, Clock, Film, Star, MoreVertical, FolderOpen, Archive, Copy, Trash2, Undo2, PackageOpen,
-  Clapperboard, Smartphone, Captions, Image, AudioLines, Share2, Upload } from "lucide-react";
+  Clapperboard, Smartphone, Captions, Image, AudioLines, Share2, Upload, ArrowRight, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
@@ -25,7 +25,33 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { NewProjectDialog } from "./NewProjectDialog";
+import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/EmptyState";
+
+/** Mini aspect-ratio tile for the recents list. */
+function AspectTile({ w, h }: { w: number | null; h: number | null }) {
+  const ar = w && h ? w / h : 16 / 9;
+  const max = 26;
+  const tw = ar >= 1 ? max : Math.max(10, Math.round(max * ar));
+  const th = ar >= 1 ? Math.max(10, Math.round(max / ar)) : max;
+  return (
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-0">
+      <div
+        className="flex items-center justify-center rounded-[3px] border border-primary/40 bg-primary/10"
+        style={{ width: tw, height: th }}
+      />
+    </div>
+  );
+}
+
+const JOB_TONE: Record<string, string> = {
+  done: "bg-success/15 text-success",
+  running: "bg-primary/15 text-primary",
+  queued: "bg-secondary text-muted-foreground",
+  failed: "bg-destructive/15 text-destructive",
+  interrupted: "bg-destructive/15 text-destructive",
+  cancelled: "bg-secondary text-muted-foreground",
+};
 
 function relativeTime(iso: string, locale: string): string {
   const then = new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
@@ -44,7 +70,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const project = useProject();
-  const [newOpen, setNewOpen] = useState(false);
+  // creation now happens in /create
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleteFileToo, setDeleteFileToo] = useState(false);
 
@@ -52,6 +78,11 @@ export function HomePage() {
   const projects = useQuery({
     queryKey: ["projects"],
     queryFn: () => api.listProjects(),
+  });
+  const exportJobs = useQuery({
+    queryKey: ["home-export-jobs"],
+    queryFn: () => api.listJobs("render.export", 5),
+    refetchInterval: 10_000,
   });
 
   useEffect(() => {
@@ -116,6 +147,7 @@ export function HomePage() {
     }
   };
 
+  const hasOpen = !!project.doc;
   const cards: {
     icon: typeof Clapperboard;
     title: string;
@@ -123,11 +155,11 @@ export function HomePage() {
     tone: "coral" | "lavender" | "neutral";
     action: () => void;
   }[] = [
-    { icon: Clapperboard, title: t("home.makeVideo"), desc: t("home.makeVideoDesc"), tone: "coral", action: () => setNewOpen(true) },
-    { icon: Smartphone, title: t("home.makeShort"), desc: t("home.makeShortDesc"), tone: "coral", action: () => setNewOpen(true) },
-    { icon: Captions, title: t("home.makeSubs"), desc: t("home.makeSubsDesc"), tone: "lavender", action: () => navigate("/editor?tab=subtitles") },
-    { icon: Image, title: t("home.makeThumb"), desc: t("home.makeThumbDesc"), tone: "lavender", action: () => navigate("/editor?left=graphics") },
-    { icon: AudioLines, title: t("home.makeAudio"), desc: t("home.makeAudioDesc"), tone: "lavender", action: () => navigate("/editor") },
+    { icon: Clapperboard, title: t("home.makeVideo"), desc: t("home.makeVideoDesc"), tone: "coral", action: () => navigate("/create?format=yt") },
+    { icon: Smartphone, title: t("home.makeShort"), desc: t("home.makeShortDesc"), tone: "coral", action: () => navigate("/create?format=vert") },
+    { icon: Captions, title: t("home.makeSubs"), desc: t("home.makeSubsDesc"), tone: "lavender", action: () => navigate(hasOpen ? "/editor?tab=subtitles" : "/create") },
+    { icon: Image, title: t("home.makeThumb"), desc: t("home.makeThumbDesc"), tone: "lavender", action: () => navigate(hasOpen ? "/editor?left=graphics" : "/create?format=sq") },
+    { icon: AudioLines, title: t("home.makeAudio"), desc: t("home.makeAudioDesc"), tone: "lavender", action: () => navigate(hasOpen ? "/editor" : "/create") },
     { icon: Share2, title: t("home.makePost"), desc: t("home.makePostDesc"), tone: "neutral", action: () => navigate("/social") },
   ];
   const chip = {
@@ -153,7 +185,7 @@ export function HomePage() {
             <Upload />
             {t("library.importMedia", { defaultValue: "Import media" })}
           </Button>
-          <Button onClick={() => setNewOpen(true)}>
+          <Button onClick={() => navigate("/create")}>
             <FilePlus2 />
             {t("home.newProject")}
           </Button>
@@ -223,9 +255,14 @@ export function HomePage() {
         {projects.isLoading ? (
           <p className="mt-3 text-sm text-muted-foreground">{t("common.loading")}</p>
         ) : !projects.data?.length ? (
-          <div className="mt-3 rounded-lg border border-dashed border-border p-6 text-center">
-            <p className="text-sm font-medium">{t("home.emptyProjects")}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{t("home.emptyProjectsHint")}</p>
+          <div className="mt-3 rounded-lg border border-dashed border-border">
+            <EmptyState
+              compact
+              icon={Clapperboard}
+              title={t("home.emptyProjects")}
+              body={t("home.emptyProjectsHint")}
+              action={{ label: t("home.newProject"), onClick: () => navigate("/create") }}
+            />
           </div>
         ) : (
           <ul className="mt-3 divide-y divide-border rounded-lg border border-border bg-card">
@@ -235,15 +272,12 @@ export function HomePage() {
                   className="flex flex-1 items-center gap-3 text-left"
                   onClick={() => void openProject(p)}
                 >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded bg-secondary text-xs font-semibold text-muted-foreground">
-                    {p.width && p.height ? `${p.width}×${p.height}` : "?"}
-                  </div>
+                  <AspectTile w={p.width} h={p.height} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
+                      {p.width && p.height ? `${p.width}×${p.height} · ` : ""}
                       {relativeTime(p.lastOpenedAt ?? p.modifiedAt, i18n.language)}
-                      {" · "}
-                      {p.filePath}
                     </p>
                   </div>
                 </button>
@@ -286,13 +320,54 @@ export function HomePage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {t("home.recentExports")}
           </h2>
+          {!!exportJobs.data?.length && (
+            <button
+              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+              onClick={() => navigate("/exports")}
+            >
+              {t("home.viewAll", { defaultValue: "View all" })} <ArrowRight className="size-3" />
+            </button>
+          )}
         </div>
-        <div className="mt-3 rounded-lg border border-dashed border-border p-6 text-center">
-          <p className="text-sm text-muted-foreground">{t("home.emptyExports")}</p>
-        </div>
+        {!exportJobs.data?.length ? (
+          <div className="mt-3 rounded-lg border border-dashed border-border">
+            <EmptyState
+              compact
+              icon={Film}
+              title={t("home.emptyExports")}
+              body="Exported videos will appear here."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 divide-y divide-border rounded-lg border border-border bg-card">
+            {exportJobs.data.map((j) => (
+              <li key={j.id} className="flex items-center gap-3 p-3">
+                {j.status === "done" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-success" />
+                ) : j.status === "running" || j.status === "queued" ? (
+                  <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+                ) : (
+                  <XCircle className="size-4 shrink-0 text-destructive" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {j.payload.outputFile ?? j.payload.projectName ?? j.kind}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {relativeTime(j.createdAt, i18n.language)}
+                  </p>
+                </div>
+                {j.status === "running" && (
+                  <span className="text-xs text-primary">{Math.round(j.progress * 100)}%</span>
+                )}
+                <span className={cn("rounded-full px-2 py-0.5 text-2xs font-medium", JOB_TONE[j.status] ?? JOB_TONE.queued)}>
+                  {j.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
-
-      <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />
 
       {/* Delete confirmation — destructive action requires explicit confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
