@@ -21,6 +21,9 @@ const SettingsPage = lazy(() =>
 const SocialPage = lazy(() =>
   import("@/modules/social/SocialPage").then((m) => ({ default: m.SocialPage })),
 );
+const DesignPreview = lazy(() =>
+  import("@/modules/preview/DesignPreview").then((m) => ({ default: m.DesignPreview })),
+);
 const ExportsPage = lazy(() =>
   import("@/modules/exports/ExportsPage").then((m) => ({ default: m.ExportsPage })),
 );
@@ -98,6 +101,14 @@ export default function App() {
       <HashRouter>
         <ErrorBoundary>
           <Routes>
+            <Route
+              path="/design-preview"
+              element={
+                <Suspense fallback={<ModuleLoading />}>
+                  <DesignPreview />
+                </Suspense>
+              }
+            />
             <Route element={<AppShell />}>
               {MODULES.map((m) => (
                 <Route
