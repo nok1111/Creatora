@@ -331,18 +331,35 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           <p className="mb-1.5 flex items-center gap-1 font-medium">
             <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-accent-foreground">· version</span>}
           </p>
-          <select
-            className="h-6 w-full rounded border border-border bg-transparent px-1 text-[10px]"
-            onChange={(e) => {
-              const p = SUBTITLE_PRESETS.find((x) => x.id === e.target.value);
-              if (p) setStyle(p.style);
-            }}
-          >
-            <option value="" className="bg-card">Preset…</option>
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
             {SUBTITLE_PRESETS.map((p) => (
-              <option key={p.id} value={p.id} className="bg-card">{p.label}</option>
+              <button
+                key={p.id}
+                onClick={() => setStyle(p.style)}
+                title={p.label}
+                className="w-16 shrink-0 overflow-hidden rounded-md border-2 border-border transition-all hover:border-accent"
+              >
+                <div className="flex h-9 items-center justify-center bg-[#0d0d12] px-0.5">
+                  <span
+                    className="text-center text-[8px] leading-tight"
+                    style={{
+                      color: p.style.text.color,
+                      fontWeight: 600,
+                      textShadow:
+                        p.style.text.outlineWidth > 0 && p.style.text.outlineColor
+                          ? `0 0 ${Math.min(3, p.style.text.outlineWidth)}px ${p.style.text.outlineColor}`
+                          : undefined,
+                    }}
+                  >
+                    Your <span style={{ color: p.style.highlightColor }}>captions</span>
+                  </span>
+                </div>
+                <div className="bg-card px-1 py-0.5 text-center text-[7px] text-muted-foreground">
+                  {p.label}
+                </div>
+              </button>
             ))}
-          </select>
+          </div>
           <div className="mt-1 grid grid-cols-3 items-center gap-1 text-[10px]">
             <label>Mode</label>
             <select value={style?.mode ?? "none"}

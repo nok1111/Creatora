@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Scissors, Trash2, Volume2 } from "lucide-react";
+import { Ear, Guitar, Mic2, Plus, Scissors, Trash2, Volume2, Wand2 } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
@@ -18,6 +18,19 @@ import { api, type Loudness } from "@/lib/ipc";
  * the user reviews then applies), and the doc-level auto-duck rules that
  * involve this clip's track.
  */
+/** Friendly one-click presets — additive only (addEffect appends; a type
+ * already enabled is skipped), so custom chains are never overwritten. */
+const PRESETS: { key: string; label: string; icon: React.ReactNode; effects: { type: string; params: Record<string, number> }[] }[] = [
+  { key: "voice", label: "Clear Voice", icon: <Mic2 className="size-3.5" />,
+    effects: [{ type: "compressor", params: { thresholdDb: -20, ratio: 3 } }, { type: "eq", params: { mid: 3 } }] },
+  { key: "noise", label: "Reduce Noise", icon: <Ear className="size-3.5" />,
+    effects: [{ type: "denoise", params: { strength: 14 } }, { type: "noisegate", params: { thresholdDb: -45 } }] },
+  { key: "enhance", label: "Enhance Voice", icon: <Wand2 className="size-3.5" />,
+    effects: [{ type: "deesser", params: { amount: 0.5 } }, { type: "eq", params: { low: 2, high: 2 } }] },
+  { key: "louder", label: "Louder", icon: <Guitar className="size-3.5" />,
+    effects: [{ type: "limiter", params: { levelDb: -1 } }] },
+];
+
 export function AudioTools({ clipId, trackId }: { clipId: string; trackId: string }) {
   const doc = useProject((s) => s.doc)!;
   const mutate = useEditor((s) => s.mutate);
@@ -50,6 +63,35 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
 
   return (
     <div className="space-y-1.5 border-t border-border pt-1.5">
+      {/* friendly one-click presets — additive, skip already-enabled types */}
+      <div className="mb-2 flex flex-wrap gap-1">
+        {PRESETS.map((p) => (
+          <button
+            key={p.key}
+            title={`${p.label} — adds ${p.effects.map((e) => e.type).join(" + ")}`}
+            className="flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[10px] hover:border-accent hover:bg-accent/10"
+            onClick={() =>
+              mutate((d) => {
+                let dd = d;
+                const existing = new Set((clip?.effects ?? []).filter((e) => e.enabled).map((e) => e.type));
+                for (const e of p.effects) {
+                  if (existing.has(e.type)) continue;
+                  dd = addEffect(dd, clipId, {
+                    id: crypto.randomUUID(),
+                    type: e.type,
+                    enabled: true,
+                    params: e.params,
+                  });
+                }
+                return dd;
+              })
+            }
+          >
+            {p.icon} {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* loudness: measure + non-destructive gain suggestion */}
       <div className="flex items-center gap-1">
         <select

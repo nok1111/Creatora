@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useProject } from "@/stores/project";
 import { effectiveDoc } from "@/lib/timeline-engine";
@@ -23,6 +23,7 @@ import {
 } from "@/services/audio-preview";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
+import { angleDeg, scaleFromCorner, snapToGuides } from "@/lib/canvas-manip";
 
 /**
  * Preview compositor — one absolutely-positioned media element per active
@@ -67,6 +68,9 @@ export function Preview({
   const mutate = useEditor((s) => s.mutate);
   const select = useEditor((s) => s.select);
   const stageRef = useRef<HTMLDivElement>(null);
+  const selection = useEditor((s) => s.selection);
+  const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
+  const [editing, setEditing] = useState<string | null>(null);
 
   // Master clock: advance playhead while playing. Also monitors real frame
   // times — if the rAF cadence stays ≥1.5× the project's frame budget for a
@@ -146,8 +150,15 @@ export function Preview({
     const scaleX = viewDoc.canvas.width / Math.max(1, rect.width);
     const scaleY = viewDoc.canvas.height / Math.max(1, rect.height);
     const move = (ev: PointerEvent) => {
-      const nx = base.x + (ev.clientX - startX) * scaleX;
-      const ny = base.y + (ev.clientY - startY) * scaleY;
+      const rawX = base.x + (ev.clientX - startX) * scaleX;
+      const rawY = base.y + (ev.clientY - startY) * scaleY;
+      const el = stage.querySelector(`[data-clip-id="${clipId}"]`);
+      const ew = el ? (el.getBoundingClientRect().width * scaleX) : 0;
+      const eh = el ? (el.getBoundingClientRect().height * scaleY) : 0;
+      const snap = snapToGuides(rawX + ew / 2, rawY + eh / 2, viewDoc.canvas.width, viewDoc.canvas.height, 12);
+      const nx = rawX + (snap.vGuide !== null ? snap.x - (rawX + ew / 2) : 0);
+      const ny = rawY + (snap.hGuide !== null ? snap.y - (rawY + eh / 2) : 0);
+      setGuides({ v: snap.vGuide, h: snap.hGuide });
       const d = useProject.getState().doc;
       if (!d) return;
       const versionId = useEditor.getState().activeVersionId;
@@ -162,6 +173,7 @@ export function Preview({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      setGuides({ v: null, h: null });
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -316,7 +328,7 @@ export function Preview({
               : asset.filePath;
           const url = convertFileSrc(srcPath);
           return isImg ? (
-            <img key={clip.id} src={url} style={style} alt={asset.name} draggable={false} />
+            <img key={clip.id} src={url} style={style} alt={asset.name} draggable={false} data-clip-id={clip.id} />
           ) : (
             <video
               key={clip.id}
@@ -505,7 +517,9 @@ export function Preview({
                     pointerEvents: "auto",
                     cursor: "move",
                   }}
+                  data-clip-id={clip.id}
                   onPointerDown={(e) => dragClip(clip.id, e)}
+                  onDoubleClick={() => findClip(viewDoc, clip.id)?.track.kind === "text" && setEditing(clip.id)}
                 >
                   {shapeDiv}
                   {textSpan}
@@ -590,6 +604,92 @@ export function Preview({
               />
             );
           })()}
+
+        {/* Selection overlay: outline + resize/rotate handles + snap guides.
+            All gestures write the same transform fields the FFmpeg render
+            plan consumes, honoring active-version overrides. */}
+        {(() => {
+          const stage = stageRef.current;
+          const selId = selection[0];
+          if (!stage || !selId || editing) return null;
+          const el = stage.querySelector<HTMLElement>(`[data-clip-id="${selId}"]`);
+          const hit = selId ? findClip(viewDoc, selId) : null;
+          if (!el || !hit) return null;
+          const sr = stage.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          const box = { left: r.left - sr.left, top: r.top - sr.top, w: r.width, h: r.height };
+          const kx = viewDoc.canvas.width / Math.max(1, sr.width);
+          const ky = viewDoc.canvas.height / Math.max(1, sr.height);
+          const write = (patch: Partial<typeof hit.clip.transform>) => {
+            const versionId = useEditor.getState().activeVersionId;
+            mutate((dd) =>
+              versionId
+                ? setVersionClipOverride(dd, versionId, selId, {
+                    transform: { ...hit.clip.transform, ...patch },
+                  })
+                : updateClip(dd, selId, { transform: patch }),
+            );
+          };
+          const corner = (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            const sx = e.clientX, sy = e.clientY;
+            const bs = hit.clip.transform;
+            const mv = (ev: PointerEvent) => {
+              const ns = scaleFromCorner(bs.scaleX, bs.scaleY, box.w / kx, box.h / ky,
+                (ev.clientX - sx) * kx, (ev.clientY - sy) * ky);
+              write({ scaleX: ns.scaleX, scaleY: ns.scaleY });
+            };
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+          };
+          const rotate = (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            const cx = box.left + box.w / 2, cy = box.top + box.h / 2;
+            const mv = (ev: PointerEvent) => write({ rotationDeg: angleDeg(cx, cy, ev.clientX - sr.left, ev.clientY - sr.top) });
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+          };
+          const H = "absolute size-2.5 rounded-full border border-accent bg-accent cursor-nwse-resize";
+          return (
+            <div className="pointer-events-none absolute border-2 border-accent" style={box}>
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 cursor-grab">
+                <div className="pointer-events-auto size-2.5 rounded-full border border-accent bg-accent" onPointerDown={rotate} />
+              </div>
+              {[[-5, -5], [box.w - 5, -5], [-5, box.h - 5], [box.w - 5, box.h - 5]].map(([x, y], i) => (
+                <div key={i} className={H} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={corner} />
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Snap guide lines while dragging. */}
+        {guides.v !== null && (
+          <div className="pointer-events-none absolute top-0 bottom-0 w-px bg-accent/70"
+            style={{ left: `${(guides.v / viewDoc.canvas.width) * 100}%` }} />
+        )}
+        {guides.h !== null && (
+          <div className="pointer-events-none absolute left-0 right-0 h-px bg-accent/70"
+            style={{ top: `${(guides.h / viewDoc.canvas.height) * 100}%` }} />
+        )}
+
+        {/* Inline text edit on double-click. */}
+        {editing && (() => {
+          const hit = findClip(viewDoc, editing);
+          if (!hit) { setEditing(null); return null; }
+          return (
+            <textarea
+              autoFocus
+              defaultValue={hit.clip.text ?? ""}
+              className="absolute z-20 resize-none rounded border-2 border-accent bg-black/70 p-2 text-center text-cream outline-none"
+              style={{ inset: "30% 20%", fontSize: 14 }}
+              onBlur={(e) => {
+                mutate((dd) => updateClip(dd, editing, { text: e.target.value }));
+                setEditing(null);
+              }}
+              onKeyDown={(e) => { if (e.key === "Escape") e.currentTarget.blur(); }}
+            />
+          );
+        })()}
 
         {/* Audio-track elements (no visual). */}
         {active

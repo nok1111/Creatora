@@ -57,6 +57,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
   const [reframing, setReframing] = useState<string | null>(null);
   const [batching, setBatching] = useState(false);
   const [showExportCfg, setShowExportCfg] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
   if (!doc) return null;
   const versions = doc.versions;
@@ -272,19 +273,50 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
         </div>
       ))}
 
-      {/* Add from preset */}
-      <select
-        className="shrink-0 rounded border border-border bg-background px-1.5 py-1 text-[10px]"
-        value=""
-        onChange={(e) => e.target.value && createFrom(e.target.value)}
-      >
-        <option value="">+ {t("versions.addFormat")}</option>
-        {FORMAT_PRESETS.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
-      </select>
+      {/* Add from preset — visual aspect-ratio cards (Phase 10.5B). */}
+      <div className="relative shrink-0">
+        <button
+          className="rounded border border-border bg-background px-1.5 py-1 text-[10px] hover:bg-accent"
+          onClick={() => setShowAdd(!showAdd)}
+        >
+          + {t("versions.addFormat")}
+        </button>
+        {showAdd && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setShowAdd(false)} />
+            <div className="absolute bottom-full left-0 z-40 mb-1 flex w-[420px] flex-wrap gap-2 rounded-xl border border-border bg-card p-3 shadow-xl">
+              {FORMAT_PRESETS.map((p) => {
+                const portrait = p.canvas.height > p.canvas.width;
+                const bw = portrait ? 26 : 44;
+                const bh = portrait ? 44 : Math.max(20, Math.round((44 * p.canvas.height) / p.canvas.width));
+                const ar = `${p.canvas.width}×${p.canvas.height}`;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => { createFrom(p.id); setShowAdd(false); }}
+                    className="flex w-[96px] flex-col items-center gap-1.5 rounded-lg border-2 border-border p-2 transition-all hover:border-accent hover:bg-accent/10"
+                    title={p.label}
+                  >
+                    <div
+                      className="flex items-center justify-center rounded border border-border bg-secondary text-[8px] font-medium text-muted-foreground"
+                      style={{ width: bw, height: bh }}
+                    >
+                      {portrait ? "9:16" : ar === `${1080}×${1080}` ? "1:1" : ""}
+                    </div>
+                    <div className="text-center text-[9px] font-medium leading-tight">
+                      {p.platform}
+                      <div className="text-[8px] font-normal text-muted-foreground">{ar}</div>
+                      {p.maxDurationMs && (
+                        <div className="text-[8px] text-warning">≤{Math.round(p.maxDurationMs / 1000)}s</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="mx-1 h-4 w-px shrink-0 bg-border" />
       {active && (
