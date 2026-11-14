@@ -21,7 +21,7 @@ import {
 } from "@/lib/timeline-engine";
 import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
 import { AudioTools } from "@/modules/editor/AudioTools";
-import { GraphicsSection } from "@/modules/editor/GraphicsInspector";
+import { GraphicsInspector, GraphicsSection } from "@/modules/editor/GraphicsInspector";
 import type { Clip } from "@/lib/project-types";
 
 /**
@@ -155,40 +155,57 @@ export function Inspector() {
   const nextClip = sorted[idx + 1];
   const hasOut = clipTransitions.some((tr) => tr.clipA === clipId);
 
+  // Design elements (text/shape clips on text|graphics tracks, or any clip
+  // carrying text/shape) get the design-studio inspector; media clips keep
+  // the classic Transform/Audio/Graphics sections.
+  const isDesign =
+    clip.mediaRef == null &&
+    (clip.text != null ||
+      clip.textStyle != null ||
+      clip.shape != null ||
+      track.kind === "text" ||
+      track.kind === "graphics");
+
   return (
     <div className="h-full space-y-4 overflow-y-auto border-l border-border bg-card p-3 text-xs">
       <div className="font-medium text-foreground">{t("editor.inspector")}</div>
 
-      <section className="space-y-1.5">
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {t("editor.sectionTransform")}
-        </div>
-        {version && (
-          <p className="text-[9px] italic text-accent-foreground/80">
-            {t("versions.editingVersion", { name: version.name })}
-          </p>
-        )}
-        {num("X", clipTransform.x, (v) => patchTransform("x", v), "transform.x")}
-        {num("Y", clipTransform.y, (v) => patchTransform("y", v), "transform.y")}
-        {num("Scale X", clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
-        {num("Scale Y", clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
-        {num("Rotate°", clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
-        {num("Opacity", clipTransform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
-      </section>
+      {isDesign ? (
+        <GraphicsInspector clipId={clipId} />
+      ) : (
+        <>
+          <section className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {t("editor.sectionTransform")}
+            </div>
+            {version && (
+              <p className="text-[9px] italic text-accent-foreground/80">
+                {t("versions.editingVersion", { name: version.name })}
+              </p>
+            )}
+            {num("X", clipTransform.x, (v) => patchTransform("x", v), "transform.x")}
+            {num("Y", clipTransform.y, (v) => patchTransform("y", v), "transform.y")}
+            {num("Scale X", clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
+            {num("Scale Y", clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
+            {num("Rotate°", clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
+            {num("Opacity", clipTransform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
+          </section>
 
-      <section className="space-y-1.5">
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {t("editor.sectionAudio")}
-        </div>
-        {num("Volume", clip.volume, (v) => mutate((d) => updateClip(d, clipId, { volume: Math.max(0, Math.min(8, v)) })), "volume", 0.05)}
-        {num("Speed", clip.speed, (v) => mutate((d) => updateClip(d, clipId, { speed: Math.max(0.1, Math.min(8, v)) })), undefined, 0.1)}
-        {num("Pan", clip.pan ?? 0, (v) => mutate((d) => updateClip(d, clipId, { pan: Math.max(-1, Math.min(1, v)) })), undefined, 0.05)}
-        {num("Fade in ms", clip.fadeInMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v) })), undefined, 50)}
-        {num("Fade out ms", clip.fadeOutMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v) })), undefined, 50)}
-        <AudioTools clipId={clipId} trackId={track.id} />
-      </section>
+          <section className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {t("editor.sectionAudio")}
+            </div>
+            {num("Volume", clip.volume, (v) => mutate((d) => updateClip(d, clipId, { volume: Math.max(0, Math.min(8, v)) })), "volume", 0.05)}
+            {num("Speed", clip.speed, (v) => mutate((d) => updateClip(d, clipId, { speed: Math.max(0.1, Math.min(8, v)) })), undefined, 0.1)}
+            {num("Pan", clip.pan ?? 0, (v) => mutate((d) => updateClip(d, clipId, { pan: Math.max(-1, Math.min(1, v)) })), undefined, 0.05)}
+            {num("Fade in ms", clip.fadeInMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v) })), undefined, 50)}
+            {num("Fade out ms", clip.fadeOutMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v) })), undefined, 50)}
+            <AudioTools clipId={clipId} trackId={track.id} />
+          </section>
 
-      <GraphicsSection clipId={clipId} />
+          <GraphicsSection clipId={clipId} />
+        </>
+      )}
 
       <section className="space-y-1.5">
         <div className="flex items-center justify-between">
@@ -297,7 +314,7 @@ export function Inspector() {
         )}
       </section>
 
-      {clipText !== "" || clip.text != null ? (
+      {!isDesign && (clipText !== "" || clip.text != null) ? (
         <section className="space-y-1.5">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
             {t("editor.sectionText")}
