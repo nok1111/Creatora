@@ -1,0 +1,117 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Clapperboard, Smartphone, Square, Settings2, ArrowRight } from "lucide-react";
+import { useProject } from "@/stores/project";
+import { cn } from "@/lib/utils";
+
+/** Guided creation — /create. Two steps: pick a format, name it, edit. */
+
+const FORMATS = [
+  { id: "yt", label: "YouTube video", hint: "Horizontal · 16:9", w: 1920, h: 1080,
+    icon: Clapperboard, bw: 88, bh: 50, tone: "border-primary/40 text-primary" },
+  { id: "vert", label: "Short / Reel / TikTok", hint: "Vertical · 9:16", w: 1080, h: 1920,
+    icon: Smartphone, bw: 32, bh: 56, tone: "border-accent text-accent-foreground" },
+  { id: "sq", label: "Square post", hint: "Square · 1:1", w: 1080, h: 1080,
+    icon: Square, bw: 48, bh: 48, tone: "border-success/40 text-success" },
+  { id: "custom", label: "Custom format", hint: "Any size", w: 1280, h: 720,
+    icon: Settings2, bw: 60, bh: 36, tone: "border-border text-muted-foreground" },
+] as const;
+
+export function CreatePage() {
+  const nav = useNavigate();
+  const createNew = useProject((s) => s.createNew);
+  const [fmt, setFmt] = useState<(typeof FORMATS)[number]["id"]>("vert");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+
+  const selected = FORMATS.find((f) => f.id === fmt)!;
+  const dims = fmt === "custom" && size ? size : { w: selected.w, h: selected.h };
+
+  const create = async () => {
+    const n = name.trim() || "Untitled project";
+    setBusy(true);
+    try {
+      await createNew({ name: n, width: dims.w, height: dims.h, fpsNum: 30, fpsDen: 1 });
+      nav("/editor");
+    } catch (e) {
+      toast.error(String(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-6 p-8">
+      <div>
+        <h1 className="text-2xl font-bold">What are you making?</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick a format — you can change it or add more inside the editor.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3">
+        {FORMATS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFmt(f.id)}
+            className={cn(
+              "flex flex-col items-center gap-3 rounded-xl border-2 bg-surface-2 p-5 shadow-raise transition-all",
+              fmt === f.id ? f.tone + " shadow-lift scale-[1.02]" : "border-border hover:border-muted-foreground/50",
+            )}
+          >
+            <div
+              className="flex items-center justify-center rounded-lg border border-border bg-surface-0"
+              style={{ width: f.bw, height: f.bh }}
+            >
+              <f.icon className="size-5 opacity-70" />
+            </div>
+            <div className="text-center">
+              <div className="text-sm font-semibold leading-tight">{f.label}</div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">{f.hint}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {fmt === "custom" && (
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-sm">
+          <span className="text-muted-foreground">Size:</span>
+          <input
+            className="w-20 rounded-md border border-input bg-surface-0 px-2 py-1 text-center"
+            defaultValue={1280}
+            onChange={(e) => setSize({ w: +e.target.value || 1280, h: size?.h ?? 720 })}
+          />
+          ×
+          <input
+            className="w-20 rounded-md border border-input bg-surface-0 px-2 py-1 text-center"
+            defaultValue={720}
+            onChange={(e) => setSize({ w: size?.w ?? 1280, h: +e.target.value || 720 })}
+          />
+          <span className="text-xs text-muted-foreground">px</span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void create()}
+          placeholder="Name your project"
+          className="h-11 flex-1 rounded-xl border border-input bg-surface-1 px-4 text-sm shadow-raise outline-none focus:border-primary"
+        />
+        <button
+          onClick={() => void create()}
+          disabled={busy}
+          className="flex h-11 items-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-raise transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+        >
+          {busy ? "Creating…" : "Start editing"} <ArrowRight className="size-4" />
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Next step inside the editor: import your media (drag & drop works).
+      </p>
+    </div>
+  );
+}

@@ -73,6 +73,12 @@
     --success: 86 85% 69%;          /* #B8F36B lime */
     --success-foreground: 100 45% 12%;
     --warning: 39 100% 74%;         /* #FFD477 butter */
+    /* Depth system — 4 surfaces + elevation (Phase 11 Etapa B). */
+    --surface-0: 240 12% 9%;        /* app floor, below graphite */
+    --surface-1: 245 11% 14%;       /* panels == card */
+    --surface-2: 246 10% 17%;       /* raised cards == secondary */
+    --surface-3: 250 9% 21%;        /* popovers, dialogs, hover */
+    --hairline: 0 0% 100%;          /* used as hsl(var(--hairline) / .06) */
     --warning-foreground: 40 65% 14%;
     --topbar: 246 12% 11%;
     --topbar-foreground: 265 7% 65%;

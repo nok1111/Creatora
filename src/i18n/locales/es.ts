@@ -49,7 +49,7 @@ export const es: typeof en = {
     projectDeleted: "Proyecto eliminado",
     projectName: "Nombre del proyecto",
     projectNamePlaceholder: "Mi vídeo",
-    preset: "Preset de lienzo",
+    preset: "Formato",
     presetCustom: "Personalizado…",
     width: "Ancho",
     height: "Alto",

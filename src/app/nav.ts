@@ -28,7 +28,7 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   { key: "home", path: "/", icon: Home, phase: 2, implemented: true },
   { key: "library", path: "/library", icon: FolderOpen, phase: 2, implemented: true },
-  { key: "editor", path: "/editor", icon: Clapperboard, phase: 3, implemented: true },
+  { key: "editor", path: "/create", icon: Clapperboard, phase: 3, implemented: true },
   { key: "exports", path: "/exports", icon: Rocket, phase: 10, implemented: true },
   { key: "social", path: "/social", icon: Share2, phase: 8, implemented: true },
   { key: "analytics", path: "/analytics", icon: BarChart3, phase: 9, implemented: true },

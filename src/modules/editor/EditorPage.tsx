@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -15,13 +15,14 @@ import {
   Redo2,
   Save,
   Undo2,
-  AlertCircle,
 } from "lucide-react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
 import { awaitJob, onJobProgress } from "@/services/jobs";
 import { useProject } from "@/stores/project";
 import { SuggestionBanner } from "@/components/SuggestionBanner";
+import { EmptyState } from "@/components/EmptyState";
+import { Clapperboard } from "lucide-react";
 import { useEditor } from "@/stores/editor";
 import {
   splitClip,
@@ -68,6 +69,7 @@ export function EditorPage() {
   const [exporting, setExporting] = useState<{ jobId: string; progress: number } | null>(null);
   // Deep-link params: /editor?tab=subtitles, /editor?left=graphics
   const [params] = useSearchParams();
+  const nav = useNavigate();
   const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">(
     params.get("tab") === "subtitles" ? "subtitles" : "timeline",
   );
@@ -206,10 +208,12 @@ export function EditorPage() {
 
   if (!doc) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <AlertCircle className="size-8" />
-        <p className="text-sm">{t("editor.noProject")}</p>
-      </div>
+      <EmptyState
+        icon={Clapperboard}
+        title="Nothing open yet"
+        body="Start a new project or pick a recent one from Home — your timeline, captions and formats live here."
+        action={{ label: "New project", onClick: () => nav("/create") }}
+      />
     );
   }
 

@@ -61,6 +61,12 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        surface: {
+          0: "hsl(var(--surface-0))",
+          1: "hsl(var(--surface-1))",
+          2: "hsl(var(--surface-2))",
+          3: "hsl(var(--surface-3))",
+        },
         pop: {
           coral: "#FF795E",
           lime: "#B8F36B",
@@ -69,6 +75,11 @@ export default {
           cream: "#F4F0E8",
           graphite: "#17171D",
         },
+      },
+      boxShadow: {
+        raise: "0 1px 0 hsl(var(--hairline) / 0.05) inset, 0 2px 6px hsl(240 30% 4% / 0.45)",
+        lift: "0 1px 0 hsl(var(--hairline) / 0.06) inset, 0 10px 28px hsl(240 30% 4% / 0.55)",
+        pop: "0 1px 0 hsl(var(--hairline) / 0.07) inset, 0 4px 14px hsl(240 30% 4% / 0.5)",
       },
       borderRadius: {
         lg: "var(--radius)",

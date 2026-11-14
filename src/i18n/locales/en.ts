@@ -46,7 +46,7 @@ export const en = {
     projectDeleted: "Project removed",
     projectName: "Project name",
     projectNamePlaceholder: "My video",
-    preset: "Canvas preset",
+    preset: "Format",
     presetCustom: "Custom…",
     width: "Width",
     height: "Height",

@@ -62,6 +62,7 @@ pub fn run() {
             media::commands::import_media,
             media::commands::cancel_job,
             media::commands::list_jobs,
+            media::commands::regenerate_thumbnail,
             media::commands::list_assets,
             media::commands::scan_missing_assets,
             media::commands::relink_asset,

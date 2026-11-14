@@ -339,6 +339,39 @@ pub fn list_jobs(
     Ok(jobs.list(kind_prefix.as_deref(), limit.unwrap_or(100).clamp(1, 500)))
 }
 
+/// Regenerate a missing/failed thumbnail for a single asset. Returns the
+/// new path (or None when the kind can't produce one / ffmpeg fails).
+#[tauri::command]
+pub fn regenerate_thumbnail(
+    app: tauri::AppHandle,
+    db: State<'_, Arc<Db>>,
+    asset_id: String,
+) -> CmdResult<Option<String>> {
+    let thumbs_dir = data_dir(&app)?.join("thumbs");
+    db.with(|c| {
+        let (kind, fp): (String, String) = c
+            .query_row(
+                "SELECT kind, file_path FROM media_assets WHERE id=?1",
+                [&asset_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(|_| AppError::NotFound(format!("asset {asset_id}")))?;
+        let src = PathBuf::from(&fp);
+        if !src.is_file() {
+            return Err(AppError::NotFound(format!("source file {fp}")));
+        }
+        let seek = if kind == "video" { Some(1000) } else { None };
+        let out = make_thumbnail(&thumbs_dir, &asset_id, &src, seek)
+            .map(|p| p.to_string_lossy().to_string());
+        c.execute(
+            "UPDATE media_assets SET thumbnail_path=?1 WHERE id=?2",
+            rusqlite::params![out, asset_id],
+        )?;
+        Ok(out)
+    })
+    .map_err(Into::into)
+}
+
 #[tauri::command]
 pub fn list_assets(
     db: State<'_, Arc<Db>>,

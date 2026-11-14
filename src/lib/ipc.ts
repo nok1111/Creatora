@@ -240,6 +240,8 @@ export const api = {
   oauthClientStatus: () =>
     cmd<Record<string, boolean>>("oauth_client_status"),
   revealPath: (path: string) => cmd<void>("reveal_path", { path }),
+  regenerateThumbnail: (assetId: string) =>
+    cmd<string | null>("regenerate_thumbnail", { assetId }),
 
   // ---------- analytics (Phase 9, ADR-029) ----------
   analyticsSync: (targetId?: string) =>

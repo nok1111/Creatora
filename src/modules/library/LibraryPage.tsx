@@ -70,14 +70,38 @@ function AssetCard({ asset, collections, onRelink, onDelete, onFav, onAssign, on
   const { t } = useTranslation();
   const Icon = KIND_ICON[asset.kind] ?? FileText;
   const missing = asset.status === "missing";
+  const [thumbError, setThumbError] = useState(false);
 
   return (
     <div className={cn("group relative overflow-hidden rounded-lg border border-border bg-card", missing && "border-destructive/50")}>
       <div className="relative flex aspect-video items-center justify-center bg-secondary/50">
-        {asset.thumbnailPath && !missing ? (
-          <img src={convertFileSrc(asset.thumbnailPath)} alt={asset.name} className="size-full object-cover" loading="lazy" />
+        {asset.thumbnailPath && !missing && !thumbError ? (
+          <img
+            src={convertFileSrc(asset.thumbnailPath)}
+            alt={asset.name}
+            className="size-full object-cover"
+            loading="lazy"
+            onError={() => setThumbError(true)}
+          />
         ) : (
-          <Icon className="size-8 text-muted-foreground" />
+          <div className="flex flex-col items-center gap-1.5">
+            <Icon className="size-8 text-muted-foreground" />
+            {thumbError && (
+              <button
+                className="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Regenerate thumbnail"
+                onClick={async () => {
+                  const p = await api.regenerateThumbnail(asset.id);
+                  if (p) {
+                    setThumbError(false);
+                    asset.thumbnailPath = p;
+                  }
+                }}
+              >
+                Regenerate
+              </button>
+            )}
+          </div>
         )}
         {missing && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60">

@@ -21,6 +21,9 @@ const SettingsPage = lazy(() =>
 const SocialPage = lazy(() =>
   import("@/modules/social/SocialPage").then((m) => ({ default: m.SocialPage })),
 );
+const CreatePage = lazy(() =>
+  import("@/modules/create/CreatePage").then((m) => ({ default: m.CreatePage })),
+);
 const DesignPreview = lazy(() =>
   import("@/modules/preview/DesignPreview").then((m) => ({ default: m.DesignPreview })),
 );
@@ -54,7 +57,7 @@ function pageFor(key: string) {
     case "library":
       return <LibraryPage />;
     case "editor":
-      return <EditorPage />;
+      return <CreatePage />;
     case "social":
       return <SocialPage />;
     case "exports":
@@ -110,6 +113,14 @@ export default function App() {
               }
             />
             <Route element={<AppShell />}>
+              <Route
+                path="/editor"
+                element={
+                  <Suspense fallback={<ModuleLoading />}>
+                    <EditorPage />
+                  </Suspense>
+                }
+              />
               {MODULES.map((m) => (
                 <Route
                   key={m.key}

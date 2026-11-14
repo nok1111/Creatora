@@ -24,14 +24,14 @@ export interface FormatPreset {
 export const FORMAT_PRESETS: FormatPreset[] = [
   {
     id: "yt-16x9-1080",
-    label: "YouTube 16:9 · 1080p",
+    label: "YouTube · Horizontal 16:9",
     platform: "YouTube",
     canvas: { width: 1920, height: 1080 },
     safeZones: { top: 0, bottom: 0, left: 0, right: 0 },
   },
   {
     id: "shorts-9x16-1080",
-    label: "YouTube Shorts 9:16 · 1080p",
+    label: "Shorts · Vertical 9:16",
     platform: "YouTube",
     canvas: { width: 1080, height: 1920 },
     safeZones: { top: 0.08, bottom: 0.22, left: 0.04, right: 0.04 },
@@ -39,14 +39,14 @@ export const FORMAT_PRESETS: FormatPreset[] = [
   },
   {
     id: "tiktok-9x16-1080",
-    label: "TikTok 9:16 · 1080p",
+    label: "TikTok · Vertical 9:16",
     platform: "TikTok",
     canvas: { width: 1080, height: 1920 },
     safeZones: { top: 0.1, bottom: 0.24, left: 0.05, right: 0.15 },
   },
   {
     id: "ig-reels-9x16-1080",
-    label: "Instagram Reels 9:16 · 1080p",
+    label: "Reels · Vertical 9:16",
     platform: "Instagram",
     canvas: { width: 1080, height: 1920 },
     safeZones: { top: 0.1, bottom: 0.26, left: 0.05, right: 0.16 },
@@ -54,7 +54,7 @@ export const FORMAT_PRESETS: FormatPreset[] = [
   },
   {
     id: "ig-feed-4x5-1080",
-    label: "Instagram Feed 4:5 · 1080p",
+    label: "Instagram Post · 4:5",
     platform: "Instagram",
     canvas: { width: 1080, height: 1350 },
     safeZones: { top: 0.05, bottom: 0.05, left: 0.03, right: 0.03 },
