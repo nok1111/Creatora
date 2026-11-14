@@ -18,6 +18,7 @@ export const es: typeof en = {
     home: "Inicio",
     library: "Medios",
     editor: "Crear",
+    exports: "Exports",
     social: "Redes",
     analytics: "Analíticas",
     settings: "Ajustes",

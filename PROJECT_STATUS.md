@@ -279,3 +279,12 @@ UI: VersionsPanel (create/switch/rename/dup/reset/delete, compare side-by-side, 
 - **Componentes**: variantes Button `creative`/`positive`; barrido de ~21 archivos de colores hardcodeados (amber/cyan/green/red → tokens warning/accent-foreground/success/destructive); radius 0.75rem.
 - **Docs**: UI_REDESIGN_PLAN.md, DESIGN_SYSTEM.md, UI_COMPONENT_GUIDE.md.
 - Gates: tsc/vitest(70)/build limpios. Sin cambios de backend/rutas/stores.
+
+
+## Phase 10.5A status (current)
+
+All Phase 10.5A items implemented and green (147 Rust + 78 vitest):
+Export Center, global Publication History, platform-specific Analytics views,
+account-level follower snapshots (official APIs only), UI sync cancel,
+contextual suggestions. See PHASE_10_5_REPORT.md for per-item detail and
+remaining external API limitations.

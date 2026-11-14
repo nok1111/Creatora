@@ -99,3 +99,46 @@ pub fn stats(token: &str, video_id: &str) -> Result<StatsResult, HttpError> {
     }
     Ok(out)
 }
+
+/// Account-level: channels.list?part=statistics&mine=true →
+/// subscriberCount / viewCount / videoCount for the authenticated
+/// channel (scope youtube.readonly — already granted).
+pub fn account_stats(token: &str) -> Result<StatsResult, HttpError> {
+    let body = get_json(
+        &format!("{}/youtube/v3/channels?part=statistics&mine=true", api()),
+        token,
+    )?;
+    let mut out = StatsResult::default();
+    let item = body["items"].as_array().and_then(|a| a.first());
+    match item {
+        Some(ch) => {
+            let s = &ch["statistics"];
+            let num = |k: &str| s[k].as_str().and_then(|v| v.parse::<f64>().ok());
+            if let Some(v) = num("subscriberCount") {
+                out.metrics
+                    .push(StatsResult::m("followers", "Subscribers", "count", v));
+            }
+            if let Some(v) = num("viewCount") {
+                out.metrics.push(StatsResult::m(
+                    "yt_channel_views",
+                    "Channel total views",
+                    "count",
+                    v,
+                ));
+            }
+            if let Some(v) = num("videoCount") {
+                out.metrics.push(StatsResult::m(
+                    "yt_channel_videos",
+                    "Channel videos",
+                    "count",
+                    v,
+                ));
+            }
+        }
+        None => out.unavailable.push(StatsResult::un(
+            "followers",
+            "channels.list returned no channel for this account",
+        )),
+    }
+    Ok(out)
+}

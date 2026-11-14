@@ -18,11 +18,13 @@ import { InsightsPanel } from "./InsightsPanel";
 import { SyncPanel } from "./SyncPanel";
 import { ImportPanel } from "./ImportPanel";
 import { PacketsPanel } from "./PacketsPanel";
+import { PlatformView } from "./PlatformView";
 
-type Tab = "dashboard" | "compare" | "insights" | "sync" | "import" | "packets";
+type Tab = "dashboard" | "platforms" | "compare" | "insights" | "sync" | "import" | "packets";
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "dashboard", label: "Dashboard", icon: <BarChart3 size={14} /> },
+  { key: "platforms", label: "Platforms", icon: <Package size={14} /> },
   { key: "compare", label: "Compare", icon: <GitCompareArrows size={14} /> },
   { key: "insights", label: "Insights", icon: <Lightbulb size={14} /> },
   { key: "sync", label: "Sync", icon: <RefreshCw size={14} /> },
@@ -66,6 +68,7 @@ export function AnalyticsPage() {
       </header>
       <div className="flex-1 overflow-y-auto p-5">
         {tab === "dashboard" && <Dashboard />}
+          {tab === "platforms" && <PlatformView />}
         {tab === "compare" && <ComparePanel />}
         {tab === "insights" && <InsightsPanel />}
         {tab === "sync" && <SyncPanel />}

@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   FileVideo,
+  History,
   Loader2,
   Pencil,
   Plus,
@@ -28,9 +29,10 @@ import { cn } from "@/lib/utils";
 import { ComposerDialog } from "./ComposerDialog";
 import { CalendarView } from "./CalendarView";
 import { AccountsPanel } from "./AccountsPanel";
+import { PublicationHistory } from "./PublicationHistory";
 import { PostDetail } from "./PostDetail";
 
-type Tab = "posts" | "calendar" | "accounts";
+type Tab = "posts" | "calendar" | "accounts" | "history";
 
 const STATUS_BADGE: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -58,7 +60,7 @@ export function SocialPage() {
   } = useSocial();
   const [params] = useSearchParams();
   const [tab, setTab] = useState<Tab>(
-    ["posts", "calendar", "accounts"].includes(params.get("tab") ?? "")
+    ["posts", "calendar", "accounts", "history"].includes(params.get("tab") ?? "")
       ? (params.get("tab") as Tab)
       : "posts",
   );
@@ -129,6 +131,7 @@ export function SocialPage() {
               ["posts", FileVideo],
               ["calendar", CalendarDays],
               ["accounts", Users],
+              ["history", History],
             ] as const
           ).map(([k, Icon]) => (
             <button
@@ -232,6 +235,14 @@ export function SocialPage() {
 
       {tab === "calendar" && <CalendarView onOpenPost={setDetailId} />}
       {tab === "accounts" && <AccountsPanel />}
+      {tab === "history" && (
+        <PublicationHistory
+          onOpenPost={(id) => {
+            setDetailId(id);
+            setTab("posts");
+          }}
+        />
+      )}
 
       {composing && (
         <ComposerDialog

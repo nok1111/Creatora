@@ -87,6 +87,30 @@ pub fn fetch_stats(
     }
 }
 
+/// Fetch account-level stats (audience size etc.) for a connected
+/// account. `platform_user_id` = the id stored at OAuth connect time.
+/// Returns unavailable entries (not errors) when the API exists but the
+/// account/scope can't serve it.
+pub fn fetch_account_stats(
+    platform: &str,
+    token: &str,
+    platform_user_id: &str,
+    meta: &serde_json::Value,
+) -> Result<StatsResult, HttpError> {
+    match platform {
+        "youtube" => youtube::account_stats(token),
+        "tiktok" => tiktok::account_stats(token),
+        "instagram" => instagram::account_stats(token, platform_user_id, meta),
+        "facebook" => facebook::account_stats(token, platform_user_id),
+        _ => Err(HttpError {
+            status: None,
+            message: format!("no account-stats adapter for {platform}"),
+            retry_after: None,
+            body: None,
+        }),
+    }
+}
+
 /// Which stats surfaces an adapter exposes — used by the UI to explain
 /// capability without calling the API.
 pub fn stats_capability(platform: &str) -> &'static str {

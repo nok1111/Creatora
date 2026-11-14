@@ -21,6 +21,9 @@ const SettingsPage = lazy(() =>
 const SocialPage = lazy(() =>
   import("@/modules/social/SocialPage").then((m) => ({ default: m.SocialPage })),
 );
+const ExportsPage = lazy(() =>
+  import("@/modules/exports/ExportsPage").then((m) => ({ default: m.ExportsPage })),
+);
 const AnalyticsPage = lazy(() =>
   import("@/modules/analytics/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })),
 );
@@ -51,6 +54,8 @@ function pageFor(key: string) {
       return <EditorPage />;
     case "social":
       return <SocialPage />;
+    case "exports":
+      return <ExportsPage />;
     case "analytics":
       return <AnalyticsPage />;
     case "settings":

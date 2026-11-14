@@ -16,6 +16,7 @@ import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
 import { awaitJob, onJobProgress } from "@/services/jobs";
 import { useProject } from "@/stores/project";
+import { SuggestionBanner } from "@/components/SuggestionBanner";
 import { useEditor } from "@/stores/editor";
 import {
   splitClip,
@@ -209,6 +210,7 @@ export function EditorPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <SuggestionBanner doc={doc} />
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-1.5">
         <span className="text-sm font-medium">

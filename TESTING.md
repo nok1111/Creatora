@@ -135,3 +135,13 @@ the platform's own dashboard numbers.
   verified via build chunk table; playhead isolation verified by
   subscription audit - profiler capture deferred to Phase 11 QA.
 - Not run: cargo-audit (tool absent) - CI item for Phase 11.
+
+
+## Phase 10.5A additions
+
+- `src-tauri/tests/phase10_5.rs`: account_snapshots dedupe, publication_history
+  joins/filters (platform/outcome/since/limit), list_jobs kind-prefix filter.
+- `src/services/suggestions.test.ts`: suggestion rule conditions,
+  already-done suppression, cap, dismissal persistence.
+- Manual: Exports page cancel/retry/reveal, Social→History filters,
+  Analytics→Platforms account chart, SyncPanel cancel during a run.

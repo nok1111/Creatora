@@ -15,6 +15,7 @@ export const en = {
     home: "Home",
     library: "Media",
     editor: "Create",
+    exports: "Exports",
     social: "Social",
     analytics: "Analytics",
     settings: "Settings",

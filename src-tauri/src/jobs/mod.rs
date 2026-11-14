@@ -93,12 +93,13 @@ impl JobManager {
         }
     }
 
-    fn record_start(&self, id: &str, kind: &str) {
+    fn record_start(&self, id: &str, kind: &str, payload: &serde_json::Value) {
+        let pj = serde_json::to_string(payload).unwrap_or_else(|_| "{}".into());
         if let Some(db) = self.db.lock().as_ref() {
             let _ = db.with(|c| {
                 c.execute(
-                    "INSERT INTO jobs (id, kind, payload_json, status) VALUES (?1, ?2, '{}', 'running')",
-                    [id, kind],
+                    "INSERT INTO jobs (id, kind, payload_json, status) VALUES (?1, ?2, ?3, 'running')",
+                    rusqlite::params![id, kind, pj],
                 )?;
                 Ok(())
             });
@@ -111,6 +112,21 @@ impl JobManager {
     where
         F: FnOnce(&JobCtx) -> Result<serde_json::Value, String> + Send + 'static,
     {
+        self.spawn_with_payload(app, kind, &serde_json::json!({}), body)
+    }
+
+    /// Spawn with a durable metadata payload (project name, output,
+    /// destination…) so the Export Center can render a useful history.
+    pub fn spawn_with_payload<F>(
+        &self,
+        app: tauri::AppHandle,
+        kind: &str,
+        payload: &serde_json::Value,
+        body: F,
+    ) -> String
+    where
+        F: FnOnce(&JobCtx) -> Result<serde_json::Value, String> + Send + 'static,
+    {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = Arc::new(AtomicBool::new(false));
         self.jobs.lock().insert(
@@ -119,7 +135,7 @@ impl JobManager {
                 cancel: cancel.clone(),
             },
         );
-        self.record_start(&id, kind);
+        self.record_start(&id, kind, payload);
 
         let ctx = JobCtx {
             app: app.clone(),
@@ -167,6 +183,37 @@ impl JobManager {
 
         log::info!("job {id} spawned ({kind})");
         id
+    }
+
+    /// List durable job rows — powers the Export Center / activity views.
+    /// `kind_prefix` filters with LIKE '<prefix>%'; None lists everything.
+    pub fn list(&self, kind_prefix: Option<&str>, limit: i64) -> Vec<serde_json::Value> {
+        let Some(db) = self.db.lock().clone() else {
+            return Vec::new();
+        };
+        db.with(|c| {
+            let mut stmt = c.prepare(
+                "SELECT id, kind, payload_json, status, progress, created_at, finished_at
+                 FROM jobs
+                 WHERE (?1 IS NULL OR kind LIKE ?1 || '%')
+                 ORDER BY created_at DESC LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![kind_prefix, limit], |r| {
+                let pj: String = r.get(2)?;
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "kind": r.get::<_, String>(1)?,
+                    "payload": serde_json::from_str::<serde_json::Value>(&pj)
+                        .unwrap_or(serde_json::json!({})),
+                    "status": r.get::<_, String>(3)?,
+                    "progress": r.get::<_, f64>(4)?,
+                    "createdAt": r.get::<_, String>(5)?,
+                    "finishedAt": r.get::<_, Option<String>>(6)?,
+                }))
+            })?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        })
+        .unwrap_or_default()
     }
 
     /// Signal cancellation. Returns false for unknown/finished jobs.

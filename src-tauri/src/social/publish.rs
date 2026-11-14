@@ -171,7 +171,12 @@ pub fn publish_post_target(
             .and_then(|v| v.as_str())
             .map(str::to_string),
     };
-    let job_id = jobs.spawn(app.clone(), "social.publish", move |ctx| {
+    let payload = serde_json::json!({
+        "targetId": target_id,
+        "platform": platform,
+        "postTitle": r.post.title,
+    });
+    let job_id = jobs.spawn_with_payload(app.clone(), "social.publish", &payload, move |ctx| {
         // Any error path → mark attempt+target failed right here; the job
         // event only mirrors it. Never leaves a target stuck "publishing".
         let work = (|| -> Result<serde_json::Value, String> {
@@ -315,7 +320,16 @@ pub fn export_for_target(
         .app_data_dir()
         .map_err(|e| AppError::Internal(format!("app_data_dir: {e}")))?
         .join("thumbnails");
-    let job_id = jobs.spawn(app.clone(), "social.export", move |ctx| {
+    let payload = serde_json::json!({
+        "targetId": tid,
+        "projectPath": project_path,
+        "outputPath": out_path,
+        "versionId": version_id,
+        "platform": r.platform,
+        "postTitle": r.post.title,
+        "retryable": true,
+    });
+    let job_id = jobs.spawn_with_payload(app.clone(), "social.export", &payload, move |ctx| {
         let result = crate::render::commands::run_export_body(
             ctx,
             &std::path::PathBuf::from(&project_path),

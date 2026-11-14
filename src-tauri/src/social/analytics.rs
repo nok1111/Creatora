@@ -353,6 +353,66 @@ fn start_sync_job(
                 }
             }
         }
+        // Account-level metrics (followers etc.) — once per distinct
+        // account touched this run. Dedupe is per-day via the unique
+        // index, so repeated syncs stay idempotent; a failure here is
+        // recorded as a sync error, never silently skipped.
+        let accounts: std::collections::HashSet<(String, String)> = targets
+            .iter()
+            .map(|(_, platform, _, account_id, _)| (platform.clone(), account_id.clone()))
+            .collect();
+        for (platform, account_id) in accounts {
+            if ctx.is_cancelled() {
+                break;
+            }
+            let acct = (|| -> Result<(), String> {
+                let (uid, meta) = db.with(|c| {
+                    c.query_row(
+                        "SELECT platform_user_id, meta_json FROM social_accounts WHERE id=?1",
+                        [&account_id],
+                        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+                    )
+                    .map_err(Into::into)
+                })
+                .map_err(|e: AppError| e.to_string())?;
+                let meta: serde_json::Value =
+                    serde_json::from_str(&meta).unwrap_or_default();
+                let (oauth, client_id) = oauth_cfg(&db, &app_data, &platform)?;
+                let token = super::oauth::refresh_if_needed(
+                    &db, &account_id, &platform, &oauth, &client_id,
+                )?;
+                let res = stats::fetch_account_stats(&platform, &token, &uid, &meta)
+                    .map_err(|e| e.to_message())?;
+                if res.metrics.is_empty() {
+                    return Ok(());
+                }
+                let mj = serde_json::to_string(&res.metrics)
+                    .unwrap_or_else(|_| "[]".into());
+                db.with(|c| {
+                    c.execute(
+                        "INSERT OR IGNORE INTO account_snapshots
+                         (id,account_id,platform,source,metrics_json)
+                         VALUES(?1,?2,?3,'api',?4)",
+                        rusqlite::params![uuid::Uuid::new_v4().to_string(), account_id, platform, mj],
+                    )?;
+                    Ok::<(), AppError>(())
+                })
+                .map_err(|e: AppError| e.to_string())?;
+                Ok(())
+            })();
+            if let Err(e) = acct {
+                let _ = db.with(|c| {
+                    c.execute(
+                        "INSERT INTO analytics_sync_errors(id,run_id,target_id,platform,error)
+                         VALUES(?1,?2,NULL,?3,?4)",
+                        rusqlite::params![uuid::Uuid::new_v4().to_string(), run_id, platform,
+                            format!("account stats: {e}")],
+                    )?;
+                    Ok::<(), AppError>(())
+                });
+            }
+        }
+
         let status = if failed == 0 {
             "ok"
         } else if ok == 0 && total > 0 {
@@ -840,7 +900,41 @@ pub fn analytics_insights(
     })
 }
 
-/// What each platform's stats adapter can actually serve.
+/// Account-level snapshot history per platform (for follower charts).
+/// Returns accounts (id, platform_user_id) + snapshots ordered by time.
+#[tauri::command]
+pub fn analytics_account_history(
+    db: State<'_, Arc<Db>>,
+    platform: Option<String>,
+) -> CmdResult<serde_json::Value> {
+    db.with(|c| {
+        let mut stmt = c.prepare(
+            "SELECT s.id, s.account_id, a.platform, a.platform_user_id,
+                    s.fetched_at, s.source, s.metrics_json
+             FROM account_snapshots s
+             JOIN social_accounts a ON a.id=s.account_id
+             WHERE (?1 IS NULL OR a.platform=?1)
+             ORDER BY s.fetched_at ASC",
+        )?;
+        let rows = stmt
+            .query_map([platform], |r| {
+                let mj: String = r.get(6)?;
+                Ok(serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "accountId": r.get::<_, String>(1)?,
+                    "platform": r.get::<_, String>(2)?,
+                    "platformUserId": r.get::<_, String>(3)?,
+                    "fetchedAt": r.get::<_, String>(4)?,
+                    "source": r.get::<_, String>(5)?,
+                    "metrics": serde_json::from_str::<serde_json::Value>(&mj)
+                        .unwrap_or(serde_json::json!([])),
+                }))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(serde_json::json!({"rows": rows}))
+    })
+}
+
 #[tauri::command]
 pub fn analytics_platform_stats_info() -> CmdResult<serde_json::Value> {
     Ok(serde_json::json!({

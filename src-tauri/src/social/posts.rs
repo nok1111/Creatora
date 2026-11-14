@@ -691,6 +691,85 @@ pub fn disconnect_social_account(db: State<'_, Arc<Db>>, id: String) -> CmdResul
     })
 }
 
+/// Global history row: attempt + its post/target context.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryRow {
+    pub attempt_id: String,
+    pub target_id: String,
+    pub post_id: String,
+    pub post_title: String,
+    pub project_id: Option<String>,
+    pub platform: String,
+    pub account_id: Option<String>,
+    pub status: String,
+    pub platform_post_id: Option<String>,
+    pub platform_url: Option<String>,
+    pub error: Option<String>,
+    pub attempt_no: i64,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+}
+
+/// Global publication history across all posts. Filters: platform,
+/// outcome ('ok'|'failed'|'uploading'|'cancelled'), since (ISO prefix),
+/// limit. Never fabricates results — rows come verbatim from
+/// publication_attempts.
+#[tauri::command]
+pub fn publication_history(
+    db: State<'_, Arc<Db>>,
+    platform: Option<String>,
+    outcome: Option<String>,
+    since: Option<String>,
+    limit: Option<i64>,
+) -> CmdResult<Vec<HistoryRow>> {
+    db.with(|c| {
+        let mut stmt = c.prepare(
+            "SELECT a.id, a.target_id, a.status, a.platform_post_id,
+                    a.platform_url, a.error, a.attempt_no, a.started_at,
+                    a.finished_at,
+                    t.platform, t.account_id, p.id, p.title, p.project_id
+             FROM publication_attempts a
+             JOIN social_post_targets t ON t.id=a.target_id
+             JOIN social_posts p ON p.id=t.post_id
+             WHERE (?1 IS NULL OR t.platform=?1)
+               AND (?2 IS NULL OR a.status=?2 OR
+                    (?2='ok' AND a.status='published'))
+               AND (?3 IS NULL OR a.started_at>=?3)
+             ORDER BY a.started_at DESC LIMIT ?4",
+        )?;
+        let rows = stmt
+            .query_map(
+                params![
+                    platform,
+                    outcome,
+                    since,
+                    limit.unwrap_or(200).clamp(1, 1000)
+                ],
+                |r| {
+                    Ok(HistoryRow {
+                        attempt_id: r.get(0)?,
+                        target_id: r.get(1)?,
+                        status: r.get(2)?,
+                        platform_post_id: r.get(3)?,
+                        platform_url: r.get(4)?,
+                        error: r.get(5)?,
+                        attempt_no: r.get(6)?,
+                        started_at: r.get(7)?,
+                        finished_at: r.get(8)?,
+                        platform: r.get(9)?,
+                        account_id: r.get(10)?,
+                        post_id: r.get(11)?,
+                        post_title: r.get(12)?,
+                        project_id: r.get(13)?,
+                    })
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+}
+
 // ---- attempt history ----
 
 #[tauri::command]

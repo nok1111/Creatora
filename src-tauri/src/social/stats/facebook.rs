@@ -68,3 +68,29 @@ pub fn stats(
     }
     Ok(out)
 }
+
+/// Account-level: /{page-id}?fields=followers_count,fan_count —
+/// Page followers. platform_user_id is the Page id stored at connect.
+pub fn account_stats(token: &str, platform_user_id: &str) -> Result<StatsResult, HttpError> {
+    let body = get_json(
+        &format!(
+            "{}/{platform_user_id}?fields=followers_count,fan_count",
+            ep("fb.graph", "https://graph.facebook.com/v21.0")
+        ),
+        token,
+    )?;
+    let mut out = StatsResult::default();
+    let v = body["followers_count"]
+        .as_f64()
+        .or_else(|| body["fan_count"].as_f64());
+    match v {
+        Some(v) => out
+            .metrics
+            .push(StatsResult::m("followers", "Page followers", "count", v)),
+        None => out.unavailable.push(StatsResult::un(
+            "followers",
+            "no followers_count/fan_count — needs pages_read_engagement + Page role",
+        )),
+    }
+    Ok(out)
+}

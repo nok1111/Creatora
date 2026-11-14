@@ -165,3 +165,14 @@ Format: [Keep a Changelog](https://keepachangelog.com). Versions use SemVer.
   "what can I make today" creation cards; new button variants
   (creative/positive); hardcoded hues swept to semantic tokens;
   dead nav entries removed earlier this session; 70 vitest green.
+
+
+## Phase 10.5A — Product Completeness (unreleased)
+
+- **Export Center** (`/exports`): global view of export/background jobs — filters, progress, cancel, retry for social exports, reveal in folder. Backed by durable `jobs.payload_json` + `list_jobs` command. Same JobManager.
+- **Publication History**: new Social "History" tab — all attempts across posts with platform/outcome/date filters, remote IDs, errors, deep link to PostDetail.
+- **Platform Analytics**: dedicated per-platform view (YouTube/TikTok/Instagram/Facebook) — account metrics with provenance, trends, top posts, capability notes; missing metrics shown as "—", never zero.
+- **Follower/subscriber history**: `account_snapshots` (migration 0006) captured per sync where official APIs allow; charts only with ≥2 real snapshots.
+- **Analytics sync cancel**: Cancel button in SyncPanel wired to `cancel_job`; cancelled runs persist as `cancelled`.
+- **Contextual suggestions**: centralized rule engine (`services/suggestions.ts`) + dismissible editor banner driven by real project state.
+- Tests: +3 Rust integration, +8 vitest (suggestion rules/dismissal).

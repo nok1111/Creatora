@@ -172,3 +172,10 @@ Sub-phased per product review — vertical slice first, then depth, then perform
 - Phase 11 (distribution): installer (MSIX/NSIS), auto-update, license
   activation for one-time purchase, cargo-audit in CI, CSP dev-mode
   smoke check, real-GPU perf matrix, third-party notices in About.
+
+
+## Phase 10.5A — Product Completeness (done)
+
+Export Center, Publication History, platform analytics views, account
+metrics where officially supported, sync cancel UI, contextual suggestions.
+Remaining external limits documented in PHASE_10_5_REPORT.md §8.

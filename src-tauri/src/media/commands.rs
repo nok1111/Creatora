@@ -328,6 +328,17 @@ pub fn cancel_job(jobs: State<'_, JobManager>, job_id: String) -> CmdResult<bool
     Ok(jobs.cancel(&job_id))
 }
 
+/// Durable job rows for the Export Center / activity views.
+/// `kind_prefix` e.g. "render.export", "social.", None = everything.
+#[tauri::command]
+pub fn list_jobs(
+    jobs: State<'_, JobManager>,
+    kind_prefix: Option<String>,
+    limit: Option<i64>,
+) -> CmdResult<Vec<serde_json::Value>> {
+    Ok(jobs.list(kind_prefix.as_deref(), limit.unwrap_or(100).clamp(1, 500)))
+}
+
 #[tauri::command]
 pub fn list_assets(
     db: State<'_, Arc<Db>>,

@@ -50,3 +50,40 @@ pub fn stats(token: &str, media_id: &str) -> Result<StatsResult, HttpError> {
     }
     Ok(out)
 }
+
+/// Account-level: /{ig-user-id}?fields=followers_count,media_count —
+/// professional accounts only; platform_user_id is the IG user id
+/// stored at connect (meta.igUserId wins when present).
+pub fn account_stats(
+    token: &str,
+    platform_user_id: &str,
+    meta: &serde_json::Value,
+) -> Result<StatsResult, HttpError> {
+    let uid = meta
+        .get("igUserId")
+        .and_then(|v| v.as_str())
+        .unwrap_or(platform_user_id);
+    let body = get_json(
+        &format!(
+            "{}/{uid}?fields=followers_count,media_count",
+            ep("fb.graph", "https://graph.facebook.com/v21.0")
+        ),
+        token,
+    )?;
+    let mut out = StatsResult::default();
+    match body["followers_count"].as_f64() {
+        Some(v) => {
+            out.metrics
+                .push(StatsResult::m("followers", "Followers", "count", v));
+            if let Some(v) = body["media_count"].as_f64() {
+                out.metrics
+                    .push(StatsResult::m("ig_media_count", "Media", "count", v));
+            }
+        }
+        None => out.unavailable.push(StatsResult::un(
+            "followers",
+            "no followers_count — needs a Business/Creator IG user id",
+        )),
+    }
+    Ok(out)
+}

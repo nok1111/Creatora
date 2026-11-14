@@ -119,6 +119,12 @@ export const api = {
   // Media
   importMedia: (paths: string[]) => cmd<string>("import_media", { paths }),
   cancelJob: (jobId: string) => cmd<boolean>("cancel_job", { jobId }),
+  listJobs: (kindPrefix?: string, limit?: number) =>
+    cmd<JobRow[]>("list_jobs", { kindPrefix, limit }),
+  publicationHistory: (f?: { platform?: string; outcome?: string; since?: string; limit?: number }) =>
+    cmd<PublicationHistoryRow[]>("publication_history", { ...f }),
+  analyticsAccountHistory: (platform?: string) =>
+    cmd<{ rows: AccountSnapshot[] }>("analytics_account_history", { platform }),
   listAssets: (opts?: {
     kind?: string;
     query?: string;
@@ -310,4 +316,51 @@ export interface Template {
   category: string;
   clip: import("./project-types").Clip;
   brandKitId?: string | null;
+}
+
+export interface JobRow {
+  id: string;
+  kind: string;
+  payload: {
+    projectName?: string;
+    projectPath?: string;
+    outputPath?: string;
+    outputFile?: string;
+    versionId?: string;
+    platform?: string;
+    postTitle?: string;
+    targetId?: string;
+    retryable?: boolean;
+  };
+  status: string;
+  progress: number;
+  createdAt: string;
+  finishedAt?: string | null;
+}
+
+export interface PublicationHistoryRow {
+  attemptId: string;
+  targetId: string;
+  postId: string;
+  postTitle: string;
+  projectId?: string | null;
+  platform: string;
+  accountId?: string | null;
+  status: string;
+  platformPostId?: string | null;
+  platformUrl?: string | null;
+  error?: string | null;
+  attemptNo: number;
+  startedAt: string;
+  finishedAt?: string | null;
+}
+
+export interface AccountSnapshot {
+  id: string;
+  accountId: string;
+  platform: string;
+  platformUserId: string;
+  fetchedAt: string;
+  source: string;
+  metrics: { key: string; label: string; unit: string; value: number }[];
 }

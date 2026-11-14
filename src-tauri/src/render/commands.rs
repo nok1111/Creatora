@@ -175,9 +175,23 @@ pub fn export_project(
         std::fs::create_dir_all(parent)?;
     }
     let db2 = (*db).clone();
-    let job_id = jobs.spawn(app.clone(), "render.export", move |ctx: &JobCtx| {
-        run_export_body(ctx, &project_path, &out_path, version_id.as_deref(), &db2)
+    let payload = serde_json::json!({
+        "projectPath": project_path,
+        "outputPath": out_path,
+        "versionId": version_id,
+        "projectName": project_path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string()),
+        "outputFile": out_path.file_name().map(|s| s.to_string_lossy().to_string()),
     });
+    let job_id = jobs.spawn_with_payload(
+        app.clone(),
+        "render.export",
+        &payload,
+        move |ctx: &JobCtx| {
+            run_export_body(ctx, &project_path, &out_path, version_id.as_deref(), &db2)
+        },
+    );
     Ok(job_id)
 }
 

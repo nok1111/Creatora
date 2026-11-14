@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/ipc";
 import { awaitJob } from "@/services/jobs";
@@ -30,14 +30,18 @@ export function SyncPanel() {
     queryFn: () => api.analyticsPlatformStatsInfo(),
   });
   const [busy, setBusy] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const runNow = async () => {
     setBusy(true);
     try {
       const job = await api.analyticsSync();
+      setJobId(job);
       const f = await awaitJob<{ ok: number; failed: number }>(job);
       if (f.status === "done") {
         toast.success(`Sync done: ${f.result?.ok ?? 0} ok, ${f.result?.failed ?? 0} failed`);
+      } else if (f.status === "cancelled") {
+        toast.info("Sync cancelled");
       } else {
         toast.error(`Sync ${f.status}: ${f.error ?? ""}`);
       }
@@ -45,7 +49,14 @@ export function SyncPanel() {
       void qc.invalidateQueries({ queryKey: ["analytics-dashboard"] });
     } finally {
       setBusy(false);
+      setJobId(null);
     }
+  };
+
+  const cancel = async () => {
+    if (!jobId) return;
+    await api.cancelJob(jobId);
+    toast.info("Cancelling sync…");
   };
 
   const setIntervalMin = async (v: number) => {
@@ -75,10 +86,17 @@ export function SyncPanel() {
               ))}
             </select>
           </div>
-          <Button size="sm" disabled={busy} onClick={() => void runNow()}>
-            <RefreshCw size={13} className="mr-1" />
-            {busy ? "Syncing…" : "Sync now"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" disabled={busy} onClick={() => void runNow()}>
+              <RefreshCw size={13} className="mr-1" />
+              {busy ? "Syncing…" : "Sync now"}
+            </Button>
+            {busy && jobId && (
+              <Button size="sm" variant="destructive" onClick={() => void cancel()}>
+                <XCircle size={13} className="mr-1" /> Cancel
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="rounded-lg border border-border p-4 space-y-2">

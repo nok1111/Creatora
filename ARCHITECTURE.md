@@ -218,3 +218,17 @@ Job plumbing: analytics_sync runs through the existing JobManager; the
   'interrupted' - UI never shows phantom work.
 - store::open rejects .creatora > 64 MiB before parsing.
 - CSP in tauri.conf.json - see PHASE_10_SECURITY_REPORT.md.
+
+
+## Phase 10.5A notes
+
+- `jobs.payload_json` now carries display metadata (projectName, outputPath,
+  targetId, platform, retryable); `list_jobs` serves the Export Center.
+- `publication_history` joins attempts→targets→posts; read-only, preserves
+  the publication state machine.
+- `account_snapshots` (migration 0006): one API snapshot per account/day;
+  `fetch_account_stats` per adapter captures only officially exposed
+  account metrics. Sync cancellation is cooperative — checked between
+  targets, not inside an in-flight HTTP request.
+- Suggestions: `services/suggestions.ts` pure evaluator; dismissals in
+  localStorage; banner-only UX, no modals.

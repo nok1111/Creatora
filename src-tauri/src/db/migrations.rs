@@ -21,6 +21,10 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "0005_analytics",
         include_str!("../../migrations/0005_analytics.sql"),
     ),
+    (
+        "0006_account_snapshots",
+        include_str!("../../migrations/0006_account_snapshots.sql"),
+    ),
 ];
 
 pub fn migrate(conn: &Connection) -> Result<(), AppError> {
