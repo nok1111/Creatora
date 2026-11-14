@@ -166,6 +166,8 @@ export const en = {
     copy: "Copy (Ctrl+C)",
     duplicate: "Duplicate (Ctrl+D)",
     renameTrack: "Rename track",
+    dropLocked: "Track is locked",
+    dropWrongTrack: "That media type doesn't belong on this track",
     inspector: "Inspector",
     inspectorEmpty: "Select one clip to edit its properties.",
     keyframe: "Toggle keyframe at playhead",

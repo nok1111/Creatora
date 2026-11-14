@@ -169,6 +169,8 @@ export const es: typeof en = {
     copy: "Copiar (Ctrl+C)",
     duplicate: "Duplicar (Ctrl+D)",
     renameTrack: "Renombrar pista",
+    dropLocked: "La pista está bloqueada",
+    dropWrongTrack: "Ese tipo de medio no va en esta pista",
     inspector: "Inspector",
     inspectorEmpty: "Selecciona un clip para editar sus propiedades.",
     keyframe: "Alternar keyframe en el playhead",

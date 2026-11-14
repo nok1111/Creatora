@@ -9,6 +9,7 @@ import { awaitJob } from "@/services/jobs";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import { addClip } from "@/lib/timeline-engine";
+import { setDragPayload } from "@/lib/drag-payload";
 import type { AssetSummary } from "@/lib/media-types";
 import { EmptyState } from "@/components/EmptyState";
 import { reportError } from "@/lib/errors";
@@ -105,7 +106,16 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
                 String(a.durationMs ?? 3000),
               );
               e.dataTransfer.effectAllowed = "copy";
+              // dataTransfer isn't readable during dragover — stash for the
+              // timeline's drop ghost + lane validation.
+              setDragPayload({
+                assetId: a.id,
+                filePath: a.filePath,
+                durationMs: a.durationMs ?? 3000,
+                kind: a.kind,
+              });
             }}
+            onDragEnd={() => setDragPayload(null)}
             className="group flex cursor-grab items-center gap-2 rounded border border-border bg-background/60 p-1.5 text-xs hover:bg-accent"
           >
             {a.thumbnailPath ? (

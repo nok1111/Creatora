@@ -43,6 +43,8 @@ import {
   trimClip,
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
+import { getDragPayload } from "@/lib/drag-payload";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   AnchoredMenu,
@@ -88,6 +90,27 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const [editingTrack, setEditingTrack] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track; clip: Clip } | null>(null);
+  // Drop feedback: ghost position + validity for the lane under the pointer.
+  const [dropHint, setDropHint] = useState<{
+    trackId: string;
+    startMs: number;
+    durationMs: number;
+    valid: boolean;
+  } | null>(null);
+  const dropHintRef = useRef<typeof dropHint>(null);
+  // Lane under pointer while moving a clip (pointer-drag, not HTML5 DnD).
+  const [moveLane, setMoveLane] = useState<{ trackId: string; valid: boolean } | null>(null);
+  const setHint = (h: typeof dropHint) => {
+    const p = dropHintRef.current;
+    if (
+      p === h ||
+      (p && h && p.trackId === h.trackId && p.startMs === h.startMs &&
+        p.durationMs === h.durationMs && p.valid === h.valid)
+    )
+      return;
+    dropHintRef.current = h;
+    setDropHint(h);
+  };
 
   const msToPx = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec]);
   const pxToMs = useCallback((px: number) => (px / pxPerSec) * 1000, [pxPerSec]);
@@ -108,6 +131,35 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [playing, doc, msToPx]);
+
+  // Wheel map — native listener (non-passive, so preventDefault actually
+  // cancels): wheel → horizontal scroll, Shift+wheel → vertical scroll,
+  // Ctrl+wheel → zoom anchored on the cursor (same anchor math as before).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect();
+        const pps = useEditor.getState().pxPerSec;
+        const cursorMs = ((e.clientX - rect.left + el.scrollLeft - HEADER_W) / pps) * 1000;
+        const factor = e.deltaY < 0 ? 1.25 : 0.8;
+        const next = Math.min(600, Math.max(20, pps * factor));
+        useEditor.getState().setZoom(next);
+        requestAnimationFrame(() => {
+          el.scrollLeft = Math.max(0, (cursorMs / 1000) * next - (e.clientX - rect.left - HEADER_W));
+        });
+        return;
+      }
+      if (e.shiftKey) el.scrollTop += e.deltaY;
+      else el.scrollLeft += e.deltaX !== 0 ? e.deltaX : e.deltaY;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // Re-attach only when the scroll container appears/disappears — not on
+    // every doc mutation (scrubbing would churn listeners each frame).
+  }, [doc != null]);
 
   if (!doc) return null;
   const durationMs = Math.max(timelineDuration(doc), 10_000);
@@ -151,6 +203,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     if (track.locked) return; // locked: selectable but not editable
 
     beginGesture();
+    document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
     const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
     const laneRect = lane.getBoundingClientRect();
     const grabOffsetMs = pxToMs(e.clientX - laneRect.left) - clip.startMs;
@@ -169,6 +222,19 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
             break;
           }
         }
+        // Target-lane feedback: highlight + not-allowed cursor when the
+        // move would be rejected (locked or kind-incompatible track).
+        const targetTrack = doc.timeline.tracks.find((t) => t.id === targetTrackId);
+        const validMove =
+          !!targetTrack &&
+          !targetTrack.locked &&
+          (targetTrack.kind === "audio") === (track.kind === "audio");
+        setMoveLane((p) =>
+          p && p.trackId === targetTrackId && p.valid === validMove
+            ? p
+            : { trackId: targetTrackId, valid: validMove },
+        );
+        document.body.style.cursor = validMove ? "grabbing" : "not-allowed";
         mutateInGesture((d) => {
           // moveClipToTrack handles both same-track (moveClip) and
           // cross-track moves, with kind/lock checks built in.
@@ -194,6 +260,8 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      setMoveLane(null);
       endGesture();
       setSnapLine(null);
     };
@@ -214,22 +282,6 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-  };
-
-  // Ctrl+wheel zoom anchored on the cursor.
-  const onWheel = (e: React.WheelEvent) => {
-    if (!e.ctrlKey && !e.metaKey) return;
-    e.preventDefault();
-    const el = scrollRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const cursorMs = pxToMs(e.clientX - rect.left + el.scrollLeft - HEADER_W);
-    const factor = e.deltaY < 0 ? 1.25 : 0.8;
-    const next = Math.min(600, Math.max(20, pxPerSec * factor));
-    setZoom(next);
-    requestAnimationFrame(() => {
-      el.scrollLeft = Math.max(0, msToPx(cursorMs) - (e.clientX - rect.left - HEADER_W));
-    });
   };
 
   const fit = () => {
@@ -290,11 +342,26 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     select(ids);
   };
 
+  /** Lane validation shared by dragover (ghost/dropEffect) and drop —
+      mirrors moveClipToTrack's rules: audio only on audio tracks, locked
+      rejects everything. Unknown kind (foreign drag) stays permissive. */
+  const dropValid = (track: Track, kind: string | undefined) =>
+    !track.locked && (!kind || (track.kind === "audio") === (kind === "audio"));
+
   const onDrop = (e: React.DragEvent, track: Track) => {
     e.preventDefault();
-    if (track.locked) return;
+    setHint(null);
     const assetId = e.dataTransfer.getData("application/x-creatora-asset");
     if (!assetId) return;
+    if (track.locked) {
+      toast.error(t("editor.dropLocked"));
+      return;
+    }
+    const kind = getDragPayload()?.kind ?? assets.get(assetId)?.kind;
+    if (!dropValid(track, kind)) {
+      toast.error(t("editor.dropWrongTrack"));
+      return;
+    }
     const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
     const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
     const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
@@ -391,7 +458,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   );
 
   return (
-    <div className="flex h-full flex-col border-t border-border bg-card" onWheel={onWheel}>
+    <div className="flex h-full flex-col border-t border-border bg-card">
       {/* Toolbar */}
       <div className="flex items-center gap-1 border-b border-border px-2 py-1">
         <PlayheadTimecode doc={doc} durationMs={durationMs} />
@@ -428,7 +495,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       </div>
 
       {/* Headers + lanes share one scroll container so they stay aligned. */}
-      <div ref={scrollRef} className="relative flex-1 overflow-auto">
+      <div
+        ref={scrollRef}
+        className="relative flex-1 overflow-auto"
+        onDragLeave={(e) => {
+          // Leaving the scroll region entirely → clear the ghost.
+          if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node))
+            setHint(null);
+        }}
+      >
         <div className="flex" style={{ width: HEADER_W + lanesW, minWidth: "100%" }}>
           {/* Track headers */}
           <div
@@ -529,17 +604,59 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 key={track.id}
                 data-lane
                 data-track-id={track.id}
-                className={`relative border-b border-border/50 ${
+                className={cn(
+                  "relative border-b border-border/50",
                   track.locked
                     ? "bg-secondary/25"
                     : track.visible
                       ? "bg-background/40"
-                      : "bg-secondary/10"
-                }`}
+                      : "bg-secondary/10",
+                  // Drop-target highlight (media drag or cross-track move).
+                  dropHint?.trackId === track.id &&
+                    (dropHint.valid
+                      ? "bg-primary/15 outline-1 -outline-offset-1 outline-primary/60"
+                      : "bg-destructive/15 outline-1 -outline-offset-1 outline-destructive/60"),
+                  moveLane?.trackId === track.id &&
+                    (moveLane.valid ? "bg-primary/15" : "bg-destructive/15"),
+                )}
                 style={{ height: TRACK_H, width: lanesW }}
-                onDragOver={(e) => e.preventDefault()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  const lane = e.currentTarget as HTMLElement;
+                  if (!e.dataTransfer.types.includes("application/x-creatora-asset")) {
+                    e.dataTransfer.dropEffect = "none";
+                    setHint(null);
+                    return;
+                  }
+                  const payload = getDragPayload();
+                  const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+                  const valid = dropValid(track, payload?.kind);
+                  e.dataTransfer.dropEffect = valid ? "copy" : "none";
+                  setHint({
+                    trackId: track.id,
+                    startMs: ms,
+                    durationMs: payload?.durationMs ?? 3000,
+                    valid,
+                  });
+                }}
                 onDrop={(e) => onDrop(e, track)}
               >
+                {/* Insertion ghost — where the clip will land. */}
+                {dropHint?.trackId === track.id && (
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute top-1 rounded border-2 border-dashed",
+                      dropHint.valid
+                        ? "border-primary/80 bg-primary/20"
+                        : "border-destructive/80 bg-destructive/20",
+                    )}
+                    style={{
+                      left: msToPx(dropHint.startMs),
+                      width: Math.max(6, msToPx(dropHint.durationMs)),
+                      height: TRACK_H - 8,
+                    }}
+                  />
+                )}
                 {track.clips.map((clip) => {
                   const sel = selection.includes(clip.id);
                   return (
