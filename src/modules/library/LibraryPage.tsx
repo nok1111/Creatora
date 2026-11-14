@@ -71,13 +71,17 @@ function AssetCard({ asset, collections, onRelink, onDelete, onFav, onAssign, on
   const Icon = KIND_ICON[asset.kind] ?? FileText;
   const missing = asset.status === "missing";
   const [thumbError, setThumbError] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [thumbSrc, setThumbSrc] = useState(() =>
+    asset.thumbnailPath ? convertFileSrc(asset.thumbnailPath) : null,
+  );
 
   return (
     <div className={cn("group relative overflow-hidden rounded-lg border border-border bg-card", missing && "border-destructive/50")}>
       <div className="relative flex aspect-video items-center justify-center bg-secondary/50">
-        {asset.thumbnailPath && !missing && !thumbError ? (
+        {thumbSrc && !missing && !thumbError ? (
           <img
-            src={convertFileSrc(asset.thumbnailPath)}
+            src={thumbSrc}
             alt={asset.name}
             className="size-full object-cover"
             loading="lazy"
@@ -88,17 +92,31 @@ function AssetCard({ asset, collections, onRelink, onDelete, onFav, onAssign, on
             <Icon className="size-8 text-muted-foreground" />
             {thumbError && (
               <button
-                className="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                disabled={regenerating}
+                className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60"
                 title="Regenerate thumbnail"
                 onClick={async () => {
-                  const p = await api.regenerateThumbnail(asset.id);
-                  if (p) {
-                    setThumbError(false);
-                    asset.thumbnailPath = p;
+                  setRegenerating(true);
+                  try {
+                    const p = await api.regenerateThumbnail(asset.id);
+                    if (p) {
+                      asset.thumbnailPath = p;
+                      // Bust the webview's cache of the failed image — same
+                      // URL would re-fire onError with the old response.
+                      setThumbSrc(`${convertFileSrc(p)}?v=${Date.now()}`);
+                      setThumbError(false);
+                    } else {
+                      toast.error("Couldn't generate a preview for this file");
+                    }
+                  } catch (e) {
+                    toast.error(String(e));
+                  } finally {
+                    setRegenerating(false);
                   }
                 }}
               >
-                Regenerate
+                {regenerating ? <Loader2 className="size-2.5 animate-spin" /> : null}
+                {regenerating ? "Working…" : "Regenerate"}
               </button>
             )}
           </div>

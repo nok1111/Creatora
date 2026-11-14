@@ -90,6 +90,7 @@ export const es: typeof en = {
     delete: "Eliminar selección",
     missingMedia: "no encontrado",
     saved: "Proyecto guardado",
+    export: "Exportar",
     exportTitle: "Exportar video",
     exportDone: "Exportación terminada",
     exportFailed: "La exportación falló",
@@ -160,6 +161,7 @@ export const es: typeof en = {
     kind: {
       all: "Todo",
       video: "Vídeo",
+      audio: "Audio",
       image: "Imágenes",
       graphic: "Gráficos",
       font: "Fuentes",

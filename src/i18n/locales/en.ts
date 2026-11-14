@@ -87,6 +87,7 @@ export const en = {
     delete: "Delete selected",
     missingMedia: "missing",
     saved: "Project saved",
+    export: "Export",
     exportTitle: "Export video",
     exportDone: "Export finished",
     exportFailed: "Export failed",
@@ -157,6 +158,7 @@ export const en = {
     kind: {
       all: "All",
       video: "Video",
+      audio: "Audio",
       image: "Images",
       graphic: "Graphics",
       font: "Fonts",

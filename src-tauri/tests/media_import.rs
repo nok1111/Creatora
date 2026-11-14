@@ -167,3 +167,41 @@ fn proxy_generation_produces_playable_downscaled_file() {
         .unwrap();
     assert_eq!(listed.as_deref(), Some(path.as_str()));
 }
+
+#[test]
+fn thumbnail_regeneration_restores_missing_file() {
+    if !tools_ok() {
+        eprintln!("skipping: ffmpeg tools not provisioned");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("creatora-thumb-{}", uuid::Uuid::new_v4()));
+    let db = Db::open(&dir).expect("open db");
+    let thumbs = dir.join("thumbs");
+
+    let asset =
+        commands::import_one(&thumbs, &db, &corpus("short_h264_720p.mp4")).expect("import video");
+    let thumb = PathBuf::from(asset.thumbnail_path.clone().expect("thumb path"));
+    assert!(thumb.is_file(), "import generated a thumbnail");
+
+    // Simulate the broken-image scenario: DB keeps the path, file is gone.
+    std::fs::remove_file(&thumb).expect("delete thumb");
+    assert!(!thumb.exists());
+
+    // Same call the regenerate_thumbnail command makes — file must come back.
+    let out = commands::make_thumbnail(
+        &thumbs,
+        &asset.id,
+        &corpus("short_h264_720p.mp4"),
+        Some(1000),
+    );
+    assert_eq!(
+        out.as_deref(),
+        Some(thumb.as_path()),
+        "regenerated path matches"
+    );
+    assert!(thumb.is_file(), "thumbnail file restored");
+
+    // A source that no longer exists must return None, not panic.
+    let gone = commands::make_thumbnail(&thumbs, &asset.id, &dir.join("nope.mp4"), Some(1000));
+    assert!(gone.is_none());
+}

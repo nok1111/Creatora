@@ -62,7 +62,7 @@ fn content_hash(path: &Path) -> Result<String, AppError> {
 
 /// Thumbnail via ffmpeg: for video seek ~1s, single scaled frame → JPEG.
 /// Returns output path on success; failures are non-fatal (None).
-fn make_thumbnail(
+pub fn make_thumbnail(
     thumbs_dir: &Path,
     asset_id: &str,
     src: &Path,
