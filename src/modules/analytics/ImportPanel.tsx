@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SourceBadge } from "./charts";
 import { useTranslation } from "react-i18next";
+import { reportError } from "@/lib/errors";
 
 export function ImportPanel() {
   const { t } = useTranslation();
@@ -36,7 +37,7 @@ export function ImportPanel() {
     try {
       setPreview(await api.analyticsImportPreview(path));
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
       setPreview(null);
     } finally {
       setBusy(false);
@@ -57,7 +58,7 @@ export function ImportPanel() {
       void qc.invalidateQueries({ queryKey: ["import-batches"] });
       void qc.invalidateQueries({ queryKey: ["analytics-dashboard"] });
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     } finally {
       setBusy(false);
     }

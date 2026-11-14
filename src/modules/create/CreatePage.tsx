@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 import { Clapperboard, Smartphone, Square, Settings2, ArrowRight } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { requestProjectSwitch } from "@/services/project-switch";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
+import { reportError } from "@/lib/errors";
 
 /** Guided creation — /create. Two steps: pick a format, name it, edit. */
 
@@ -45,7 +45,7 @@ export function CreatePage() {
         await createNew({ name: n, width: dims.w, height: dims.h, fpsNum: fps, fpsDen: 1 });
         nav("/editor");
       } catch (e) {
-        toast.error(String(e));
+        reportError(e);
         setBusy(false);
       }
     });

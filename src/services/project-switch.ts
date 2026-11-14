@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { toast } from "sonner";
 import { autosave } from "./autosave";
 import { useProject } from "@/stores/project";
+import { reportError } from "@/lib/errors";
 
 /**
  * Unsaved-work guard for project switching (Fase 3D).
@@ -41,7 +41,7 @@ export function requestProjectSwitch(action: () => Promise<void>) {
       action().catch((e) => {
         // Even on the fast path a failed open must not lose the current doc —
         // openFromPath only replaces state on success, so just report it.
-        toast.error(String(e));
+        reportError(e);
       }),
     );
     return;

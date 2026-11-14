@@ -40,6 +40,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import { reportError } from "@/lib/errors";
 
 const KIND_FILTERS: (AssetKind | "all")[] = ["all", "video", "audio", "image", "graphic", "font"];
 
@@ -110,7 +111,7 @@ function AssetCard({ asset, collections, onRelink, onDelete, onFav, onAssign, on
                       toast.error("Couldn't generate a preview for this file");
                     }
                   } catch (e) {
-                    toast.error(String(e));
+                    reportError(e);
                   } finally {
                     setRegenerating(false);
                   }

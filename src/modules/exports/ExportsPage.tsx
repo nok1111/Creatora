@@ -11,6 +11,7 @@ import { awaitJob, onJobFinished } from "@/services/jobs";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
+import { reportError } from "@/lib/errors";
 
 const KIND_KEYS: Record<string, string> = {
   "render.export": "kind_render_export",
@@ -112,7 +113,7 @@ export function ExportsPage() {
         });
       void qc.invalidateQueries({ queryKey: ["jobs"] });
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     }
   };
 

@@ -480,6 +480,18 @@ export const es: typeof en = {
     st_uploading: "En curso",
     st_cancelled: "Cancelado",
   },
+  err: {
+    generic: "Algo salió mal — tu trabajo está intacto",
+    notFound: "No se encontró un archivo o elemento",
+    db: "La base de datos local reportó un problema — tus proyectos están a salvo",
+    invalidInput: "La entrada fue rechazada",
+    io: "No se pudo leer o escribir un archivo — verifica que sigue existiendo",
+    ioPermission: "Permiso denegado — el archivo o carpeta está protegido o en uso",
+    ffmpeg: "El motor de video reportó un error — tu proyecto está intacto",
+    transcribe: "El motor de transcripción local falló",
+    social: "La conexión con la plataforma falló — el post sigue guardado",
+    network: "Falló una petición de red — revisa tu conexión",
+  },
   subs: {
     timing: "Timing",
     animation: "Animación",

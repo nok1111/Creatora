@@ -34,7 +34,7 @@ export function PostStatsDetail({
       if (f.status === "done") {
         toast.success(t("ana.statsSynced"));
       } else {
-        toast.error(`Sync failed: ${f.error ?? "unknown"}`);
+        toast.error(t("ana.failed"), { description: f.error });
       }
       void hist.refetch();
     });

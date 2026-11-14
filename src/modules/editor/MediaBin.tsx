@@ -11,6 +11,7 @@ import { useEditor } from "@/stores/editor";
 import { addClip } from "@/lib/timeline-engine";
 import type { AssetSummary } from "@/lib/media-types";
 import { EmptyState } from "@/components/EmptyState";
+import { reportError } from "@/lib/errors";
 
 /** Project media bin: imported assets → click + or drag onto a track. */
 export function MediaBin({ assets }: { assets: AssetSummary[] }) {
@@ -149,7 +150,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
                     toast.success(t("library.relinked"));
                     void qc.invalidateQueries({ queryKey: ["assets"] });
                   } catch (e) {
-                    toast.error(String(e));
+                    reportError(e);
                   }
                 }}
                 className="rounded p-1 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"

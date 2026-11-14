@@ -6,6 +6,7 @@ import { FolderOpen, Package } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
+import { reportError } from "@/lib/errors";
 
 export function PacketsPanel() {
   const { t: tr } = useTranslation();
@@ -53,12 +54,12 @@ export function PacketsPanel() {
     try {
       const r = await api.exportPublishPackets([...selected], dir);
       toast.success(`${r.exported.length} packets exported`);
-      if (r.errors.length) toast.error(`${r.errors.length} failed — see console`);
+      if (r.errors.length) toast.error(tr("ana.failed"), { description: r.errors.join("\n") });
       console.warn("packet errors", r.errors);
       setSelected(new Set());
       void qc.invalidateQueries({ queryKey: ["publish-packets"] });
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     } finally {
       setBusy(false);
     }

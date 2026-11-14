@@ -45,7 +45,7 @@ export function SyncPanel() {
       } else if (f.status === "cancelled") {
         toast.info(t("ana.syncCancelled"));
       } else {
-        toast.error(`Sync ${f.status}: ${f.error ?? ""}`);
+        toast.error(t("ana.failed"), { description: f.error ?? f.status });
       }
       void qc.invalidateQueries({ queryKey: ["analytics-sync-runs"] });
       void qc.invalidateQueries({ queryKey: ["analytics-dashboard"] });

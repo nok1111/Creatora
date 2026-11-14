@@ -477,6 +477,18 @@ export const en = {
     st_uploading: "In progress",
     st_cancelled: "Cancelled",
   },
+  err: {
+    generic: "Something went wrong — your work is intact",
+    notFound: "A file or item could not be found",
+    db: "The local database reported a problem — your projects are safe",
+    invalidInput: "The input was rejected",
+    io: "A file could not be read or written — check it still exists",
+    ioPermission: "Permission denied — the file or folder is protected or in use",
+    ffmpeg: "The video engine reported an error — your project is intact",
+    transcribe: "The local transcription engine failed",
+    social: "The platform connection failed — the post is still saved",
+    network: "A network request failed — check your connection",
+  },
   subs: {
     timing: "Timing",
     animation: "Animation",

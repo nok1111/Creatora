@@ -43,6 +43,7 @@ import { SUBTITLE_PRESETS } from "@/lib/subtitle-presets";
 import type { AssetSummary } from "@/lib/media-types";
 import type { SubtitleCue } from "@/lib/project-types";
 import { Button } from "@/components/ui/button";
+import { reportError } from "@/lib/errors";
 
 const fmtMs = (ms: number) => {
   const s = Math.floor(ms / 1000);
@@ -161,7 +162,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
     // Transcription writes cues into the saved project — save first.
     await useProject.getState().save();
     const id = await api.transcribeMedia(filePath, src, model, lang).catch((e) => {
-      toast.error(String(e));
+      reportError(e);
       return null;
     });
     if (!id) return;
@@ -180,7 +181,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
       const r = res as { cues?: number; withWords?: number };
       toast.success(t("subs.cuesDone", { cues: r.cues ?? 0, words: r.withWords ?? 0 }));
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     } finally {
       off();
       setJob(null);
@@ -192,7 +193,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
     if (!out || !filePath) return;
     await api.exportSubtitles(filePath, out, format, versionId ?? undefined)
       .then(() => toast.success(`${format.toUpperCase()} exported`))
-      .catch((e) => toast.error(String(e)));
+      .catch((e) => reportError(e));
   };
 
   const cueRow = (cue: SubtitleCue) => {

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { CaptionStudio } from "./CaptionStudio";
 import { ValidationPanel } from "./ValidationPanel";
 import { useTranslation } from "react-i18next";
+import { reportError } from "@/lib/errors";
 
 interface DraftTarget extends TargetInput {
   enabled: boolean;
@@ -140,7 +141,7 @@ export function ComposerDialog({
       toast.success(markReady ? tr("social.postReady") : tr("social.draftSaved"));
       onClose();
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     } finally {
       setSaving(false);
     }

@@ -28,6 +28,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { ValidationPanel } from "./ValidationPanel";
+import { reportError } from "@/lib/errors";
 
 /** Post detail: per-target export/publish pipeline + attempts + validation. */
 export function PostDetail({
@@ -104,7 +105,7 @@ export function PostDetail({
         toast.error(fin.error ?? tr("social.publishFailed"));
       }
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     } finally {
       setBusy(null);
       void refetch();

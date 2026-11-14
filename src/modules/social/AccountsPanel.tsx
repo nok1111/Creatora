@@ -9,6 +9,7 @@ import {
   type SocialPlatform,
 } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
+import { reportError } from "@/lib/errors";
 
 /**
  * Connected Accounts — honest capability display + OAuth client config.
@@ -41,7 +42,7 @@ export function AccountsPanel() {
         `Browser opened for ${PLATFORM_LABEL[p]}. Redirect URI to whitelist: ${start.redirectUri}`,
       );
     } catch (e) {
-      toast.error(String(e));
+      reportError(e);
     } finally {
       setBusy(null);
     }

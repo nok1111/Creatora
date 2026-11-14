@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
 import { Plus, Trash2, Download, Upload, Palette, Type, Square, RectangleHorizontal, BadgeCheck, MessageSquare, Heading } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { PromptDialog } from "@/components/PromptDialog";
@@ -28,6 +27,7 @@ import { DEFAULT_TEXT_STYLE } from "@/lib/project-types";
 import type { BrandKit, BrandLogo } from "@/lib/project-types";
 import { awaitJob } from "@/services/jobs";
 import { useTranslation } from "react-i18next";
+import { reportError } from "@/lib/errors";
 
 const TEMPLATE_CATEGORIES = ["title", "lowerThird", "callout", "badge", "intro", "outro", "shape", "brand"] as const;
 
@@ -193,7 +193,7 @@ export function GraphicsBin() {
     const assets = await api.listAssets();
     const a = assets.find((x) => x.filePath === l.path);
     if (!a) {
-      toast.error(`Could not import logo: ${l.path}`);
+      reportError(new Error(`logo import: ${l.path}`), t("gfxB.importKit"));
       return;
     }
     let id = "";
