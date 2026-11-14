@@ -27,6 +27,8 @@ import {
   type SocialPostTarget,
 } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
+import { SuggestionBanner } from "@/components/SuggestionBanner";
+import { useProject } from "@/stores/project";
 import { cn } from "@/lib/utils";
 import { ComposerDialog } from "./ComposerDialog";
 import { CalendarView } from "./CalendarView";
@@ -48,6 +50,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export function SocialPage() {
   const { t } = useTranslation();
+  const doc = useProject((s) => s.doc);
   const {
     posts,
     loaded,
@@ -160,6 +163,8 @@ export function SocialPage() {
           </Button>
         )}
       </div>
+
+      <SuggestionBanner doc={doc} only={["prepare-publish", "thumbnail-to-post"]} />
 
       {tab === "posts" && (
         <>

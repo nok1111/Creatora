@@ -24,6 +24,12 @@ export interface Suggestion {
 }
 
 export interface SuggestionContext {
+  /** Project has imported media references. */
+  hasMedia: boolean;
+  /** Timeline has at least one clip. */
+  hasClips: boolean;
+  /** A completed export exists for this project. */
+  exportedAny: boolean;
   /** A horizontal export finished recently and no vertical version exists. */
   exportedHorizontal: boolean;
   hasVerticalVersion: boolean;
@@ -38,45 +44,87 @@ export interface SuggestionContext {
   hasSocialPost: boolean;
 }
 
-export function evalSuggestions(ctx: SuggestionContext): Suggestion[] {
+export function evalSuggestions(
+  ctx: SuggestionContext,
+  only?: string[],
+): Suggestion[] {
   const out: Suggestion[] = [];
+  // Workflow order — earliest unmet stage wins first slot.
+  if (!ctx.hasMedia) {
+    out.push({
+      key: "import-media",
+      title: "suggest.importMedia.title",
+      body: "suggest.importMedia.body",
+      actionLabel: "suggest.importMedia.action",
+      to: "/library",
+    });
+  } else if (!ctx.hasClips) {
+    out.push({
+      key: "add-to-timeline",
+      title: "suggest.addToTimeline.title",
+      body: "suggest.addToTimeline.body",
+      actionLabel: "suggest.addToTimeline.action",
+      to: "/editor",
+    });
+  } else {
+    if (!ctx.hasSubtitles) {
+      out.push({
+        key: "create-subtitles",
+        title: "suggest.createSubtitles.title",
+        body: "suggest.createSubtitles.body",
+        actionLabel: "suggest.createSubtitles.action",
+        to: "/editor?tab=subtitles",
+      });
+    }
+    if (!ctx.exportedAny) {
+      out.push({
+        key: "export-video",
+        title: "suggest.exportVideo.title",
+        body: "suggest.exportVideo.body",
+        actionLabel: "suggest.exportVideo.action",
+        to: "/editor?export=1",
+      });
+    }
+  }
   if (ctx.exportedHorizontal && !ctx.hasVerticalVersion) {
     out.push({
       key: "adapt-vertical",
-      title: "Go vertical",
-      body: "Turn this export into a vertical video for Reels and Shorts.",
-      actionLabel: "Add vertical version",
+      title: "suggest.adaptVertical.title",
+      body: "suggest.adaptVertical.body",
+      actionLabel: "suggest.adaptVertical.action",
       to: "/editor",
     });
   }
   if (ctx.hasSubtitles && !ctx.subtitleStyleApplied) {
     out.push({
       key: "subtitle-style",
-      title: "Style your captions",
-      body: "Try a subtitle style to make your captions stand out.",
-      actionLabel: "Open Subtitle Studio",
+      title: "suggest.subtitleStyle.title",
+      body: "suggest.subtitleStyle.body",
+      actionLabel: "suggest.subtitleStyle.action",
       to: "/editor?tab=subtitles",
     });
   }
   if (ctx.hasThumbnail && !ctx.postUsesThumbnail) {
     out.push({
       key: "thumbnail-to-post",
-      title: "Put your thumbnail to work",
-      body: "Add this thumbnail to a YouTube publication post.",
-      actionLabel: "Open Social Studio",
+      title: "suggest.thumbnailToPost.title",
+      body: "suggest.thumbnailToPost.body",
+      actionLabel: "suggest.thumbnailToPost.action",
       to: "/social",
     });
   }
-  if (ctx.multiFormat && !ctx.hasSocialPost) {
+  if ((ctx.multiFormat || ctx.exportedAny) && !ctx.hasSocialPost) {
     out.push({
       key: "prepare-publish",
-      title: "Ready to publish",
-      body: "You have multiple formats — prepare your content for publication.",
-      actionLabel: "Plan a post",
+      title: "suggest.preparePublish.title",
+      body: "suggest.preparePublish.body",
+      actionLabel: "suggest.preparePublish.action",
       to: "/social",
     });
   }
-  return out.slice(0, 2);
+  // Page scoping happens before the cap so a page's relevant suggestion
+  // is never pushed out by workflow stages it doesn't display.
+  return out.filter((s) => !only || only.includes(s.key)).slice(0, 2);
 }
 
 // ---------- dismissal persistence ----------
@@ -113,9 +161,17 @@ export interface ProjectSignals {
   hasSubtitles: boolean;
   subtitleStyleApplied: boolean;
   hasThumbnail: boolean;
+  hasMedia: boolean;
+  hasClips: boolean;
+  /** Current project file — scopes "exported" signals to this project. */
+  projectPath?: string | null;
 }
 
-export function useSuggestions(project: ProjectSignals | null, hasSocialPost: boolean): {
+export function useSuggestions(
+  project: ProjectSignals | null,
+  hasSocialPost: boolean,
+  only?: string[],
+): {
   suggestions: Suggestion[];
   dismiss: (key: string) => void;
 } {
@@ -124,18 +180,33 @@ export function useSuggestions(project: ProjectSignals | null, hasSocialPost: bo
 
   const jobs = useQuery({
     queryKey: ["jobs", "suggestions"],
-    queryFn: () => api.listJobs("export", 20),
+    // No kind prefix — job kinds are "render.export" etc., filtered below.
+    queryFn: () => api.listJobs(undefined, 30),
     staleTime: 15_000,
   });
 
   const dismissed = dismissedKeys();
 
   const suggestions = useMemo(() => {
-    const recentExport = (jobs.data ?? []).find(
+    const doneExports = (jobs.data ?? []).filter(
       (j: JobRow) => j.kind.includes("export") && j.status === "done" && j.payload?.outputPath,
     );
+    const mine = project?.projectPath
+      ? doneExports.filter((j) => j.payload?.projectPath === project.projectPath)
+      : [];
+    const exportedAny = project
+      ? project.projectPath
+        ? mine.length > 0
+        : doneExports.length > 0
+      : false;
+    // "Go vertical" needs a project in the editor to act on — don't offer
+    // it from a project-less session even if someone else's export exists.
+    const recentExport = project ? (mine[0] ?? doneExports[0]) : undefined;
     const vertical = project?.versions.some((v) => v.aspectRatio === "9:16") ?? false;
     const ctx: SuggestionContext = {
+      hasMedia: project?.hasMedia ?? false,
+      hasClips: project?.hasClips ?? false,
+      exportedAny,
       exportedHorizontal: Boolean(recentExport) && !vertical,
       hasVerticalVersion: vertical,
       hasSubtitles: project?.hasSubtitles ?? false,
@@ -145,8 +216,8 @@ export function useSuggestions(project: ProjectSignals | null, hasSocialPost: bo
       multiFormat: (project?.versions.length ?? 0) >= 2,
       hasSocialPost,
     };
-    return evalSuggestions(ctx).filter((s) => !dismissed.has(s.key));
-  }, [jobs.data, project, hasSocialPost, dismissed]);
+    return evalSuggestions(ctx, only).filter((s) => !dismissed.has(s.key));
+  }, [jobs.data, project, hasSocialPost, dismissed, only]);
 
   return { suggestions, dismiss: dismissSuggestion };
 }

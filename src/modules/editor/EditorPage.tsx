@@ -64,9 +64,9 @@ export function EditorPage() {
   const previewQuality = useEditor((s) => s.previewQuality);
   const setPreviewQuality = useEditor((s) => s.setPreviewQuality);
 
-  const [exportOpen, setExportOpen] = useState(false);
-  // Deep-link params: /editor?tab=subtitles, /editor?left=graphics
+  // Deep-link params: /editor?tab=subtitles, /editor?left=graphics, /editor?export=1
   const [params] = useSearchParams();
+  const [exportOpen, setExportOpen] = useState(params.get("export") === "1");
   const nav = useNavigate();
   const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">(
     params.get("tab") === "subtitles" ? "subtitles" : "timeline",

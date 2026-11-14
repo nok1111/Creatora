@@ -14,6 +14,7 @@ export const es: typeof en = {
     error: "Algo salió mal",
     done: "Listo",
     retry: "Reintentar",
+    dismiss: "Descartar",
   },
   nav: {
     home: "Inicio",
@@ -28,6 +29,48 @@ export const es: typeof en = {
   openInEditor: {
     open: "Abrir proyecto",
     notFound: "No se encontró el proyecto vinculado.",
+  },
+  suggest: {
+    importMedia: {
+      title: "Consigue material",
+      body: "Importa video, audio o imágenes para empezar tu proyecto.",
+      action: "Importar medios",
+    },
+    addToTimeline: {
+      title: "Monta tu edición",
+      body: "Ya tienes medios listos — suelta un clip en la línea de tiempo.",
+      action: "Abrir el editor",
+    },
+    createSubtitles: {
+      title: "Ponle subtítulos",
+      body: "Tu video ya está en la línea de tiempo — añade subtítulos automáticos para llegar a más gente.",
+      action: "Crear subtítulos",
+    },
+    exportVideo: {
+      title: "Sácalo al mundo",
+      body: "Tu edición está lista — expórtala a un archivo de video.",
+      action: "Exportar video",
+    },
+    adaptVertical: {
+      title: "Pásate a vertical",
+      body: "Convierte esta exportación en un video vertical para Reels y Shorts.",
+      action: "Añadir versión vertical",
+    },
+    subtitleStyle: {
+      title: "Estiliza tus subtítulos",
+      body: "Prueba un estilo de subtítulos para que destaquen.",
+      action: "Abrir estudio de subtítulos",
+    },
+    thumbnailToPost: {
+      title: "Aprovecha tu miniatura",
+      body: "Añade esta miniatura a una publicación de YouTube.",
+      action: "Abrir Social Studio",
+    },
+    preparePublish: {
+      title: "Listo para publicar",
+      body: "Ya tienes contenido terminado — prepáralo para publicación.",
+      action: "Planificar un post",
+    },
   },
   home: {
     title: "Inicio",

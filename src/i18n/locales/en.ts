@@ -11,6 +11,7 @@ export const en = {
     error: "Something went wrong",
     retry: "Retry",
     done: "Done",
+    dismiss: "Dismiss",
   },
   nav: {
     home: "Home",
@@ -25,6 +26,48 @@ export const en = {
   openInEditor: {
     open: "Open project",
     notFound: "The linked project could not be found.",
+  },
+  suggest: {
+    importMedia: {
+      title: "Get some media",
+      body: "Import video, audio or images to start building your project.",
+      action: "Import media",
+    },
+    addToTimeline: {
+      title: "Build your edit",
+      body: "You have media ready — drop a clip onto the timeline.",
+      action: "Open editor",
+    },
+    createSubtitles: {
+      title: "Caption it",
+      body: "Your video is on the timeline — add auto-subtitles to reach more viewers.",
+      action: "Create subtitles",
+    },
+    exportVideo: {
+      title: "Ship it",
+      body: "Your edit is ready — export it to a video file.",
+      action: "Export video",
+    },
+    adaptVertical: {
+      title: "Go vertical",
+      body: "Turn this export into a vertical video for Reels and Shorts.",
+      action: "Add vertical version",
+    },
+    subtitleStyle: {
+      title: "Style your captions",
+      body: "Try a subtitle style to make your captions stand out.",
+      action: "Open Subtitle Studio",
+    },
+    thumbnailToPost: {
+      title: "Put your thumbnail to work",
+      body: "Add this thumbnail to a YouTube publication post.",
+      action: "Open Social Studio",
+    },
+    preparePublish: {
+      title: "Ready to publish",
+      body: "You have finished content — prepare it for publication.",
+      action: "Plan a post",
+    },
   },
   home: {
     title: "Home",

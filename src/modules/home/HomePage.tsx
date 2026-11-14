@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/EmptyState";
+import { SuggestionBanner } from "@/components/SuggestionBanner";
 
 /** Mini aspect-ratio tile for the recents list. */
 function AspectTile({ w, h }: { w: number | null; h: number | null }) {
@@ -191,6 +192,11 @@ export function HomePage() {
             {t("home.newProject")}
           </Button>
         </div>
+      </div>
+
+      {/* Next-step suggestion for the active project */}
+      <div className="mt-4">
+        <SuggestionBanner doc={project.doc} />
       </div>
 
       {/* Creation cards — one click to the right tool */}

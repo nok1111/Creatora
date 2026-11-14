@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { api, type JobRow } from "@/lib/ipc";
 import { useOpenInEditor } from "@/lib/open-in-editor";
+import { SuggestionBanner } from "@/components/SuggestionBanner";
+import { useProject } from "@/stores/project";
 import { awaitJob, onJobFinished } from "@/services/jobs";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
@@ -38,6 +40,7 @@ function jobTitle(j: JobRow): string {
 export function ExportsPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const doc = useProject((s) => s.doc);
   const { openPath, run } = useOpenInEditor();
   const [filter, setFilter] = useState<"all" | "exports" | "running" | "failed">("all");
   const jobs = useQuery({
@@ -107,6 +110,10 @@ export function ExportsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <SuggestionBanner doc={doc} only={["adapt-vertical", "prepare-publish"]} />
       </div>
 
       <div className="mt-5 rounded-xl border border-border">
