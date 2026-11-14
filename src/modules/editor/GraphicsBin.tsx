@@ -73,7 +73,7 @@ export function GraphicsBin() {
     insert({
       startMs: playheadMs,
       durationMs: 3000,
-      text: "Title",
+      text: t("gfxB.seedTitle"),
       textStyle: { ...DEFAULT_TEXT_STYLE, fontSizePx: Math.round(doc.canvas.height * 0.09) },
     });
 
@@ -82,7 +82,7 @@ export function GraphicsBin() {
       {
         startMs: playheadMs,
         durationMs: 4000,
-        text: "Name · Role",
+        text: t("gfxB.seedLower3rd"),
         textStyle: {
           ...DEFAULT_TEXT_STYLE,
           fontSizePx: Math.round(doc.canvas.height * 0.04),
@@ -119,7 +119,7 @@ export function GraphicsBin() {
       {
         startMs: playheadMs,
         durationMs: 4000,
-        text: "NEW",
+        text: t("gfxB.seedBadge"),
         textStyle: {
           ...DEFAULT_TEXT_STYLE,
           fontSizePx: Math.round(doc.canvas.height * 0.045),
@@ -141,7 +141,7 @@ export function GraphicsBin() {
       {
         startMs: playheadMs,
         durationMs: 4000,
-        text: "Watch this →",
+        text: t("gfxB.seedCallout"),
         textStyle: {
           ...DEFAULT_TEXT_STYLE,
           fontSizePx: Math.round(doc.canvas.height * 0.038),
@@ -181,7 +181,7 @@ export function GraphicsBin() {
     await api.saveTemplate({
       ...tpl,
       id: crypto.randomUUID(),
-      name: `${tpl.name} copy`,
+      name: `${tpl.name} ${t("gfxB.tplCopySuffix")}`,
       clip: JSON.parse(JSON.stringify(tpl.clip)),
     });
     invalidate();
@@ -277,12 +277,12 @@ export function GraphicsBin() {
           </button>
           <button
             className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent"
-            title="Heading — large centered text"
+            title={t("gfxB.headingTip")}
             onClick={() =>
               insert({
                 startMs: playheadMs,
                 durationMs: 3000,
-                text: "Heading",
+                text: t("gfxB.seedHeading"),
                 textStyle: {
                   ...DEFAULT_TEXT_STYLE,
                   fontSizePx: Math.round(doc.canvas.height * 0.07),
@@ -321,7 +321,7 @@ export function GraphicsBin() {
         </div>
         {[...groups.entries()].map(([cat, tpls]) => (
           <div key={cat}>
-            <div className="text-[9px] uppercase text-muted-foreground/70">{cat}</div>
+            <div className="text-[9px] uppercase text-muted-foreground/70">{t(`gfxB.cat_${cat}`)}</div>
             {tpls.map((tpl) => (
               <div
                 key={tpl.id}
@@ -366,7 +366,7 @@ export function GraphicsBin() {
                 <span className="invisible flex gap-0.5 group-hover:visible">
                   <button
                     className="text-muted-foreground hover:text-foreground"
-                    title="Duplicate template"
+                    title={t("gfxB.tplDuplicate")}
                     onClick={() => void duplicateTemplate(tpl)}
                   >
                     <Plus className="size-3" />
@@ -387,7 +387,7 @@ export function GraphicsBin() {
         ))}
         {(templatesQ.data ?? []).length === 0 && (
           <div className="text-[10px] text-muted-foreground">
-            Select an element → + to save a reusable template
+            {t("gfxB.tplEmptyHint")}
           </div>
         )}
       </div>
@@ -399,7 +399,7 @@ export function GraphicsBin() {
           onClick={() => setBrandOpen(!brandOpen)}
         >
           <span className="flex items-center gap-1">
-            <Palette className="size-3.5" /> Brand kit {activeKit ? `· ${activeKit.name}` : ""}
+            <Palette className="size-3.5" /> {t("gfxB.brandKit")} {activeKit ? `· ${activeKit.name}` : ""}
           </span>
           <span>{brandOpen ? "−" : "+"}</span>
         </button>
@@ -411,7 +411,7 @@ export function GraphicsBin() {
                 <button
                   className={`truncate text-left ${doc.brandKitId === k.id ? "text-accent-foreground" : ""}`}
                   onClick={() => mutate((d) => setDocBrandKit(d, doc.brandKitId === k.id ? null : k))}
-                  title="Set active (embeds snapshot into project)"
+                  title={t("gfxB.brandSetActive")}
                 >
                   {k.name}
                 </button>
@@ -443,15 +443,15 @@ export function GraphicsBin() {
                     <span key={c} className="inline-block size-3 rounded-sm border border-border/50" style={{ background: c }} title={c} />
                   ))}
                   <span className="ml-1 text-[8px] text-muted-foreground">
-                    {k.fonts[0]?.name ?? "—"} · {k.logos.length} logo{k.logos.length === 1 ? "" : "s"}
+                    {k.fonts[0]?.name ?? "—"} · {t("gfxB.brandLogos", { count: k.logos.length })}
                   </span>
                   {doc.brandKitId === k.id && (
                     <button
                       className="ml-auto rounded border border-border px-1 text-[8px] hover:bg-accent"
-                      title="Apply kit colors/fonts to brand-bound clips"
+                      title={t("gfxB.brandApplyTitle")}
                       onClick={() => mutate((d) => applyBrandToBoundClips(d))}
                     >
-                      Apply
+                      {t("gfxB.brandApply")}
                     </button>
                   )}
                 </div>
@@ -497,7 +497,7 @@ export function GraphicsBin() {
                   <button
                     key={i}
                     className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] hover:bg-accent"
-                    title={`Insert logo at playhead: ${l.path}`}
+                    title={t("gfxB.logoInsert", { path: l.path })}
                     onClick={() => void insertLogo(l)}
                   >
                     ◇ {l.name}
@@ -505,10 +505,10 @@ export function GraphicsBin() {
                 ))}
                 <button
                   className="w-full rounded border border-border px-1 py-0.5 text-[10px] hover:bg-accent"
-                  title="Re-apply snapshot to every brand-bound element"
+                  title={t("gfxB.brandApplyAllTitle")}
                   onClick={() => mutate((d) => applyBrandToBoundClips(d))}
                 >
-                  Apply brand to bound elements
+                  {t("gfxB.brandApplyAll")}
                 </button>
                 <EditKitInline kit={activeKit} onSaved={invalidate} />
               </div>
@@ -558,10 +558,10 @@ export function GraphicsBin() {
       {/* Text override when applying a text template */}
       <PromptDialog
         open={!!applyTpl}
-        title="Template text"
-        description="Edit the text before inserting — the design is kept."
+        title={t("gfxB.tplTextTitle")}
+        description={t("gfxB.tplTextDesc")}
         defaultValue={applyTpl?.clip.text ?? ""}
-        confirmLabel="Insert"
+        confirmLabel={t("gfxB.tplInsert")}
         onSubmit={(v) => applyTpl && applyTemplate(applyTpl, v)}
         onClose={() => setApplyTpl(null)}
       />
@@ -572,14 +572,14 @@ export function GraphicsBin() {
           <DialogHeader>
             <DialogTitle className="text-base">{t("gfxB.saveTemplate")}</DialogTitle>
             <DialogDescription>
-              Reusable in any project — it keeps text, style, shape and animations.
+              {t("gfxB.tplSaveDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Input
               value={tplName}
               onChange={(e) => setTplName(e.target.value)}
-              placeholder="Template name"
+              placeholder={t("gfxB.tplNamePh")}
               autoFocus
             />
             <select
@@ -588,7 +588,7 @@ export function GraphicsBin() {
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
             >
               {TEMPLATE_CATEGORIES.map((c) => (
-                <option key={c} value={c} className="bg-card">{c}</option>
+                <option key={c} value={c} className="bg-card">{t(`gfxB.cat_${c}`)}</option>
               ))}
             </select>
           </div>
@@ -598,7 +598,7 @@ export function GraphicsBin() {
               disabled={!tplName.trim()}
               onClick={() => void saveSelectionAsTemplate(tplName, tplCat).then(() => setSaveTpl(false))}
             >
-              Save template
+              {t("gfxB.tplSave")}
             </Button>
           </DialogFooter>
         </DialogContent>

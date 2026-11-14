@@ -179,9 +179,9 @@ export function EditorPage() {
     return (
       <EmptyState
         icon={Clapperboard}
-        title="Nothing open yet"
-        body="Start a new project or pick a recent one from Home — your timeline, captions and formats live here."
-        action={{ label: "New project", onClick: () => nav("/create") }}
+        title={t("editor.emptyTitle")}
+        body={t("editor.emptyBody")}
+        action={{ label: t("editor.emptyAction"), onClick: () => nav("/create") }}
       />
     );
   }
@@ -209,7 +209,7 @@ export function EditorPage() {
         {/* Common actions — labeled, each routes to the existing workflow. */}
         <button
           className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Split selected clip at playhead (S)"
+          title={t("editor.toolTrimTitle")}
           onClick={() => {
             const es = useEditor.getState();
             for (const id of es.selection) {
@@ -217,35 +217,35 @@ export function EditorPage() {
             }
           }}
         >
-          <Scissors className="size-3.5" /> Trim
+          <Scissors className="size-3.5" /> {t("editor.toolTrim")}
         </button>
         <button
           className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Add text — Graphics bin"
+          title={t("editor.toolTextTitle")}
           onClick={() => setLeftTab("graphics")}
         >
-          <Type className="size-3.5" /> Text
+          <Type className="size-3.5" /> {t("editor.toolText")}
         </button>
         <button
           className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Add music — Media bin"
+          title={t("editor.toolMusicTitle")}
           onClick={() => setLeftTab("media")}
         >
-          <Music4 className="size-3.5" /> Music
+          <Music4 className="size-3.5" /> {t("editor.toolMusic")}
         </button>
         <button
           className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Captions — Subtitle Studio"
+          title={t("editor.toolCaptionsTitle")}
           onClick={() => setBottomTab("subtitles")}
         >
-          <Subtitles className="size-3.5" /> Captions
+          <Subtitles className="size-3.5" /> {t("editor.toolCaptions")}
         </button>
         <button
           className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Overlay graphics — Graphics bin"
+          title={t("editor.toolOverlayTitle")}
           onClick={() => setLeftTab("graphics")}
         >
-          <ImageIcon className="size-3.5" /> Overlay
+          <ImageIcon className="size-3.5" /> {t("editor.toolOverlay")}
         </button>
         <div className="flex-1" />
         <button
@@ -269,7 +269,7 @@ export function EditorPage() {
           style={{ width: `min(${panelSizes.left}px, 45%)` }}
         >
           <div className="flex gap-1 border-b border-r border-border px-1.5 py-1">
-            {([["media", Music4], ["graphics", ImageIcon]] as const).map(([tb, Icon]) => (
+            {([["media", Music4, "editor.tabMedia"], ["graphics", ImageIcon, "editor.tabGraphics"]] as const).map(([tb, Icon, key]) => (
               <button
                 key={tb}
                 onClick={() => setLeftTab(tb)}
@@ -277,7 +277,7 @@ export function EditorPage() {
                   leftTab === tb ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                <Icon className="size-3.5" /> {tb}
+                <Icon className="size-3.5" /> {t(key)}
               </button>
             ))}
           </div>
@@ -301,7 +301,7 @@ export function EditorPage() {
           {comparePane && (
             <div className="relative min-w-0 flex-1 border-l border-border">
               <span className="absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-accent-foreground">
-                {doc?.meta.name} · master
+                {doc?.meta.name} · {t("versions.master")}
               </span>
               <Preview assets={assetMap} docOverride={doc ?? undefined} />
             </div>
@@ -341,7 +341,7 @@ export function EditorPage() {
           label={t("editor.resizePanel")}
         />
         <div className="flex gap-1 border-b border-border px-2 py-1">
-          {([["timeline", Scissors, "Timeline"], ["subtitles", Subtitles, "Subtitles"]] as const).map(([tab, Icon, label]) => (
+          {([["timeline", Scissors, "editor.tabTimeline"], ["subtitles", Subtitles, "editor.tabSubtitles"]] as const).map(([tab, Icon, labelKey]) => (
             <button
               key={tab}
               onClick={() => setBottomTab(tab)}
@@ -349,7 +349,7 @@ export function EditorPage() {
                 bottomTab === tab ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
-              <Icon className="size-3.5" /> {label}
+              <Icon className="size-3.5" /> {t(labelKey)}
             </button>
           ))}
         </div>

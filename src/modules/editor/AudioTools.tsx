@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckCircle2, Ear, Guitar, Mic2, Plus, Scissors, Trash2, Volume2, Wand2 } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
@@ -20,18 +21,19 @@ import { api, type Loudness } from "@/lib/ipc";
  */
 /** Friendly one-click presets — additive only (addEffect appends; a type
  * already enabled is skipped), so custom chains are never overwritten. */
-const PRESETS: { key: string; label: string; icon: React.ReactNode; effects: { type: string; params: Record<string, number> }[] }[] = [
-  { key: "voice", label: "Clear Voice", icon: <Mic2 className="size-3.5" />,
+const PRESETS: { key: string; labelKey: string; icon: React.ReactNode; effects: { type: string; params: Record<string, number> }[] }[] = [
+  { key: "voice", labelKey: "audio.presetVoice", icon: <Mic2 className="size-3.5" />,
     effects: [{ type: "compressor", params: { thresholdDb: -20, ratio: 3 } }, { type: "eq", params: { mid: 3 } }] },
-  { key: "noise", label: "Reduce Noise", icon: <Ear className="size-3.5" />,
+  { key: "noise", labelKey: "audio.presetNoise", icon: <Ear className="size-3.5" />,
     effects: [{ type: "denoise", params: { strength: 14 } }, { type: "noisegate", params: { thresholdDb: -45 } }] },
-  { key: "enhance", label: "Enhance Voice", icon: <Wand2 className="size-3.5" />,
+  { key: "enhance", labelKey: "audio.presetEnhance", icon: <Wand2 className="size-3.5" />,
     effects: [{ type: "deesser", params: { amount: 0.5 } }, { type: "eq", params: { low: 2, high: 2 } }] },
-  { key: "louder", label: "Louder", icon: <Guitar className="size-3.5" />,
+  { key: "louder", labelKey: "audio.presetLouder", icon: <Guitar className="size-3.5" />,
     effects: [{ type: "limiter", params: { levelDb: -1 } }] },
 ];
 
 export function AudioTools({ clipId, trackId }: { clipId: string; trackId: string }) {
+  const { t } = useTranslation();
   const doc = useProject((s) => s.doc)!;
   const mutate = useEditor((s) => s.mutate);
   const clip = findClip(doc, clipId)?.clip;
@@ -72,14 +74,15 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
   return (
     <div className="space-y-1.5 border-t border-border pt-1.5">
       {/* friendly one-click presets — additive, skip already-enabled types */}
-      {sectionLabel("Enhance")}
+      {sectionLabel(t("audio.enhance"))}
       <div className="mb-2 flex flex-wrap gap-1">
         {PRESETS.map((p) => {
           const applied = p.effects.every((e) => enabledTypes.has(e.type));
+          const label = t(p.labelKey);
           return (
           <button
             key={p.key}
-            title={`${p.label} — adds ${p.effects.map((e) => e.type).join(" + ")}`}
+            title={t("audio.presetAdds", { label, effects: p.effects.map((e) => e.type).join(" + ") })}
             className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition-colors ${
               applied
                 ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
@@ -102,7 +105,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
               })
             }
           >
-            {applied ? <CheckCircle2 className="size-3.5" /> : p.icon} {p.label}
+            {applied ? <CheckCircle2 className="size-3.5" /> : p.icon} {label}
           </button>
           );
         })}
@@ -115,9 +118,9 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
             return (
               <span
                 className="flex items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-[10px] text-muted-foreground"
-                title="Needs a voice clip on another track — ducking lowers this track while the voice plays"
+                title={t("audio.balanceNeedsTitle")}
               >
-                <Guitar className="size-3.5" /> Balance Music · needs a voice track
+                <Guitar className="size-3.5" /> {t("audio.balanceNeedsVoice")}
               </span>
             );
           }
@@ -125,7 +128,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
             <select
               className="rounded-md border border-border bg-card px-1.5 py-1 text-[10px]"
               value=""
-              title="Duck this track under the chosen voice track"
+              title={t("audio.balanceTitle")}
               onChange={(e) => {
                 if (!e.target.value) return;
                 mutate((d) =>
@@ -142,9 +145,9 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
                 );
               }}
             >
-              <option value="">{hasRule ? "Balance Music · active — change target…" : "Balance Music → voice track…"}</option>
-              {otherAudio.map((t) => (
-                <option key={t.id} value={t.id}>{t.name ?? t.kind} track</option>
+              <option value="">{hasRule ? t("audio.balanceActive") : t("audio.balancePick")}</option>
+              {otherAudio.map((t2) => (
+                <option key={t2.id} value={t2.id}>{t("audio.trackSuffix", { name: t2.name ?? t2.kind })}</option>
               ))}
             </select>
           );
@@ -152,25 +155,25 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
       </div>
 
       {/* loudness: measure + non-destructive gain suggestion */}
-      {sectionLabel("Loudness")}
+      {sectionLabel(t("audio.loudness"))}
       <div className="flex items-center gap-1">
         <select
           className="rounded border border-border bg-background px-1 py-0.5 text-[10px]"
           value={target}
           onChange={(e) => setTarget(Number(e.target.value))}
-          title="Target LUFS (orientative — not a platform requirement)"
+          title={t("audio.lufsTitle")}
         >
-          <option value={-14}>-14 LUFS (YouTube-ish)</option>
-          <option value={-16}>-16 LUFS (podcast-ish)</option>
-          <option value={-11}>-11 LUFS (loud social)</option>
-          <option value={-23}>-23 LUFS (EBU broadcast)</option>
+          <option value={-14}>{t("audio.lufsYoutube")}</option>
+          <option value={-16}>{t("audio.lufsPodcast")}</option>
+          <option value={-11}>{t("audio.lufsSocial")}</option>
+          <option value={-23}>{t("audio.lufsEbu")}</option>
         </select>
         <button
           className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent disabled:opacity-50"
           disabled={busy}
           onClick={() => withBusy(async () => setLoud(await api.analyzeLoudness(srcPath)))}
         >
-          <Volume2 className="mr-0.5 inline size-3" /> Measure
+          <Volume2 className="mr-0.5 inline size-3" /> {t("audio.measure")}
         </button>
         <button
           className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent disabled:opacity-50"
@@ -201,7 +204,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
             })
           }
         >
-          Normalize →
+          {t("audio.normalize")}
         </button>
       </div>
       {loud && (
@@ -212,9 +215,9 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
       )}
 
       {/* silence detection → reviewable proposal, never destructive */}
-      {sectionLabel("Silence cleanup")}
+      {sectionLabel(t("audio.silenceSection"))}
       <div className="flex items-center gap-1 text-[10px]">
-        <span className="text-muted-foreground">silence</span>
+        <span className="text-muted-foreground">{t("audio.silenceLbl")}</span>
         <input
           className="w-10 rounded border border-border bg-background px-1"
           type="number"
@@ -228,7 +231,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
           value={minMs}
           onChange={(e) => setMinMs(Number(e.target.value))}
         />
-        <span className="text-muted-foreground">ms pad</span>
+        <span className="text-muted-foreground">{t("audio.silenceMsPad")}</span>
         <input
           className="w-12 rounded border border-border bg-background px-1"
           type="number"
@@ -240,14 +243,13 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
           disabled={busy}
           onClick={() => withBusy(async () => setSilence(await api.detectSilence(srcPath, noiseDb, minMs)))}
         >
-          Detect
+          {t("audio.detect")}
         </button>
       </div>
       {silence && (
         <div className="space-y-1 rounded border border-amber-500/40 bg-warning/15 p-1.5 text-[10px]">
           <div className="text-muted-foreground">
-            {silence.length} silent region{silence.length === 1 ? "" : "s"} — review then apply
-            (undoable)
+            {t("audio.silenceRegions", { count: silence.length })}
           </div>
           <div className="max-h-16 overflow-y-auto font-mono">
             {silence.map((r, i) => (
@@ -261,16 +263,16 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
             disabled={silence.length === 0}
             onClick={() => mutate((d) => applySilenceCut(d, clipId, silence, padMs) ?? d)}
           >
-            <Scissors className="mr-0.5 inline size-3" /> Apply cut proposal
+            <Scissors className="mr-0.5 inline size-3" /> {t("audio.applyCut")}
           </button>
         </div>
       )}
 
       {/* auto-duck rules involving this track */}
-      {sectionLabel("Auto-duck")}
+      {sectionLabel(t("audio.duckSection"))}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[10px]">
-          <span className="text-muted-foreground">auto-duck</span>
+          <span className="text-muted-foreground">{t("audio.duckAuto")}</span>
           <button
             className="rounded border border-border px-1 py-0.5 hover:bg-accent"
             onClick={() => {
@@ -290,7 +292,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
               );
             }}
           >
-            <Plus className="inline size-3" /> rule
+            <Plus className="inline size-3" /> {t("audio.duckRule")}
           </button>
         </div>
         {rules.map((r) => (
@@ -305,7 +307,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
               >
                 {audioTracks.map((tk) => (
                   <option key={tk.id} value={tk.id}>
-                    src: {tk.name}
+                    {t("audio.duckSrc")}: {tk.name}
                   </option>
                 ))}
               </select>
@@ -319,7 +321,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
               >
                 {audioTracks.map((tk) => (
                   <option key={tk.id} value={tk.id}>
-                    dst: {tk.name}
+                    {t("audio.duckDst")}: {tk.name}
                   </option>
                 ))}
               </select>
@@ -332,15 +334,15 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
             </div>
             {(
               [
-                ["thresh", "thresholdDb", -60, 0, 1],
-                ["reduce", "reductionDb", -40, 0, 1],
-                ["attack", "attackMs", 1, 1000, 5],
-                ["release", "releaseMs", 10, 3000, 10],
-                ["hold", "holdMs", 0, 2000, 10],
+                ["audio.duckThresh", "thresholdDb", -60, 0, 1],
+                ["audio.duckReduce", "reductionDb", -40, 0, 1],
+                ["audio.duckAttack", "attackMs", 1, 1000, 5],
+                ["audio.duckRelease", "releaseMs", 10, 3000, 10],
+                ["audio.duckHold", "holdMs", 0, 2000, 10],
               ] as const
             ).map(([lbl, k, mn, mx, st]) => (
               <div key={k} className="flex items-center gap-1">
-                <span className="w-10 text-muted-foreground">{lbl}</span>
+                <span className="w-10 text-muted-foreground">{t(lbl)}</span>
                 <input
                   type="range"
                   className="flex-1"

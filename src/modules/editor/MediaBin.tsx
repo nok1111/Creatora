@@ -70,7 +70,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
         {t("editor.mediaBin")}
         <button
           className="rounded p-1 hover:bg-accent"
-          title="Import media"
+          title={t("editor.importMedia")}
           onClick={() => void importFiles()}
         >
           <FolderInput className="size-3.5" />

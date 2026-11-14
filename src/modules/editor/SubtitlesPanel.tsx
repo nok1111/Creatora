@@ -237,19 +237,19 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             }}
           />
           <span className="ml-auto flex opacity-0 transition group-hover:opacity-100">
-            <button title="Split at playhead" className="p-0.5 hover:text-accent-foreground"
+            <button title={t("subs.splitAtPlayhead")} className="p-0.5 hover:text-accent-foreground"
               onClick={(e) => { e.stopPropagation(); mutate((d) => splitCue(d, cue.id, playheadMs)?.doc ?? d); }}>
               <Scissors className="size-3" />
             </button>
-            <button title="Merge with next" className="p-0.5 hover:text-accent-foreground"
+            <button title={t("subs.mergeNext")} className="p-0.5 hover:text-accent-foreground"
               onClick={(e) => { e.stopPropagation(); mutate((d) => mergeCueWithNext(d, cue.id)?.doc ?? d); }}>
               <Merge className="size-3" />
             </button>
-            <button title="Duplicate" className="p-0.5 hover:text-accent-foreground"
+            <button title={t("subs.duplicateCue")} className="p-0.5 hover:text-accent-foreground"
               onClick={(e) => { e.stopPropagation(); mutate((d) => duplicateCue(d, cue.id)?.doc ?? d); }}>
               <Plus className="size-3" />
             </button>
-            <button title="Delete" className="p-0.5 hover:text-destructive"
+            <button title={t("subs.deleteCue")} className="p-0.5 hover:text-destructive"
               onClick={(e) => { e.stopPropagation(); mutate((d) => removeCue(d, cue.id)); }}>
               <Trash2 className="size-3" />
             </button>
@@ -293,12 +293,12 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             <EmptyState
               compact
               icon={Captions}
-              title="No captions yet"
-              body="Transcribe an audio or video asset locally, or add a cue manually at the playhead."
+              title={t("subs.noCaptions")}
+              body={t("subs.noCaptionsBody")}
               action={{
-                label: "Add cue",
+                label: t("subs.addCue"),
                 onClick: () =>
-                  mutate((d) => addCue(d, { startMs: playheadMs, endMs: playheadMs + 2000, text: "New cue", words: [] }).doc),
+                  mutate((d) => addCue(d, { startMs: playheadMs, endMs: playheadMs + 2000, text: t("subs.newCueSeed"), words: [] }).doc),
               }}
             />
           )}

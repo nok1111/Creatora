@@ -123,6 +123,7 @@ function SliderRow({
   onToggleKey?: (p: AnimatablePath, cur: number) => void;
   format?: (v: number) => string;
 }) {
+  const { t } = useTranslation();
   const gesturing = useRef(false);
   /** Begin once (pointer-down, focus or first change) — always with the
       doc as it is right now; end on release/blur. One undo per edit. */
@@ -184,7 +185,7 @@ function SliderRow({
             "shrink-0 rounded p-0.5",
             kfAt(kfPath) ? "text-accent-foreground" : "text-muted-foreground/50 hover:text-foreground",
           )}
-          title="Toggle keyframe at playhead"
+          title={t("editor.keyframe")}
           onClick={() => onToggleKey(kfPath, value)}
         >
           <Diamond className="size-3" />
@@ -394,7 +395,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
             return v?.clipOverrides[clipId] ? (
               <button
                 className="rounded px-1 text-[9px] text-accent-foreground hover:bg-accent"
-                title="Drop this element's version overrides — re-sync to the shared base"
+                title={t("gfxI.dropOverride")}
                 onClick={() => mutate((d) => clearVersionClipOverrides(d, activeVersionId, clipId))}
               >
                 re-sync
@@ -403,14 +404,14 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
           })()}
         <button
           className="rounded p-1 hover:bg-accent"
-          title="Copy style"
+          title={t("gfxI.copyStyle")}
           onClick={() => (styleClipboard = clipStylePayload(clip))}
         >
           <Copy className="size-3.5" />
         </button>
         <button
           className="rounded p-1 hover:bg-accent disabled:opacity-40"
-          title="Paste style"
+          title={t("gfxI.pasteStyle")}
           disabled={!styleClipboard}
           onClick={() => styleClipboard && mutate((d) => applyClipStyle(d, clipId, styleClipboard!))}
         >
@@ -705,14 +706,14 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
             type="number"
             value={dur}
             onChange={(e) => setDur(Math.max(0, Number(e.target.value)))}
-            title="duration ms"
+            title={t("gfxI.durMs")}
           />
           <span className="text-muted-foreground">ms</span>
           <select
             className={cn(FIELD)}
             value={dir}
             onChange={(e) => setDir(e.target.value)}
-            title="direction"
+            title={t("gfxI.direction")}
           >
             {DIRS.map(([v, l]) => (
               <option key={v} value={v}>
@@ -724,7 +725,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
             className={cn(FIELD)}
             value={easing}
             onChange={(e) => setEasing(e.target.value)}
-            title="easing"
+            title={t("gfxI.easing")}
           >
             {EASINGS.map(([v, l]) => (
               <option key={v} value={v}>
@@ -737,7 +738,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
             type="number"
             value={intensity}
             onChange={(e) => setIntensity(Number(e.target.value))}
-            title="intensity px"
+            title={t("gfxI.intensityPx")}
           />
         </div>
         {(presetId === "typewriter" || presetId === "typewriterOut" || presetId === "wipe" || presetId === "wipeOut" || presetId === "blurIn" || presetId === "blurOut") &&
@@ -882,14 +883,14 @@ function TypeExtras({
                   type="number"
                   className={cn(FIELD, "w-11")}
                   value={style.shadowX ?? 0}
-                  title="shadow X px"
+                  title={t("gfxI.shadowXPx")}
                   onChange={(e) => patchStyle("shadowX", Number(e.target.value))}
                 />
                 <input
                   type="number"
                   className={cn(FIELD, "w-11")}
                   value={style.shadowY ?? 0}
-                  title="shadow Y px"
+                  title={t("gfxI.shadowYPx")}
                   onChange={(e) => patchStyle("shadowY", Number(e.target.value))}
                 />
               </>
@@ -913,6 +914,7 @@ function TypeExtras({
     Kept for NON-design clips (media overlays etc.); design clips get the
     full GraphicsInspector above. */
 export function GraphicsSection({ clipId }: { clipId: string }) {
+  const { t } = useTranslation();
   const doc = useProject((s) => s.doc)!;
   const mutate = useEditor((s) => s.mutate);
   const activeVersionId = useEditor((s) => s.activeVersionId);
@@ -952,7 +954,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
             return hasOv ? (
               <button
                 className="rounded px-1 text-[9px] text-accent-foreground hover:bg-accent"
-                title="Drop this element's version overrides — re-sync to the shared base"
+                title={t("gfxI.dropOverride")}
                 onClick={() => mutate((d) => clearVersionClipOverrides(d, activeVersionId, clipId))}
               >
                 re-sync
@@ -962,14 +964,14 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
         <span className="flex gap-0.5">
           <button
             className="rounded p-0.5 hover:bg-accent"
-            title="Copy style"
+            title={t("gfxI.copyStyle")}
             onClick={() => (styleClipboard = clipStylePayload(clip))}
           >
             <Copy className="size-3" />
           </button>
           <button
             className="rounded p-0.5 hover:bg-accent disabled:opacity-40"
-            title="Paste style"
+            title={t("gfxI.pasteStyle")}
             disabled={!styleClipboard}
             onClick={() => styleClipboard && mutate((d) => applyClipStyle(d, clipId, styleClipboard!))}
           >
@@ -1105,7 +1107,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
           </button>
         </div>
         <div className="flex items-center gap-1 text-[10px]">
-          <input className="w-12 rounded border border-border bg-background px-1" type="number" value={dur} onChange={(e) => setDur(Number(e.target.value))} title="duration ms" />
+          <input className="w-12 rounded border border-border bg-background px-1" type="number" value={dur} onChange={(e) => setDur(Number(e.target.value))} title={t("gfxI.durMs")} />
           <span className="text-muted-foreground">ms</span>
           <select className="rounded border border-border bg-background px-1 py-0.5" value={dir} onChange={(e) => setDir(e.target.value)}>
             <option value="left">←</option>
@@ -1113,7 +1115,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
             <option value="up">↑</option>
             <option value="down">↓</option>
           </select>
-          <input className="w-12 rounded border border-border bg-background px-1" type="number" value={intensity} onChange={(e) => setIntensity(Number(e.target.value))} title="intensity px" />
+          <input className="w-12 rounded border border-border bg-background px-1" type="number" value={intensity} onChange={(e) => setIntensity(Number(e.target.value))} title={t("gfxI.intensityPx")} />
           <select className="rounded border border-border bg-background px-1 py-0.5" value={easing} onChange={(e) => setEasing(e.target.value)}>
             <option value="linear">lin</option>
             <option value="easeOut">out</option>

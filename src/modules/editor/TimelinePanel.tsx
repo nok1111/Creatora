@@ -423,7 +423,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       </button>
       <button
         className={`rounded px-0.5 py-0.5 text-[9px] font-bold hover:bg-accent ${track.solo ? "text-accent-foreground" : "text-muted-foreground"}`}
-        title="Solo (mute other tracks)"
+        title={t("editor.trackSolo")}
         onClick={(e) => {
           e.stopPropagation();
           mutate((d) => setTrackFlag(d, track.id, { solo: !track.solo }));
@@ -438,7 +438,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         max={2}
         step={0.01}
         value={track.volume ?? 1}
-        title={`Track gain ${((track.volume ?? 1) * 100).toFixed(0)}%`}
+        title={t("editor.trackGain", { pct: ((track.volume ?? 1) * 100).toFixed(0) })}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) =>
           mutate((d) => setTrackFlag(d, track.id, { volume: Number(e.target.value) }))
@@ -696,7 +696,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       <div className="relative flex flex-1 items-center gap-1 truncate px-1">
                         {track.locked && <Lock className="size-3 shrink-0" />}
                         <span className="truncate">
-                          {(clip.mediaRef && assets.get(clip.mediaRef)?.name) ?? "clip"} ·{" "}
+                          {(clip.mediaRef && assets.get(clip.mediaRef)?.name) ?? t("editor.clipFallback")} ·{" "}
                           {(clip.durationMs / 1000).toFixed(1)}s
                         </span>
                       </div>
@@ -719,7 +719,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 </div>
                 <p className="text-xs font-medium text-foreground">{t("editor.dropHint")}</p>
                 <p className="max-w-xs text-[11px] text-muted-foreground">
-                  Drag media from the left panel, or create a track first.
+                  {t("editor.dropHintEmpty")}
                 </p>
               </div>
             )}

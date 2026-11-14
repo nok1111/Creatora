@@ -42,7 +42,7 @@ export function Inspector() {
         <EmptyState
           compact
           icon={SlidersHorizontal}
-          title="Nothing selected"
+          title={t("editor.nothingSelected")}
           body={t("editor.inspectorEmpty")}
         />
       </div>
@@ -374,10 +374,10 @@ export function Inspector() {
                       value={clipStyle.shadowColor.slice(0, 7)}
                       onChange={(e) => patchStyle("shadowColor", e.target.value + "CC")} />
                     <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
-                      value={clipStyle.shadowX ?? 0} title="shadow X px"
+                      value={clipStyle.shadowX ?? 0} title={t("gfxI.shadowXPx")}
                       onChange={(e) => patchStyle("shadowX", Number(e.target.value))} />
                     <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
-                      value={clipStyle.shadowY ?? 0} title="shadow Y px"
+                      value={clipStyle.shadowY ?? 0} title={t("gfxI.shadowYPx")}
                       onChange={(e) => patchStyle("shadowY", Number(e.target.value))} />
                   </>
                 )}

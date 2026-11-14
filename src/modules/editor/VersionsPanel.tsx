@@ -397,33 +397,33 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/60 px-3 py-2 text-[10px]">
         <span className="font-medium">{t("versions.exportFor", { name: active.name })}</span>
         <label className="flex items-center gap-1 text-muted-foreground">
-          Video
+          {t("versions.exportVideo")}
           <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.codec}
             onChange={(e) => patchExport(active, { codec: e.target.value })}>
             {EXPORT_MATRIX.videoCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-1 text-muted-foreground" title="Encoder speed vs compression">
-          Speed
+        <label className="flex items-center gap-1 text-muted-foreground" title={t("versions.exportSpeedTitle")}>
+          {t("versions.exportSpeed")}
           <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.preset}
             onChange={(e) => patchExport(active, { preset: e.target.value })}>
             {EXPORT_MATRIX.presets.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
-        <label className="flex items-center gap-1 text-muted-foreground" title="Lower = higher quality (0–51)">
-          Quality
+        <label className="flex items-center gap-1 text-muted-foreground" title={t("versions.exportQualityTitle")}>
+          {t("versions.exportQuality")}
           <input type="number" min={0} max={51} className="w-12 rounded-md border border-border bg-background px-1.5 py-1 text-foreground"
             value={active.export.crf}
             onChange={(e) => patchExport(active, { crf: Math.min(51, Math.max(0, Number(e.target.value))) })} />
         </label>
-        <label className="flex items-center gap-1 text-muted-foreground" title="Optional fixed video bitrate">
-          Bitrate
+        <label className="flex items-center gap-1 text-muted-foreground" title={t("versions.exportBitrateTitle")}>
+          {t("versions.exportBitrate")}
           <input placeholder={t("versions.bitratePh")} className="w-14 rounded-md border border-border bg-background px-1.5 py-1 text-foreground"
             value={active.export.videoBitrate ?? ""}
             onChange={(e) => patchExport(active, { videoBitrate: e.target.value || null })} />
         </label>
         <label className="flex items-center gap-1 text-muted-foreground">
-          Audio
+          {t("versions.exportAudio")}
           <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.audioCodec}
             onChange={(e) => patchExport(active, { audioCodec: e.target.value })}>
             {EXPORT_MATRIX.audioCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -434,7 +434,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
           </select>
         </label>
         <label className="flex items-center gap-1 text-muted-foreground">
-          Format
+          {t("versions.exportFormat")}
           <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.container}
             onChange={(e) => patchExport(active, { container: e.target.value })}>
             {EXPORT_MATRIX.containers.map((c) => <option key={c} value={c}>{c}</option>)}
