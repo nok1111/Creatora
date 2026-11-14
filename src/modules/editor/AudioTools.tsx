@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ear, Guitar, Mic2, Plus, Scissors, Trash2, Volume2, Wand2 } from "lucide-react";
+import { CheckCircle2, Ear, Guitar, Mic2, Plus, Scissors, Trash2, Volume2, Wand2 } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
@@ -61,16 +61,30 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
     }
   };
 
+  const enabledTypes = new Set((clip.effects ?? []).filter((e) => e.enabled).map((e) => e.type));
+
+  const sectionLabel = (children: React.ReactNode) => (
+    <p className="pt-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </p>
+  );
+
   return (
     <div className="space-y-1.5 border-t border-border pt-1.5">
       {/* friendly one-click presets — additive, skip already-enabled types */}
+      {sectionLabel("Enhance")}
       <div className="mb-2 flex flex-wrap gap-1">
-        {PRESETS.map((p) => (
-
+        {PRESETS.map((p) => {
+          const applied = p.effects.every((e) => enabledTypes.has(e.type));
+          return (
           <button
             key={p.key}
             title={`${p.label} — adds ${p.effects.map((e) => e.type).join(" + ")}`}
-            className="flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[10px] hover:border-accent hover:bg-accent/10"
+            className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition-colors ${
+              applied
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                : "border-border bg-card hover:border-accent hover:bg-accent/10"
+            }`}
             onClick={() =>
               mutate((d) => {
                 let dd = d;
@@ -88,9 +102,10 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
               })
             }
           >
-            {p.icon} {p.label}
+            {applied ? <CheckCircle2 className="size-3.5" /> : p.icon} {p.label}
           </button>
-        ))}
+          );
+        })}
         {/* Balance Music — contextual: only when a second audio track
             exists to act as the voice target. */}
         {(() => {
@@ -137,6 +152,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
       </div>
 
       {/* loudness: measure + non-destructive gain suggestion */}
+      {sectionLabel("Loudness")}
       <div className="flex items-center gap-1">
         <select
           className="rounded border border-border bg-background px-1 py-0.5 text-[10px]"
@@ -196,6 +212,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
       )}
 
       {/* silence detection → reviewable proposal, never destructive */}
+      {sectionLabel("Silence cleanup")}
       <div className="flex items-center gap-1 text-[10px]">
         <span className="text-muted-foreground">silence</span>
         <input
@@ -250,6 +267,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
       )}
 
       {/* auto-duck rules involving this track */}
+      {sectionLabel("Auto-duck")}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-muted-foreground">auto-duck</span>
