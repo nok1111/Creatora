@@ -6,6 +6,7 @@ use crate::db::Db;
 use crate::error::{AppError, CmdResult};
 use crate::jobs::{JobCtx, JobManager};
 use crate::media::{self, probe};
+use crate::project::document::ExportSettings;
 use crate::project::store;
 use crate::render::plan::{self, RenderPlan, SourceInfo};
 use serde::Serialize;
@@ -109,9 +110,30 @@ pub fn run_ffmpeg(
         .map_err(|e| format!("spawn ffmpeg: {e}"))?;
 
     let stdout = child.stdout.take().expect("piped stdout");
+    // Drain stderr on its own thread — if nobody reads it, ffmpeg blocks
+    // once the pipe buffer fills, which freezes progress and the render.
+    let stderr_acc = Arc::new(std::sync::Mutex::new(String::new()));
+    if let Some(mut err) = child.stderr.take() {
+        let acc = stderr_acc.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = [0u8; 8192];
+            loop {
+                match err.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        if let Ok(mut s) = acc.lock() {
+                            if s.len() < 256 * 1024 {
+                                s.push_str(&String::from_utf8_lossy(&buf[..n]));
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
     let reader = BufReader::new(stdout);
     let total_us = (plan.duration_ms.max(1) as f64) * 1000.0;
-    let mut last_err = String::new();
 
     for line in reader.lines() {
         if cancelled() {
@@ -135,12 +157,10 @@ pub fn run_ffmpeg(
     }
 
     let status = child.wait().map_err(|e| format!("wait ffmpeg: {e}"))?;
-    if let Some(mut err) = child.stderr.take() {
-        use std::io::Read;
-        let mut buf = String::new();
-        let _ = err.read_to_string(&mut buf);
-        last_err = buf;
-    }
+    let last_err = stderr_acc
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or_default();
     if !status.success() {
         let _ = std::fs::remove_file(out);
         let tail = last_err
@@ -168,6 +188,7 @@ pub fn export_project(
     project_path: String,
     out_path: String,
     version_id: Option<String>,
+    settings: Option<ExportSettings>,
 ) -> CmdResult<String> {
     let project_path = PathBuf::from(&project_path);
     let out_path = PathBuf::from(&out_path);
@@ -189,7 +210,14 @@ pub fn export_project(
         "render.export",
         &payload,
         move |ctx: &JobCtx| {
-            run_export_body(ctx, &project_path, &out_path, version_id.as_deref(), &db2)
+            run_export_body(
+                ctx,
+                &project_path,
+                &out_path,
+                version_id.as_deref(),
+                settings.clone(),
+                &db2,
+            )
         },
     );
     Ok(job_id)
@@ -202,13 +230,19 @@ pub fn run_export_body(
     project_path: &std::path::Path,
     out_path: &std::path::Path,
     version_id: Option<&str>,
+    settings: Option<ExportSettings>,
     db2: &Arc<Db>,
 ) -> Result<serde_json::Value, String> {
     {
         let doc = store::open(project_path).map_err(|e| e.to_string())?;
-        let export = version_id
-            .and_then(|id| doc.version(id))
-            .map(|v| v.export.clone())
+        // Explicit settings (Export Dialog) win; then the version's saved
+        // settings; then defaults — never silently ignored.
+        let export = settings
+            .or_else(|| {
+                version_id
+                    .and_then(|id| doc.version(id))
+                    .map(|v| v.export.clone())
+            })
             .unwrap_or_default();
         let doc = match version_id {
             Some(id) => doc
@@ -294,6 +328,7 @@ pub fn export_versions(
             project_path.clone(),
             out.to_string_lossy().into_owned(),
             vid,
+            None,
         )?);
     }
     Ok(ids)

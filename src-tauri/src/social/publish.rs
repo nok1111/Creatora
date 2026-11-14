@@ -335,6 +335,7 @@ pub fn export_for_target(
             &std::path::PathBuf::from(&project_path),
             &out_path,
             version_id.as_deref(),
+            None,
             &db2,
         )?;
         let out = PathBuf::from(result["outputPath"].as_str().unwrap_or_default());

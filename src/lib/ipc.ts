@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { ExportSettings } from "@/lib/project-types";
 
 /** Serialized error shape returned by every Rust command. */
 export interface AppErrorPayload {
@@ -93,8 +94,8 @@ export const api = {
     ),
 
   // Render
-  exportProject: (projectPath: string, outPath: string, versionId?: string) =>
-    cmd<string>("export_project", { projectPath, outPath, versionId }),
+  exportProject: (projectPath: string, outPath: string, versionId?: string, settings?: ExportSettings) =>
+    cmd<string>("export_project", { projectPath, outPath, versionId, settings: settings ?? null }),
   exportVersions: (projectPath: string, outDir: string, versionIds: string[]) =>
     cmd<string[]>("export_versions", { projectPath, outDir, versionIds }),
   analyzeSubject: (path: string, inMs: number, outMs: number, samples = 24) =>

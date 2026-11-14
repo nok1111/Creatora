@@ -16,9 +16,7 @@ import {
   Save,
   Undo2,
 } from "lucide-react";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
-import { awaitJob, onJobProgress } from "@/services/jobs";
 import { useProject } from "@/stores/project";
 import { SuggestionBanner } from "@/components/SuggestionBanner";
 import { EmptyState } from "@/components/EmptyState";
@@ -42,6 +40,7 @@ import { SubtitlesPanel } from "./SubtitlesPanel";
 import { MediaBin } from "./MediaBin";
 import { GraphicsBin } from "./GraphicsBin";
 import { Inspector } from "./Inspector";
+import { ExportDialog } from "./ExportDialog";
 
 /**
  * Phase-3 vertical slice editor: media bin → preview → timeline → export.
@@ -50,7 +49,6 @@ import { Inspector } from "./Inspector";
 export function EditorPage() {
   const { t } = useTranslation();
   const doc = useProject((s) => s.doc);
-  const filePath = useProject((s) => s.filePath);
   const dirty = useProject((s) => s.dirty);
   const save = useProject((s) => s.save);
 
@@ -66,7 +64,7 @@ export function EditorPage() {
   const previewQuality = useEditor((s) => s.previewQuality);
   const setPreviewQuality = useEditor((s) => s.setPreviewQuality);
 
-  const [exporting, setExporting] = useState<{ jobId: string; progress: number } | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   // Deep-link params: /editor?tab=subtitles, /editor?left=graphics
   const [params] = useSearchParams();
   const nav = useNavigate();
@@ -172,36 +170,6 @@ export function EditorPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [onKey]);
 
-  // --- export ---
-  const exportNow = async () => {
-    if (!filePath || exporting) return;
-    const out = await saveDialog({
-      title: t("editor.exportTitle"),
-      defaultPath: `${doc?.meta.name ?? "export"}.mp4`,
-      filters: [{ name: "MP4", extensions: ["mp4"] }],
-    });
-    if (!out) return;
-    try {
-      await save(); // render the saved file — export == persisted state
-      const jobId = await api.exportProject(filePath, out, useEditor.getState().activeVersionId ?? undefined);
-      setExporting({ jobId, progress: 0 });
-      const off = onJobProgress((p) => {
-        if (p.jobId === jobId) setExporting({ jobId, progress: p.progress });
-      });
-      const fin = await awaitJob<{ outputPath: string; skippedClips: number }>(jobId);
-      off();
-      setExporting(null);
-      if (fin.status === "done") {
-        toast.success(t("editor.exportDone"), { description: fin.result?.outputPath });
-      } else {
-        toast.error(t("editor.exportFailed"), { description: fin.error });
-      }
-    } catch (e) {
-      setExporting(null);
-      toast.error(t("editor.exportFailed"), { description: String(e) });
-    }
-  };
-
   const compareMode = useEditor((s) => s.compareMode);
   const activeVersionId = useEditor((s) => s.activeVersionId);
   const comparePane = compareMode && activeVersionId !== null;
@@ -288,21 +256,9 @@ export function EditorPage() {
         >
           {previewQuality === "proxy" ? t("editor.qualityProxy") : t("editor.qualityFull")}
         </button>
-        {exporting ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="h-1.5 w-36 overflow-hidden rounded bg-secondary">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${Math.max(2, exporting.progress * 100)}%` }}
-              />
-            </div>
-            {Math.round(exporting.progress * 100)}%
-          </div>
-        ) : (
-          <Button size="sm" variant="secondary" onClick={() => void exportNow()}>
-            <Download className="mr-1 size-4" /> {t("editor.export")}
-          </Button>
-        )}
+        <Button size="sm" variant="secondary" onClick={() => setExportOpen(true)}>
+          <Download className="mr-1 size-4" /> {t("editor.export")}
+        </Button>
       </div>
 
       {/* Middle: bin + preview */}
@@ -380,6 +336,8 @@ export function EditorPage() {
           )}
         </div>
       </div>
+
+      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
     </div>
   );
 }
