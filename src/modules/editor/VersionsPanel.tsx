@@ -180,6 +180,27 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
 
   const active = activeId ? getVersion(doc, activeId) : undefined;
 
+  /** Small block showing the real aspect ratio — recognisable at a glance. */
+  const aspectTile = (w: number, h: number, activeChip: boolean) => {
+    const portrait = h > w;
+    const bw = portrait ? 8 : 14;
+    const bh = portrait ? 14 : Math.max(7, Math.round((14 * h) / w));
+    return (
+      <span
+        className={`inline-block shrink-0 rounded-[2px] border ${
+          activeChip ? "border-primary bg-primary/40" : "border-muted-foreground/50 bg-muted-foreground/20"
+        }`}
+        style={{ width: bw, height: bh }}
+      />
+    );
+  };
+
+  const ratioStr = (w: number, h: number) => {
+    const g = (a: number, b: number): number => (b ? g(b, a % b) : a);
+    const d = g(w, h);
+    return `${w / d}:${h / d}`;
+  };
+
   const patchExport = (v: FormatVersion, patch: Partial<ExportSettings>) => {
     mutate((d) => {
       const n = structuredClone(d);
@@ -197,30 +218,39 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
       <Layers className="size-3.5 shrink-0 text-muted-foreground" />
       {/* Master */}
       <button
-        className={`shrink-0 rounded border px-2 py-1 text-[10px] ${
+        className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] transition-colors ${
           activeId === null
-            ? "border-primary bg-primary/15 text-foreground"
+            ? "border-primary bg-primary/15 text-foreground shadow-raise"
             : "border-border text-muted-foreground hover:bg-accent"
         }`}
         onClick={() => setActive(null)}
       >
-        {t("versions.master")} · {doc.canvas.width}×{doc.canvas.height}
+        {aspectTile(doc.canvas.width, doc.canvas.height, activeId === null)}
+        <span className="text-left">
+          <div>{t("versions.master")}</div>
+          <div className="text-[9px] opacity-60">
+            {ratioStr(doc.canvas.width, doc.canvas.height)} · {doc.canvas.width}×{doc.canvas.height}
+          </div>
+        </span>
       </button>
 
       {versions.map((v) => (
         <div
           key={v.id}
-          className={`group flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-[10px] ${
+          className={`group flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] transition-colors ${
             activeId === v.id
-              ? "border-primary bg-primary/15 text-foreground"
+              ? "border-primary bg-primary/15 text-foreground shadow-raise"
               : "border-border text-muted-foreground hover:bg-accent"
           }`}
         >
-          <button className="text-left" onClick={() => setActive(v.id)}>
-            <div>{v.name}</div>
-            <div className="text-[9px] opacity-60">
-              {v.canvas.width}×{v.canvas.height}
-            </div>
+          <button className="flex items-center gap-1.5 text-left" onClick={() => setActive(v.id)}>
+            {aspectTile(v.canvas.width, v.canvas.height, activeId === v.id)}
+            <span>
+              <div>{v.name}</div>
+              <div className="text-[9px] opacity-60">
+                {ratioStr(v.canvas.width, v.canvas.height)} · {v.canvas.width}×{v.canvas.height}
+              </div>
+            </span>
           </button>
           <div className="ml-1 hidden items-center gap-0.5 group-hover:flex">
             <button
@@ -301,7 +331,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
                       className="flex items-center justify-center rounded border border-border bg-secondary text-[8px] font-medium text-muted-foreground"
                       style={{ width: bw, height: bh }}
                     >
-                      {portrait ? "9:16" : ar === `${1080}×${1080}` ? "1:1" : ""}
+                      {ratioStr(p.canvas.width, p.canvas.height)}
                     </div>
                     <div className="text-center text-[9px] font-medium leading-tight">
                       {p.platform}
@@ -358,40 +388,52 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
     {/* Effective export settings for the active version — always shown
         before export (no silently-ignored fields). */}
     {active && showExportCfg && (
-      <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-3 py-1.5 text-[10px]">
-        <span className="text-muted-foreground">{t("versions.exportFor", { name: active.name })}</span>
-        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.codec}
-          onChange={(e) => patchExport(active, { codec: e.target.value })}>
-          {EXPORT_MATRIX.videoCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.preset}
-          onChange={(e) => patchExport(active, { preset: e.target.value })}>
-          {EXPORT_MATRIX.presets.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/60 px-3 py-2 text-[10px]">
+        <span className="font-medium">{t("versions.exportFor", { name: active.name })}</span>
         <label className="flex items-center gap-1 text-muted-foreground">
-          CRF
-          <input type="number" min={0} max={51} className="w-12 rounded border border-border bg-background px-1 py-0.5"
+          Video
+          <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.codec}
+            onChange={(e) => patchExport(active, { codec: e.target.value })}>
+            {EXPORT_MATRIX.videoCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-1 text-muted-foreground" title="Encoder speed vs compression">
+          Speed
+          <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.preset}
+            onChange={(e) => patchExport(active, { preset: e.target.value })}>
+            {EXPORT_MATRIX.presets.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-1 text-muted-foreground" title="Lower = higher quality (0–51)">
+          Quality
+          <input type="number" min={0} max={51} className="w-12 rounded-md border border-border bg-background px-1.5 py-1 text-foreground"
             value={active.export.crf}
             onChange={(e) => patchExport(active, { crf: Math.min(51, Math.max(0, Number(e.target.value))) })} />
         </label>
-        <label className="flex items-center gap-1 text-muted-foreground">
-          vb
-          <input placeholder={t("versions.bitratePh")} className="w-14 rounded border border-border bg-background px-1 py-0.5"
+        <label className="flex items-center gap-1 text-muted-foreground" title="Optional fixed video bitrate">
+          Bitrate
+          <input placeholder={t("versions.bitratePh")} className="w-14 rounded-md border border-border bg-background px-1.5 py-1 text-foreground"
             value={active.export.videoBitrate ?? ""}
             onChange={(e) => patchExport(active, { videoBitrate: e.target.value || null })} />
         </label>
-        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.audioCodec}
-          onChange={(e) => patchExport(active, { audioCodec: e.target.value })}>
-          {EXPORT_MATRIX.audioCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.audioBitrate}
-          onChange={(e) => patchExport(active, { audioBitrate: e.target.value })}>
-          {["96k", "128k", "192k", "256k", "320k"].map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="rounded border border-border bg-background px-1 py-0.5" value={active.export.container}
-          onChange={(e) => patchExport(active, { container: e.target.value })}>
-          {EXPORT_MATRIX.containers.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <label className="flex items-center gap-1 text-muted-foreground">
+          Audio
+          <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.audioCodec}
+            onChange={(e) => patchExport(active, { audioCodec: e.target.value })}>
+            {EXPORT_MATRIX.audioCodecs.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.audioBitrate}
+            onChange={(e) => patchExport(active, { audioBitrate: e.target.value })}>
+            {["96k", "128k", "192k", "256k", "320k"].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-1 text-muted-foreground">
+          Format
+          <select className="rounded-md border border-border bg-background px-1.5 py-1 text-foreground" value={active.export.container}
+            onChange={(e) => patchExport(active, { container: e.target.value })}>
+            {EXPORT_MATRIX.containers.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
         <span className="text-muted-foreground">
           {active.canvas.width}×{active.canvas.height} · {active.canvas.fpsNum}/{active.canvas.fpsDen}fps
         </span>
