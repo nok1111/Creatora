@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
+  Captions,
   ChevronRight,
+  Clock,
   Download,
   ListChecks,
   Merge,
@@ -13,6 +15,7 @@ import {
   Trash2,
   Wand2,
 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/ipc";
 import { awaitJob, onJobProgress } from "@/services/jobs";
 import { useProject } from "@/stores/project";
@@ -236,9 +239,17 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         </div>
         <div ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto p-1.5">
           {cues.length === 0 && (
-            <p className="p-3 text-center text-xs text-muted-foreground">
-              No cues — transcribe or add one manually.
-            </p>
+            <EmptyState
+              compact
+              icon={Captions}
+              title="No captions yet"
+              body="Transcribe an audio or video asset locally, or add a cue manually at the playhead."
+              action={{
+                label: "Add cue",
+                onClick: () =>
+                  mutate((d) => addCue(d, { startMs: playheadMs, endMs: playheadMs + 2000, text: "New cue", words: [] }).doc),
+              }}
+            />
           )}
           {cues.map(cueRow)}
         </div>
@@ -286,7 +297,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
 
         {/* Timing tools */}
         <div className="rounded border border-border/60 p-2">
-          <p className="mb-1.5 font-medium">Timing</p>
+          <p className="mb-1.5 flex items-center gap-1 font-medium"><Clock className="size-3" /> Timing</p>
           <div className="flex items-center gap-1">
             <input value={shift} onChange={(e) => setShift(e.target.value)}
               className="h-6 w-14 rounded border border-border bg-transparent px-1 text-[10px]" placeholder="±ms" />
@@ -360,15 +371,31 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               </button>
             ))}
           </div>
+          <div className="mt-1 text-[10px]">
+            <label className="mb-1 block text-muted-foreground">Animation</label>
+            <div className="grid grid-cols-3 gap-1">
+              {([
+                ["none", "Static", "Plain cue text"],
+                ["karaoke", "Karaoke", "Word-by-word highlight"],
+                ["pop", "Pop", "Word pops in"],
+              ] as const).map(([mode, label, hint]) => (
+                <button
+                  key={mode}
+                  onClick={() => setStyle({ mode })}
+                  title={hint}
+                  className={`rounded-md border px-1 py-1.5 text-center transition-colors ${
+                    (style?.mode ?? "none") === mode
+                      ? "border-primary bg-primary/15 text-foreground"
+                      : "border-border text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <div className="text-[9px] font-medium">{label}</div>
+                  <div className="text-[7px] opacity-70">{hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-1 grid grid-cols-3 items-center gap-1 text-[10px]">
-            <label>Mode</label>
-            <select value={style?.mode ?? "none"}
-              onChange={(e) => setStyle({ mode: e.target.value })}
-              className="col-span-2 h-6 rounded border border-border bg-transparent px-1">
-              <option value="none" className="bg-card">None</option>
-              <option value="karaoke" className="bg-card">Karaoke</option>
-              <option value="pop" className="bg-card">Pop</option>
-            </select>
             <label>Size</label>
             <input type="number" value={style?.text.fontSizePx ?? 32}
               onChange={(e) => style && setStyle({ text: { ...style.text, fontSizePx: +e.target.value } })}
