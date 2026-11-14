@@ -18,6 +18,7 @@ import {
 import { EmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/ipc";
 import { awaitJob, onJobProgress } from "@/services/jobs";
+import { requestProjectSwitch } from "@/services/project-switch";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
@@ -126,7 +127,12 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
     });
     try {
       const res = await awaitJob(id);
-      await useProject.getState().openFromPath(filePath);
+      await new Promise<void>((resolve) => {
+        requestProjectSwitch(async () => {
+          await useProject.getState().openFromPath(filePath);
+          resolve();
+        });
+      });
       const r = res as { cues?: number; withWords?: number };
       toast.success(`${r.cues ?? 0} cues (${r.withWords ?? 0} with word timing)`);
     } catch (e) {

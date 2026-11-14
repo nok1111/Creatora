@@ -6,6 +6,7 @@ import { FilePlus2, Clock, Film, Star, MoreVertical, FolderOpen, Archive, Copy, 
 import { useNavigate } from "react-router-dom";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
+import { requestProjectSwitch } from "@/services/project-switch";
 import type { ProjectSummary } from "@/lib/project-types";
 import { useProject } from "@/stores/project";
 import { Button } from "@/components/ui/button";
@@ -93,14 +94,12 @@ export function HomePage() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects"] });
 
-  const openProject = async (p: ProjectSummary) => {
-    try {
+  const openProject = (p: ProjectSummary) => {
+    requestProjectSwitch(async () => {
       await project.openFromPath(p.filePath);
       refresh();
       navigate("/editor");
-    } catch (e) {
-      toast.error(t("common.error"), { description: String(e) });
-    }
+    });
   };
 
   const flag = async (id: string, flags: { favorite?: boolean; archived?: boolean }) => {
@@ -247,7 +246,13 @@ export function HomePage() {
             <Button size="sm" variant="outline" onClick={() => void project.save()} disabled={!project.dirty}>
               {t("common.save")}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => project.close()}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                requestProjectSwitch(async () => project.close())
+              }
+            >
               {t("common.close")}
             </Button>
           </span>
@@ -280,7 +285,7 @@ export function HomePage() {
               <li key={p.id} className="flex items-center gap-3 p-3">
                 <button
                   className="flex flex-1 items-center gap-3 text-left"
-                  onClick={() => void openProject(p)}
+                  onClick={() => openProject(p)}
                 >
                   <AspectTile w={p.width} h={p.height} />
                   <div className="min-w-0 flex-1">
@@ -297,7 +302,7 @@ export function HomePage() {
                     <MoreVertical className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => void openProject(p)}>
+                    <DropdownMenuItem onClick={() => openProject(p)}>
                       <FolderOpen className="size-4" /> {t("home.open")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => void flag(p.id, { favorite: !p.isFavorite })}>

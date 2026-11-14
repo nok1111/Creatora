@@ -27,6 +27,13 @@ export const en = {
     open: "Open project",
     notFound: "The linked project could not be found.",
   },
+  switchGuard: {
+    title: "Unsaved changes",
+    desc: "\"{{name}}\" has changes that aren't saved to the project file. An autosave backup is kept either way.",
+    saveContinue: "Save & continue",
+    dontSave: "Continue without saving",
+    saving: "Saving…",
+  },
   suggest: {
     importMedia: {
       title: "Get some media",

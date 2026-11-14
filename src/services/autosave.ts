@@ -22,6 +22,7 @@ class AutosaveService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private intervalMs = 30_000;
   private running = false;
+  private chain: Promise<void> = Promise.resolve();
   private onError: ErrorHandler = (id, e) =>
     console.error(`[autosave] save failed for ${id}:`, e);
 
@@ -45,7 +46,7 @@ class AutosaveService {
   start() {
     if (this.running) return;
     this.running = true;
-    this.timer = setInterval(() => void this.tick(), this.intervalMs);
+    this.timer = setInterval(() => void this.flush(), this.intervalMs);
     window.addEventListener("beforeunload", this.flushSync);
   }
 
@@ -57,20 +58,43 @@ class AutosaveService {
     window.removeEventListener("beforeunload", this.flushSync);
   }
 
+  private lastErrors = new Map<string, unknown>();
+
   /** Run one save pass over all dirty sources. Serial to avoid write races. */
   async tick(): Promise<void> {
+    this.lastErrors.clear();
     for (const source of this.sources.values()) {
       try {
         if (source.isDirty()) await source.save();
       } catch (e) {
+        this.lastErrors.set(source.id, e);
         this.onError(source.id, e);
       }
     }
   }
 
+  /**
+   * Serialize save passes through a single promise chain so a caller can
+   * await "everything pending" — e.g. before replacing the open document.
+   * Errors are reported per-source via onError; flush itself never rejects.
+   */
+  flush(): Promise<void> {
+    this.chain = this.chain.then(() => this.tick()).catch(() => {});
+    return this.chain;
+  }
+
+  /**
+   * Like flush() but resolves with the ids of sources whose save failed in
+   * the last pass — a project switch can then decide to keep the document.
+   */
+  async flushWithErrors(): Promise<string[]> {
+    await this.flush();
+    return [...this.lastErrors.keys()];
+  }
+
   /** Best-effort flush on unload — async work can't be awaited here. */
   private flushSync = () => {
-    void this.tick();
+    void this.flush();
   };
 }
 

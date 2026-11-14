@@ -12,6 +12,11 @@ vi.mock("@/stores/project", () => ({
     sel({ createNew }),
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+// The wizard's job here is calling createNew with the right dims — bypass
+// the unsaved-changes guard (it needs a real project store to decide).
+vi.mock("@/services/project-switch", () => ({
+  requestProjectSwitch: (fn: () => Promise<void>) => void fn(),
+}));
 
 let container: HTMLDivElement;
 let root: Root;

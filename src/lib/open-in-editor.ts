@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/ipc";
 import { useProject } from "@/stores/project";
+import { requestProjectSwitch } from "@/services/project-switch";
 
 /**
  * Single entry point for "open this project file and show it in the editor".
@@ -21,8 +22,10 @@ export function useOpenInEditor() {
         navigate("/editor");
         return;
       }
-      await st.openFromPath(filePath);
-      navigate("/editor");
+      requestProjectSwitch(async () => {
+        await st.openFromPath(filePath);
+        navigate("/editor");
+      });
     },
     [navigate],
   );

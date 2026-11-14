@@ -30,6 +30,13 @@ export const es: typeof en = {
     open: "Abrir proyecto",
     notFound: "No se encontró el proyecto vinculado.",
   },
+  switchGuard: {
+    title: "Cambios sin guardar",
+    desc: "\"{{name}}\" tiene cambios que no están guardados en el archivo del proyecto. De todos modos se conserva una copia de autoguardado.",
+    saveContinue: "Guardar y continuar",
+    dontSave: "Continuar sin guardar",
+    saving: "Guardando…",
+  },
   suggest: {
     importMedia: {
       title: "Consigue material",

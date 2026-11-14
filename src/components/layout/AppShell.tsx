@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Clapperboard } from "lucide-react";
 import { MODULES } from "@/app/nav";
 import { useProject } from "@/stores/project";
+import { ProjectSwitchDialog } from "@/components/ProjectSwitchDialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -72,6 +73,8 @@ export function AppShell() {
       <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-slim">
         <Outlet />
       </main>
+
+      <ProjectSwitchDialog />
     </div>
   );
 }

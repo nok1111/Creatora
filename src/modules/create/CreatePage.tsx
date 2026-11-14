@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Clapperboard, Smartphone, Square, Settings2, ArrowRight } from "lucide-react";
 import { useProject } from "@/stores/project";
+import { requestProjectSwitch } from "@/services/project-switch";
 import { cn } from "@/lib/utils";
 
 /** Guided creation — /create. Two steps: pick a format, name it, edit. */
@@ -34,16 +35,18 @@ export function CreatePage() {
   const selected = FORMATS.find((f) => f.id === fmt)!;
   const dims = fmt === "custom" && size ? size : { w: selected.w, h: selected.h };
 
-  const create = async () => {
+  const create = () => {
     const n = name.trim() || "Untitled project";
-    setBusy(true);
-    try {
-      await createNew({ name: n, width: dims.w, height: dims.h, fpsNum: fps, fpsDen: 1 });
-      nav("/editor");
-    } catch (e) {
-      toast.error(String(e));
-      setBusy(false);
-    }
+    requestProjectSwitch(async () => {
+      setBusy(true);
+      try {
+        await createNew({ name: n, width: dims.w, height: dims.h, fpsNum: fps, fpsDen: 1 });
+        nav("/editor");
+      } catch (e) {
+        toast.error(String(e));
+        setBusy(false);
+      }
+    });
   };
 
   return (
