@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Download, Upload, Palette, Type, Square, Sparkles } from "lucide-react";
+import { Plus, Trash2, Download, Upload, Palette, Type, Square, RectangleHorizontal, BadgeCheck, MessageSquare, Heading } from "lucide-react";
 import { api } from "@/lib/ipc";
 import type { Template } from "@/lib/ipc";
 import { useProject } from "@/stores/project";
@@ -253,16 +253,16 @@ export function GraphicsBin() {
             <Type className="size-4" /> <span className="text-[9px]">Title</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addLowerThird}>
-            <Sparkles className="size-4" /> <span className="text-[9px]">Lower 3rd</span>
+            <RectangleHorizontal className="size-4" /> <span className="text-[9px]">Lower 3rd</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addShape}>
             <Square className="size-4" /> <span className="text-[9px]">Shape</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addBadge}>
-            <Sparkles className="size-4" /> <span className="text-[9px]">Badge</span>
+            <BadgeCheck className="size-4" /> <span className="text-[9px]">Badge</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addCallout}>
-            <Type className="size-4" /> <span className="text-[9px]">Callout</span>
+            <MessageSquare className="size-4" /> <span className="text-[9px]">Callout</span>
           </button>
           <button
             className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent"
@@ -284,7 +284,7 @@ export function GraphicsBin() {
               })
             }
           >
-            <Type className="size-4" /> <span className="text-[9px]">Heading</span>
+            <Heading className="size-4" /> <span className="text-[9px]">Heading</span>
           </button>
         </div>
       </div>
@@ -308,11 +308,36 @@ export function GraphicsBin() {
             {tpls.map((tpl) => (
               <div key={tpl.id} className="group relative flex items-center justify-between rounded px-1 py-0.5 hover:bg-accent">
                 <button
-                  className="truncate text-left"
+                  className="flex min-w-0 items-center gap-1.5 truncate text-left"
                   title={tpl.clip.text ?? tpl.clip.shape?.kind ?? "template"}
                   onClick={() => applyTemplate(tpl)}
                 >
-                  {tpl.name}
+                  {/* inline mini-preview — same render model as canvas, 28×16 */}
+                  <span className="relative inline-block h-4 w-7 shrink-0 overflow-hidden rounded-[3px] bg-black">
+                    {tpl.clip.shape && (
+                      <span
+                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                        style={{
+                          width: `${Math.min(90, (tpl.clip.shape.widthPx / doc.canvas.width) * 100)}%`,
+                          height: `${Math.min(90, (tpl.clip.shape.heightPx / doc.canvas.height) * 100)}%`,
+                          background: tpl.clip.shape.fill,
+                        }}
+                      />
+                    )}
+                    {tpl.clip.text && (
+                      <span
+                        className="absolute inset-0 flex items-center justify-center overflow-hidden text-center"
+                        style={{
+                          color: tpl.clip.textStyle?.color ?? "#fff",
+                          fontSize: `${Math.max(4, ((tpl.clip.textStyle?.fontSizePx ?? 48) / doc.canvas.height) * 16)}px`,
+                          background: tpl.clip.textStyle?.backgroundColor ?? undefined,
+                        }}
+                      >
+                        {tpl.clip.text}
+                      </span>
+                    )}
+                  </span>
+                  <span className="truncate">{tpl.name}</span>
                 </button>
                 {/* hover preview — same render model as the canvas */}
                 <div className="pointer-events-none absolute left-full top-0 z-20 ml-1 hidden h-[54px] w-[96px] overflow-hidden rounded border border-border bg-black group-hover:block">
