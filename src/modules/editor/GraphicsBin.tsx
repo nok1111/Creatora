@@ -1,7 +1,20 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import { Plus, Trash2, Download, Upload, Palette, Type, Square, RectangleHorizontal, BadgeCheck, MessageSquare, Heading } from "lucide-react";
 import { api } from "@/lib/ipc";
+import { PromptDialog } from "@/components/PromptDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import type { Template } from "@/lib/ipc";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
@@ -28,6 +41,10 @@ export function GraphicsBin() {
   const qc = useQueryClient();
   const [brandOpen, setBrandOpen] = useState(false);
   const [newKitName, setNewKitName] = useState("");
+  const [applyTpl, setApplyTpl] = useState<Template | null>(null);
+  const [saveTpl, setSaveTpl] = useState(false);
+  const [tplName, setTplName] = useState("");
+  const [tplCat, setTplCat] = useState("title");
 
   const templatesQ = useQuery({ queryKey: ["templates"], queryFn: api.listTemplates });
   const kitsQ = useQuery({ queryKey: ["brandkits"], queryFn: api.listBrandKits });
@@ -133,12 +150,9 @@ export function GraphicsBin() {
       "graphics",
     );
 
-  const applyTemplate = (tpl: Template) => {
+  const applyTemplate = (tpl: Template, textOverride?: string) => {
     // Replace text without losing the design (style/anim/shape intact).
-    const text =
-      tpl.clip.text != null
-        ? window.prompt("Text", tpl.clip.text) ?? tpl.clip.text
-        : undefined;
+    const text = tpl.clip.text != null ? (textOverride ?? tpl.clip.text) : undefined;
     let id = "";
     mutate((d) => {
       const r = addGeneratedClip(d, "graphics", {
@@ -177,7 +191,7 @@ export function GraphicsBin() {
     const assets = await api.listAssets();
     const a = assets.find((x) => x.filePath === l.path);
     if (!a) {
-      window.alert(`Could not import logo: ${l.path}`);
+      toast.error(`Could not import logo: ${l.path}`);
       return;
     }
     let id = "";
@@ -197,21 +211,14 @@ export function GraphicsBin() {
     select([id]);
   };
 
-  const saveSelectionAsTemplate = async () => {
+  const saveSelectionAsTemplate = async (name: string, category: string) => {
     const sel = useEditor.getState().selection[0];
     const clip = doc.timeline.tracks.flatMap((t) => t.clips).find((c) => c.id === sel);
-    if (!clip) return;
-    const name = window.prompt("Template name", clip.text ?? "Graphic") ?? "";
-    if (!name.trim()) return;
-    const cat =
-      window.prompt(
-        `Category (${TEMPLATE_CATEGORIES.join(", ")})`,
-        clip.shape ? "shape" : "title",
-      ) ?? "";
+    if (!clip || !name.trim()) return;
     await api.saveTemplate({
       id: crypto.randomUUID(),
       name: name.trim(),
-      category: cat.trim() || (clip.shape ? "shape" : "title"),
+      category: category || (clip.shape ? "shape" : "title"),
       clip: JSON.parse(JSON.stringify(clip)),
       brandKitId: doc.brandKitId ?? undefined,
     });
@@ -297,7 +304,13 @@ export function GraphicsBin() {
             className="rounded p-0.5 hover:bg-accent disabled:opacity-40"
             title="Save selected element as template"
             disabled={useEditor.getState().selection.length !== 1}
-            onClick={() => void saveSelectionAsTemplate()}
+            onClick={() => {
+              const sel = useEditor.getState().selection[0];
+              const clip = doc.timeline.tracks.flatMap((t) => t.clips).find((c) => c.id === sel);
+              setTplName(clip?.text ?? "Graphic");
+              setTplCat(clip?.shape ? "shape" : "title");
+              setSaveTpl(true);
+            }}
           >
             <Plus className="size-3.5" />
           </button>
@@ -310,7 +323,9 @@ export function GraphicsBin() {
                 <button
                   className="flex min-w-0 items-center gap-1.5 truncate text-left"
                   title={tpl.clip.text ?? tpl.clip.shape?.kind ?? "template"}
-                  onClick={() => applyTemplate(tpl)}
+                  onClick={() =>
+                    tpl.clip.text != null ? setApplyTpl(tpl) : applyTemplate(tpl)
+                  }
                 >
                   {/* inline mini-preview — same render model as canvas, 28×16 */}
                   <span className="relative inline-block h-4 w-7 shrink-0 overflow-hidden rounded-[3px] bg-black">
@@ -423,7 +438,7 @@ export function GraphicsBin() {
                     className="text-muted-foreground hover:text-foreground"
                     title="Export kit JSON"
                     onClick={async () => {
-                      const p = window.prompt("Export to path", `C:\\\\${k.name}.brand.json`);
+                      const p = await saveDialog({ defaultPath: `${k.name}.brand.json`, filters: [{ name: "Brand kit", extensions: ["json"] }] });
                       if (p) await api.exportBrandKit(k.id, p);
                     }}
                   >
@@ -474,8 +489,8 @@ export function GraphicsBin() {
                 className="rounded border border-border px-1 hover:bg-accent"
                 title="Import kit JSON"
                 onClick={async () => {
-                  const p = window.prompt("Import kit JSON path");
-                  if (p) {
+                  const p = await openDialog({ filters: [{ name: "Brand kit", extensions: ["json"] }] });
+                  if (p && typeof p === "string") {
                     await api.importBrandKit(p);
                     invalidate();
                   }
@@ -519,6 +534,55 @@ export function GraphicsBin() {
           </div>
         )}
       </div>
+
+      {/* Text override when applying a text template */}
+      <PromptDialog
+        open={!!applyTpl}
+        title="Template text"
+        description="Edit the text before inserting — the design is kept."
+        defaultValue={applyTpl?.clip.text ?? ""}
+        confirmLabel="Insert"
+        onSubmit={(v) => applyTpl && applyTemplate(applyTpl, v)}
+        onClose={() => setApplyTpl(null)}
+      />
+
+      {/* Save selection as template — name + category */}
+      <Dialog open={saveTpl} onOpenChange={(o) => !o && setSaveTpl(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Save as template</DialogTitle>
+            <DialogDescription>
+              Reusable in any project — it keeps text, style, shape and animations.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              value={tplName}
+              onChange={(e) => setTplName(e.target.value)}
+              placeholder="Template name"
+              autoFocus
+            />
+            <select
+              value={tplCat}
+              onChange={(e) => setTplCat(e.target.value)}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+            >
+              {TEMPLATE_CATEGORIES.map((c) => (
+                <option key={c} value={c} className="bg-card">{c}</option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSaveTpl(false)}>Cancel</Button>
+            <Button
+              disabled={!tplName.trim()}
+              onClick={() => void saveSelectionAsTemplate(tplName, tplCat).then(() => setSaveTpl(false))}
+            >
+              Save template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -30,6 +30,7 @@ import type { ExportSettings } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import type { FormatVersion, Keyframe } from "@/lib/project-types";
 import { Button } from "@/components/ui/button";
+import { PromptDialog } from "@/components/PromptDialog";
 
 interface MotionSample {
   tMs: number;
@@ -58,6 +59,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
   const [batching, setBatching] = useState(false);
   const [showExportCfg, setShowExportCfg] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
   if (!doc) return null;
   const versions = doc.versions;
@@ -281,10 +283,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
             </button>
             <button
               title={t("versions.rename")}
-              onClick={() => {
-                const name = window.prompt(t("versions.renamePrompt"), v.name);
-                if (name) mutate((d) => renameVersion(d, v.id, name));
-              }}
+              onClick={() => setRenaming({ id: v.id, name: v.name })}
               className="rounded px-0.5 text-[9px] hover:text-foreground"
             >
               Aa
@@ -440,6 +439,16 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
         {exportError && <span className="text-destructive">{exportError}</span>}
       </div>
     )}
+
+    <PromptDialog
+      open={!!renaming}
+      title={t("versions.rename")}
+      defaultValue={renaming?.name}
+      onSubmit={(name) => {
+        if (name.trim() && renaming) mutate((d) => renameVersion(d, renaming.id, name.trim()));
+      }}
+      onClose={() => setRenaming(null)}
+    />
     </div>
   );
 }

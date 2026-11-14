@@ -4,6 +4,7 @@ import { Hash, Save, Trash2 } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { extractHashtags } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
+import { PromptDialog } from "@/components/PromptDialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ export function CaptionStudio({
   onHashtags: (v: string[]) => void;
 }) {
   const [tagInput, setTagInput] = useState("");
+  const [naming, setNaming] = useState(false);
   const { data: templates, refetch: refetchTemplates } = useQuery({
     queryKey: ["caption-templates"],
     queryFn: () => api.listCaptionTemplates(),
@@ -58,10 +60,9 @@ export function CaptionStudio({
     setTagInput("");
   };
 
-  const saveTemplate = async () => {
-    const name = prompt("Template name:");
-    if (!name) return;
-    await api.saveCaptionTemplate({ name, body: caption, hashtags });
+  const saveTemplate = async (name: string) => {
+    if (!name.trim()) return;
+    await api.saveCaptionTemplate({ name: name.trim(), body: caption, hashtags });
     toast.success("Template saved");
     void refetchTemplates();
   };
@@ -162,7 +163,7 @@ export function CaptionStudio({
           <label className="text-xs font-medium text-muted-foreground">
             Templates
           </label>
-          <Button size="sm" variant="ghost" onClick={() => void saveTemplate()}>
+          <Button size="sm" variant="ghost" onClick={() => setNaming(true)}>
             <Save className="size-3" />
           </Button>
         </div>
@@ -216,6 +217,16 @@ export function CaptionStudio({
           )}
         </div>
       </div>
+
+      <PromptDialog
+        open={naming}
+        title="Save caption template"
+        description="Reusable caption + hashtags for future posts."
+        placeholder="Template name"
+        confirmLabel="Save"
+        onSubmit={(v) => void saveTemplate(v)}
+        onClose={() => setNaming(false)}
+      />
     </div>
   );
 }
