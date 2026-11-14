@@ -66,6 +66,9 @@ export function Preview({
   const dtMs = useRef(16);
   const previewQuality = useEditor((s) => s.previewQuality);
   const mutate = useEditor((s) => s.mutate);
+  const mutateInGesture = useEditor((s) => s.mutateInGesture);
+  const beginGesture = useEditor((s) => s.beginGesture);
+  const endGesture = useEditor((s) => s.endGesture);
   const select = useEditor((s) => s.select);
   const stageRef = useRef<HTMLDivElement>(null);
   const selection = useEditor((s) => s.selection);
@@ -143,6 +146,7 @@ export function Preview({
     const stage = stageRef.current;
     const hit = findClip(viewDoc, clipId);
     if (!stage || !hit) return;
+    beginGesture();
     const rect = stage.getBoundingClientRect();
     const startX = e.clientX;
     const startY = e.clientY;
@@ -162,7 +166,7 @@ export function Preview({
       const d = useProject.getState().doc;
       if (!d) return;
       const versionId = useEditor.getState().activeVersionId;
-      mutate((dd) =>
+      mutateInGesture((dd) =>
         versionId
           ? setVersionClipOverride(dd, versionId, clipId, {
               transform: { ...base, x: nx, y: ny },
@@ -174,6 +178,7 @@ export function Preview({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       setGuides({ v: null, h: null });
+      endGesture();
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -610,7 +615,7 @@ export function Preview({
             plan consumes, honoring active-version overrides. */}
         {(() => {
           const stage = stageRef.current;
-          const selId = selection[0];
+          const selId = selection.length === 1 ? selection[0] : null;
           if (!stage || !selId || editing) return null;
           const el = stage.querySelector<HTMLElement>(`[data-clip-id="${selId}"]`);
           const hit = selId ? findClip(viewDoc, selId) : null;
@@ -622,7 +627,7 @@ export function Preview({
           const ky = viewDoc.canvas.height / Math.max(1, sr.height);
           const write = (patch: Partial<typeof hit.clip.transform>) => {
             const versionId = useEditor.getState().activeVersionId;
-            mutate((dd) =>
+            mutateInGesture((dd) =>
               versionId
                 ? setVersionClipOverride(dd, versionId, selId, {
                     transform: { ...hit.clip.transform, ...patch },
@@ -632,6 +637,7 @@ export function Preview({
           };
           const corner = (e: React.PointerEvent) => {
             e.preventDefault(); e.stopPropagation();
+            beginGesture();
             const sx = e.clientX, sy = e.clientY;
             const bs = hit.clip.transform;
             const mv = (ev: PointerEvent) => {
@@ -639,14 +645,15 @@ export function Preview({
                 (ev.clientX - sx) * kx, (ev.clientY - sy) * ky);
               write({ scaleX: ns.scaleX, scaleY: ns.scaleY });
             };
-            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
             window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
           };
           const rotate = (e: React.PointerEvent) => {
             e.preventDefault(); e.stopPropagation();
+            beginGesture();
             const cx = box.left + box.w / 2, cy = box.top + box.h / 2;
             const mv = (ev: PointerEvent) => write({ rotationDeg: angleDeg(cx, cy, ev.clientX - sr.left, ev.clientY - sr.top) });
-            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
             window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
           };
           const H = "absolute size-2.5 rounded-full border border-accent bg-accent cursor-nwse-resize";
