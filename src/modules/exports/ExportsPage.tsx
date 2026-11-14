@@ -12,34 +12,29 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 
-const KIND_LABEL: Record<string, string> = {
-  "render.export": "Export",
-  "social.export": "Social export",
-  "social.publish": "Publish",
-  "media.import": "Import",
-  "media.proxies": "Proxies",
-  "reframe.analyze": "Reframe",
-  "analytics.sync": "Stats sync",
+const KIND_KEYS: Record<string, string> = {
+  "render.export": "kind_render_export",
+  "social.export": "kind_social_export",
+  "social.publish": "kind_social_publish",
+  "media.import": "kind_media_import",
+  "media.proxies": "kind_media_proxies",
+  "reframe.analyze": "kind_reframe_analyze",
+  "analytics.sync": "kind_analytics_sync",
+  "download.model": "kind_download_model",
 };
 
 const STATUS_TONE: Record<string, string> = {
   done: "text-success",
   running: "text-primary",
+  queued: "text-primary",
   failed: "text-destructive",
   cancelled: "text-warning",
   interrupted: "text-warning",
 };
 
-function jobTitle(j: JobRow): string {
-  const p = j.payload ?? {};
-  return (
-    p.postTitle ?? p.projectName ?? p.outputFile ?? p.targetId ?? KIND_LABEL[j.kind] ?? j.kind
-  );
-}
-
 export function ExportsPage() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const doc = useProject((s) => s.doc);
   const { openPath, run } = useOpenInEditor();
   const [filter, setFilter] = useState<"all" | "exports" | "running" | "failed">("all");
@@ -55,6 +50,35 @@ export function ExportsPage() {
   // Live refresh on any job finishing.
   useEffect(() => onJobFinished(() => void jobs.refetch()), [jobs]);
 
+  const fmtTime = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat(i18n.language, {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    } catch {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    }
+  }, [i18n.language]);
+  const fmt = (iso?: string | null) => {
+    if (!iso) return "—";
+    // SQLite datetime('now') is UTC without a suffix — normalize so the
+    // browser renders local time instead of raw UTC.
+    const norm = iso.includes("T") ? iso : iso.replace(" ", "T") + "Z";
+    const d = new Date(norm);
+    return Number.isNaN(d.getTime()) ? iso : fmtTime.format(d);
+  };
+
+  const kindLabel = (kind: string) => {
+    const k = KIND_KEYS[kind];
+    return k ? t(`exports.${k}`) : kind;
+  };
+  const statusLabel = (status: string) =>
+    t(`exports.status_${status}`, { defaultValue: status });
+
   const rows = useMemo(() => {
     let r = jobs.data ?? [];
     if (filter === "exports") r = r.filter((j) => j.kind.includes("export"));
@@ -62,6 +86,11 @@ export function ExportsPage() {
     if (filter === "failed") r = r.filter((j) => j.status === "failed" || j.status === "interrupted");
     return r;
   }, [jobs.data, filter]);
+
+  const jobTitle = (j: JobRow): string => {
+    const p = j.payload ?? {};
+    return p.postTitle ?? p.projectName ?? p.outputFile ?? p.targetId ?? kindLabel(j.kind);
+  };
 
   const cancel = async (j: JobRow) => {
     await api.cancelJob(j.id);
@@ -73,9 +102,12 @@ export function ExportsPage() {
     const outDir = j.payload.outputPath?.replace(/[\/][^\/]*$/, "") ?? "";
     try {
       const jobId = await api.exportForTarget(j.payload.targetId, outDir);
-      toast.success("Export restarted");
+      toast.success(t("exports.restarted"));
       const f = await awaitJob(jobId);
-      if (f.status !== "done") toast.error(`Export ${f.status}: ${f.error ?? ""}`);
+      if (f.status !== "done")
+        toast.error(t("exports.restartFailed", { status: statusLabel(f.status) }), {
+          description: f.error ?? undefined,
+        });
       void qc.invalidateQueries({ queryKey: ["jobs"] });
     } catch (e) {
       toast.error(String(e));
@@ -90,10 +122,8 @@ export function ExportsPage() {
             <Rocket className="size-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold">Export Center</h1>
-            <p className="text-xs text-muted-foreground">
-              Every export and background job, live from the job log.
-            </p>
+            <h1 className="text-xl font-semibold">{t("exports.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("exports.subtitle")}</p>
           </div>
         </div>
         <div className="flex gap-1 rounded-lg border border-border p-0.5">
@@ -102,11 +132,11 @@ export function ExportsPage() {
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                "rounded-md px-3 py-1 text-xs capitalize",
+                "rounded-md px-3 py-1 text-xs",
                 filter === f ? "bg-secondary" : "text-muted-foreground",
               )}
             >
-              {f}
+              {t(`exports.filter_${f}`)}
             </button>
           ))}
         </div>
@@ -120,13 +150,13 @@ export function ExportsPage() {
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-4 py-2 text-left">Job</th>
-              <th className="px-3 py-2 text-left">Type</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Progress</th>
-              <th className="px-3 py-2 text-left">Started</th>
-              <th className="px-3 py-2 text-left">Finished</th>
-              <th className="px-4 py-2 text-right">Actions</th>
+              <th className="px-4 py-2 text-left">{t("exports.col_job")}</th>
+              <th className="px-3 py-2 text-left">{t("exports.col_type")}</th>
+              <th className="px-3 py-2 text-left">{t("exports.col_status")}</th>
+              <th className="px-3 py-2 text-left">{t("exports.col_progress")}</th>
+              <th className="px-3 py-2 text-left">{t("exports.col_started")}</th>
+              <th className="px-3 py-2 text-left">{t("exports.col_finished")}</th>
+              <th className="px-4 py-2 text-right">{t("exports.col_actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -137,21 +167,39 @@ export function ExportsPage() {
                   <div className="truncate font-mono text-[10px] text-muted-foreground">
                     {j.payload.outputPath ?? j.id.slice(0, 8)}
                   </div>
+                  {j.status === "failed" && (
+                    <div className="mt-0.5 text-[10px] text-destructive">
+                      {t("exports.failedHint")}{" "}
+                      <span
+                        className="line-clamp-2 break-all font-mono"
+                        title={j.error ?? undefined}
+                      >
+                        {j.error ?? "—"}
+                      </span>
+                    </div>
+                  )}
                 </td>
-                <td className="px-3 py-2 text-xs">{KIND_LABEL[j.kind] ?? j.kind}</td>
-                <td className={cn("px-3 py-2 text-xs capitalize", STATUS_TONE[j.status])}>
-                  {j.status}
+                <td className="px-3 py-2 text-xs">{kindLabel(j.kind)}</td>
+                <td className={cn("px-3 py-2 text-xs", STATUS_TONE[j.status])}>
+                  {statusLabel(j.status)}
                 </td>
                 <td className="px-3 py-2">
                   <div className="h-1.5 w-24 rounded-full bg-secondary">
                     <div
-                      className="h-full rounded-full bg-primary"
+                      className={cn(
+                        "h-full rounded-full",
+                        j.status === "failed" || j.status === "interrupted"
+                          ? "bg-destructive/70"
+                          : j.status === "cancelled"
+                            ? "bg-warning/70"
+                            : "bg-primary",
+                      )}
                       style={{ width: `${Math.round(j.progress * 100)}%` }}
                     />
                   </div>
                 </td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{j.createdAt}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{j.finishedAt ?? "—"}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(j.createdAt)}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(j.finishedAt)}</td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex justify-end gap-1">
                     {j.payload.projectPath && (
@@ -159,19 +207,32 @@ export function ExportsPage() {
                         size="sm"
                         variant="ghost"
                         title={t("openInEditor.open")}
+                        aria-label={t("openInEditor.open")}
                         onClick={() => run(() => openPath(j.payload.projectPath!))}
                       >
                         <Clapperboard className="size-4" />
                       </Button>
                     )}
                     {j.status === "running" && (
-                      <Button size="sm" variant="ghost" title="Cancel" onClick={() => void cancel(j)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title={t("exports.cancel")}
+                        aria-label={t("exports.cancel")}
+                        onClick={() => void cancel(j)}
+                      >
                         <XCircle className="size-4" />
                       </Button>
                     )}
                     {(j.status === "failed" || j.status === "cancelled") &&
                       j.payload.retryable && (
-                        <Button size="sm" variant="ghost" title="Retry" onClick={() => void retry(j)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title={t("exports.retry")}
+                          aria-label={t("exports.retry")}
+                          onClick={() => void retry(j)}
+                        >
                           <RefreshCw className="size-4" />
                         </Button>
                       )}
@@ -179,7 +240,8 @@ export function ExportsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        title="Show in folder"
+                        title={t("exports.showInFolder")}
+                        aria-label={t("exports.showInFolder")}
                         onClick={() => void api.revealPath(j.payload.outputPath!)}
                       >
                         <FolderOpen className="size-4" />
@@ -195,11 +257,11 @@ export function ExportsPage() {
                   <EmptyState
                     compact
                     icon={Rocket}
-                    title="No jobs yet"
+                    title={t("exports.emptyTitle")}
                     body={
                       filter === "failed"
-                        ? "No failed jobs — everything is healthy."
-                        : "Exports, thumbnail jobs and imports will show up here with live progress."
+                        ? t("exports.emptyFailedBody")
+                        : t("exports.emptyBody")
                     }
                   />
                 </td>

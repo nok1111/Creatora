@@ -58,10 +58,9 @@ export function awaitJob<T>(jobId: string): Promise<JobFinished<T>> {
     // only on the (already missed) event so it falls back to a generic.
     void primeJobListeners()
       .then(() =>
-        invoke<{ id: string; status: string; payload?: { outputPath?: string } }[]>(
-          "list_jobs",
-          { kindPrefix: null, limit: 200 },
-        ),
+        invoke<
+          { id: string; status: string; error?: string | null; payload?: { outputPath?: string } }[]
+        >("list_jobs", { kindPrefix: null, limit: 200 }),
       )
       .then((rows) => {
         const row = rows.find((r) => r.id === jobId);
@@ -69,6 +68,9 @@ export function awaitJob<T>(jobId: string): Promise<JobFinished<T>> {
           finish({
             jobId,
             status: row.status === "done" ? "done" : row.status === "cancelled" ? "cancelled" : "failed",
+            // The durable row holds the real error even when the
+            // job://finished event was missed entirely.
+            error: row.error ?? undefined,
             result: row.payload?.outputPath
               ? ({ outputPath: row.payload.outputPath } as T)
               : undefined,

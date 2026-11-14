@@ -339,6 +339,9 @@ export interface JobRow {
   progress: number;
   createdAt: string;
   finishedAt?: string | null;
+  /** Terminal error text, persisted since migration 0007. NULL on rows that
+   * predate it — failed old jobs may have no recoverable error. */
+  error?: string | null;
 }
 
 export interface PublicationHistoryRow {

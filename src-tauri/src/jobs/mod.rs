@@ -6,7 +6,7 @@ use crate::db::Db;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
 
@@ -54,15 +54,21 @@ pub struct JobCtx {
     app: tauri::AppHandle,
     id: String,
     cancel: Arc<AtomicBool>,
+    /// Last reported fraction — persisted on finish so the durable row
+    /// shows where a failed/cancelled job actually stopped (no per-event
+    /// DB writes needed).
+    last_progress: Arc<AtomicU32>,
 }
 
 impl JobCtx {
     pub fn progress(&self, fraction: f32, label: Option<&str>) {
+        let p = fraction.clamp(-1.0, 1.0);
+        self.last_progress.store(p.to_bits(), Ordering::Relaxed);
         let _ = self.app.emit(
             EVT_PROGRESS,
             ProgressEvent {
                 job_id: self.id.clone(),
-                progress: fraction.clamp(-1.0, 1.0),
+                progress: p,
                 label: label.map(str::to_string),
             },
         );
@@ -129,6 +135,7 @@ impl JobManager {
     {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = Arc::new(AtomicBool::new(false));
+        let last_progress = Arc::new(AtomicU32::new(0f32.to_bits()));
         self.jobs.lock().insert(
             id.clone(),
             JobEntry {
@@ -141,6 +148,7 @@ impl JobManager {
             app: app.clone(),
             id: id.clone(),
             cancel,
+            last_progress: last_progress.clone(),
         };
         let app2 = app.clone();
         let id2 = id.clone();
@@ -168,11 +176,24 @@ impl JobManager {
                 },
             };
             if let Some(db) = jm_db {
+                // Honest final progress: 1.0 only when the job actually
+                // completed; failed/cancelled rows keep where they stopped.
+                let final_p = if evt.status == "done" {
+                    1.0f32
+                } else {
+                    f32::from_bits(last_progress.load(Ordering::Relaxed))
+                        .clamp(0.0, 1.0)
+                };
                 let _ = db.with(|c| {
                     c.execute(
-                        "UPDATE jobs SET status = ?1, progress = 1.0,
-                         finished_at = datetime('now') WHERE id = ?2",
-                        [evt.status.as_str(), evt.job_id.as_str()],
+                        "UPDATE jobs SET status = ?1, progress = ?2, error = ?3,
+                         finished_at = datetime('now') WHERE id = ?4",
+                        rusqlite::params![
+                            evt.status.as_str(),
+                            final_p as f64,
+                            evt.error.as_deref(),
+                            evt.job_id.as_str()
+                        ],
                     )?;
                     Ok(())
                 });
@@ -193,7 +214,7 @@ impl JobManager {
         };
         db.with(|c| {
             let mut stmt = c.prepare(
-                "SELECT id, kind, payload_json, status, progress, created_at, finished_at
+                "SELECT id, kind, payload_json, status, progress, created_at, finished_at, error
                  FROM jobs
                  WHERE (?1 IS NULL OR kind LIKE ?1 || '%')
                  ORDER BY created_at DESC LIMIT ?2",
@@ -209,6 +230,7 @@ impl JobManager {
                     "progress": r.get::<_, f64>(4)?,
                     "createdAt": r.get::<_, String>(5)?,
                     "finishedAt": r.get::<_, Option<String>>(6)?,
+                    "error": r.get::<_, Option<String>>(7)?,
                 }))
             })?;
             rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
