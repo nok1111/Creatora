@@ -252,13 +252,19 @@ export function Preview({
   };
 
   return (
-    <div className="flex h-full items-center justify-center bg-black/60 p-4">
+    // inline-size container: the stage below sizes its height from 100cqw
+    // so it always fits the pane — regardless of resizable panel widths.
+    <div
+      className="flex h-full items-center justify-center bg-black/60 p-4"
+      style={{ containerType: "inline-size" }}
+    >
       <div
         ref={stageRef}
         className="relative max-h-full overflow-hidden rounded border border-border bg-black"
         style={{
           aspectRatio: `${viewDoc.canvas.width} / ${viewDoc.canvas.height}`,
-          height: "min(100%, calc((100vw - 560px) * 9 / 16))",
+          // height so that width (height * aspect) ≤ pane width minus p-4
+          height: `min(100%, calc((100cqw - 32px) * ${viewDoc.canvas.height} / ${viewDoc.canvas.width}))`,
           backgroundColor: viewDoc.canvas.background,
           containerType: "size",
         }}

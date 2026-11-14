@@ -4,15 +4,30 @@ import { api, AppError } from "@/lib/ipc";
 
 export type Theme = "dark" | "light";
 
+/** Editor dockable panels (px). Defaults = the pre-resize fixed sizes. */
+export type PanelKey = "left" | "right" | "bottom";
+export const PANEL_DEFAULTS: Record<PanelKey, number> = {
+  left: 224,
+  right: 256,
+  bottom: 256,
+};
+export const PANEL_LIMITS: Record<PanelKey, [number, number]> = {
+  left: [168, 480],
+  right: [200, 520],
+  bottom: [140, 640],
+};
+
 interface SettingsState {
   hydrated: boolean;
   theme: Theme;
   language: LanguageCode;
   autosaveIntervalSec: number;
+  panelSizes: Record<PanelKey, number>;
   hydrate: () => Promise<void>;
   setTheme: (theme: Theme) => void;
   setLanguage: (lang: LanguageCode) => void;
   setAutosaveInterval: (sec: number) => void;
+  setPanelSize: (key: PanelKey, px: number, commit?: boolean) => void;
 }
 
 function applyTheme(theme: Theme) {
@@ -31,6 +46,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   theme: "dark",
   language: "en",
   autosaveIntervalSec: 30,
+  panelSizes: { ...PANEL_DEFAULTS },
 
   hydrate: async () => {
     if (get().hydrated) return;
@@ -41,12 +57,21 @@ export const useSettings = create<SettingsState>((set, get) => ({
         ? s["app.language"]
         : "en";
       const interval = Number.parseInt(s["project.autosaveIntervalSec"] ?? "", 10);
+      const panelSizes = { ...PANEL_DEFAULTS };
+      (Object.keys(PANEL_DEFAULTS) as PanelKey[]).forEach((k) => {
+        const v = Number.parseInt(s[`editor.panel.${k}`] ?? "", 10);
+        if (Number.isFinite(v)) {
+          const [lo, hi] = PANEL_LIMITS[k];
+          panelSizes[k] = Math.min(hi, Math.max(lo, v));
+        }
+      });
       set({
         hydrated: true,
         theme,
         language,
         autosaveIntervalSec:
           Number.isFinite(interval) && interval >= 5 ? interval : 30,
+        panelSizes,
       });
       applyTheme(theme);
       void i18n.changeLanguage(language);
@@ -73,5 +98,14 @@ export const useSettings = create<SettingsState>((set, get) => ({
     const clamped = Math.max(5, Math.min(600, Math.round(sec)));
     set({ autosaveIntervalSec: clamped });
     persist("project.autosaveIntervalSec", String(clamped));
+  },
+
+  // `commit=false` during the drag (store updates live, no IPC spam);
+  // the release passes commit=true → one persisted write.
+  setPanelSize: (key, px, commit = true) => {
+    const [lo, hi] = PANEL_LIMITS[key];
+    const clamped = Math.min(hi, Math.max(lo, Math.round(px)));
+    set({ panelSizes: { ...get().panelSizes, [key]: clamped } });
+    if (commit) persist(`editor.panel.${key}`, String(clamped));
   },
 }));

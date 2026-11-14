@@ -168,6 +168,7 @@ export const en = {
     renameTrack: "Rename track",
     dropLocked: "Track is locked",
     dropWrongTrack: "That media type doesn't belong on this track",
+    resizePanel: "Resize panel (double-click to reset)",
     inspector: "Inspector",
     inspectorEmpty: "Select one clip to edit its properties.",
     keyframe: "Toggle keyframe at playhead",

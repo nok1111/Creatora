@@ -20,6 +20,8 @@ import { SuggestionBanner } from "@/components/SuggestionBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { Clapperboard } from "lucide-react";
 import { useEditor } from "@/stores/editor";
+import { useSettings, PANEL_DEFAULTS, PANEL_LIMITS } from "@/stores/settings";
+import { ResizeHandle } from "@/components/ui/resize-handle";
 import {
   splitClip,
   removeClips,
@@ -60,6 +62,8 @@ export function EditorPage() {
   const canRedo = useEditor((s) => s.future.length > 0);
   const previewQuality = useEditor((s) => s.previewQuality);
   const setPreviewQuality = useEditor((s) => s.setPreviewQuality);
+  const panelSizes = useSettings((s) => s.panelSizes);
+  const setPanelSize = useSettings((s) => s.setPanelSize);
 
   // Deep-link params: /editor?tab=subtitles, /editor?left=graphics, /editor?export=1
   const [params] = useSearchParams();
@@ -260,7 +264,10 @@ export function EditorPage() {
 
       {/* Middle: bin + preview */}
       <div className="flex min-h-0 flex-1">
-        <div className="flex w-56 shrink-0 flex-col">
+        <div
+          className="flex shrink-0 flex-col"
+          style={{ width: `min(${panelSizes.left}px, 45%)` }}
+        >
           <div className="flex gap-1 border-b border-r border-border px-1.5 py-1">
             {([["media", Music4], ["graphics", ImageIcon]] as const).map(([tb, Icon]) => (
               <button
@@ -278,6 +285,15 @@ export function EditorPage() {
             {leftTab === "media" ? <MediaBin assets={assetsQ.data ?? []} /> : <GraphicsBin />}
           </div>
         </div>
+        <ResizeHandle
+          orientation="vertical"
+          value={panelSizes.left}
+          min={PANEL_LIMITS.left[0]}
+          max={PANEL_LIMITS.left[1]}
+          defaultValue={PANEL_DEFAULTS.left}
+          onResize={(v, c) => setPanelSize("left", v, c)}
+          label={t("editor.resizePanel")}
+        />
         <div className="relative flex min-w-0 flex-1">
           <div className="relative min-w-0 flex-1">
             <Preview assets={assetMap} />
@@ -291,7 +307,17 @@ export function EditorPage() {
             </div>
           )}
         </div>
-        <div className="w-64 shrink-0">
+        <ResizeHandle
+          orientation="vertical"
+          value={panelSizes.right}
+          min={PANEL_LIMITS.right[0]}
+          max={PANEL_LIMITS.right[1]}
+          grow={-1}
+          defaultValue={PANEL_DEFAULTS.right}
+          onResize={(v, c) => setPanelSize("right", v, c)}
+          label={t("editor.resizePanel")}
+        />
+        <div className="shrink-0" style={{ width: `min(${panelSizes.right}px, 45%)` }}>
           <Inspector />
         </div>
       </div>
@@ -300,7 +326,20 @@ export function EditorPage() {
       <VersionsPanel assets={assetMap} />
 
       {/* Timeline / Subtitle Studio */}
-      <div className="flex h-64 shrink-0 flex-col border-t border-border">
+      <div
+        className="flex shrink-0 flex-col border-t border-border"
+        style={{ height: `min(${panelSizes.bottom}px, 75%)` }}
+      >
+        <ResizeHandle
+          orientation="horizontal"
+          value={panelSizes.bottom}
+          min={PANEL_LIMITS.bottom[0]}
+          max={PANEL_LIMITS.bottom[1]}
+          grow={-1}
+          defaultValue={PANEL_DEFAULTS.bottom}
+          onResize={(v, c) => setPanelSize("bottom", v, c)}
+          label={t("editor.resizePanel")}
+        />
         <div className="flex gap-1 border-b border-border px-2 py-1">
           {([["timeline", Scissors, "Timeline"], ["subtitles", Subtitles, "Subtitles"]] as const).map(([tab, Icon, label]) => (
             <button

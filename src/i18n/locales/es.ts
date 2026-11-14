@@ -171,6 +171,7 @@ export const es: typeof en = {
     renameTrack: "Renombrar pista",
     dropLocked: "La pista está bloqueada",
     dropWrongTrack: "Ese tipo de medio no va en esta pista",
+    resizePanel: "Redimensionar panel (doble clic para restablecer)",
     inspector: "Inspector",
     inspectorEmpty: "Selecciona un clip para editar sus propiedades.",
     keyframe: "Alternar keyframe en el playhead",
