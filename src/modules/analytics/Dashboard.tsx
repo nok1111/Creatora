@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { BarChart3 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/ipc";
 import { metricValue, type DashboardPost } from "@/lib/analytics-types";
 import { MiniBar, SourceBadge } from "./charts";
@@ -92,22 +94,27 @@ export function Dashboard() {
       </div>
 
       {posts.length === 0 && !q.isFetching && (
-        <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No stats yet. Publish a target with a connected account, then run
-          Sync — or import a CSV/JSON export from a platform.
-        </div>
+        <EmptyState
+          icon={BarChart3}
+          title="No stats yet"
+          body="Publish a target with a connected account, then run Sync — or import a CSV/JSON export from a platform."
+        />
       )}
 
       {byPlatform.length > 0 && (
         <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${byPlatform.length}, 1fr)` }}>
           {byPlatform.map(([plat, s]) => (
-            <div key={plat} className="rounded-lg border border-border p-3">
-              <div className="text-xs capitalize text-muted-foreground">{plat} · {s.n} posts</div>
-              <div className="mt-1 grid grid-cols-2 gap-1 text-sm">
-                <span>Views <b>{fmt(s.views)}</b></span>
-                <span>Likes <b>{fmt(s.likes)}</b></span>
-                <span>Comments <b>{fmt(s.comments)}</b></span>
-                <span>Shares <b>{fmt(s.shares)}</b></span>
+            <div key={plat} className="rounded-xl border border-border bg-card p-3 shadow-raise">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold capitalize">{plat}</span>
+                <span className="text-[10px] text-muted-foreground">{s.n} post{s.n === 1 ? "" : "s"}</span>
+              </div>
+              <div className="mt-1.5 text-lg font-semibold leading-none">{fmt(s.views)}</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">views</div>
+              <div className="mt-2 grid grid-cols-3 gap-1 border-t border-border/60 pt-1.5 text-[11px]">
+                <span className="text-muted-foreground">Likes <b className="text-foreground">{fmt(s.likes)}</b></span>
+                <span className="text-muted-foreground">Com. <b className="text-foreground">{fmt(s.comments)}</b></span>
+                <span className="text-muted-foreground">Shares <b className="text-foreground">{fmt(s.shares)}</b></span>
               </div>
             </div>
           ))}
