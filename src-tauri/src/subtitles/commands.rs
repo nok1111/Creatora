@@ -11,29 +11,32 @@ use std::process::Command;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
-/// Locate whisper-cli: provisioned tools/bin → env → PATH.
+/// Locate whisper-cli: bundled tools/bin next to the exe, repo tools/bin in
+/// dev builds, CREATORA_WHISPER env override, then PATH — same scheme as
+/// `media::tool_path` but with a plain file check (whisper-cli doesn't
+/// guarantee a `-version` flag).
 pub fn whisper_path() -> Option<PathBuf> {
+    let exe_name = "whisper-cli.exe";
+    let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(p) = std::env::var("CREATORA_WHISPER") {
-        let p = PathBuf::from(p);
-        if p.is_file() {
-            return Some(p);
-        }
+        candidates.push(PathBuf::from(p));
     }
-    let exe = std::env::current_exe().ok()?;
-    for root in [
-        exe.parent()?.parent()?.parent()?.to_path_buf(), // repo root (dev)
-        exe.parent()?.join("tools").join("bin"),         // bundled
-    ] {
-        let cand = root.join("tools").join("bin").join("whisper-cli.exe");
-        if cand.is_file() {
-            return Some(cand);
-        }
-        let cand2 = root.join("whisper-cli.exe");
-        if cand2.is_file() {
-            return Some(cand2);
-        }
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    {
+        candidates.push(dir.join("tools").join("bin").join(exe_name));
+        candidates.push(dir.join(exe_name));
     }
-    None
+    if cfg!(debug_assertions) {
+        candidates.push(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../tools/bin")
+                .join(exe_name),
+        );
+    }
+    candidates.push(PathBuf::from("whisper-cli")); // PATH
+    candidates.into_iter().find(|p| p.is_file() || p.components().count() == 1)
 }
 
 /// Models dir — provisioned; downloads land here too.
@@ -50,6 +53,9 @@ pub struct ModelInfo {
     pub name: String,
     pub size_bytes: u64,
     pub present: bool,
+    /// Bytes already on disk in `<name>.part` — a download that was
+    /// cancelled/interrupted and can be resumed with a Range request.
+    pub partial_bytes: u64,
     /// Approx quality/speed hint for the picker.
     pub tier: String,
     pub url: String,
@@ -62,27 +68,50 @@ const MODELS: &[(&str, u64, &str)] = &[
     ("ggml-small.bin", 487_601_967, "accurate"),
 ];
 
+/// Tools/models dir for dev builds — shares the repo-root logic used by
+/// list_models/find_model (CARGO_MANIFEST_DIR = src-tauri → repo root one up).
+fn dev_models_root() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tools/models"))
+    } else {
+        // Bundled layout: models live next to the exe under tools/models.
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("tools").join("models")))
+    }
+}
+
 #[tauri::command]
 pub fn list_models(app: AppHandle) -> CmdResult<Vec<ModelInfo>> {
     let dir = models_dir(&app);
     // also scan provisioned tools/models in dev
     let mut roots = vec![dir];
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(r) = exe
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.parent())
-        {
-            roots.push(r.join("tools").join("models"));
-        }
+    if let Some(r) = dev_models_root() {
+        roots.push(r);
     }
+    let part_len = |name: &str| -> u64 {
+        roots
+            .iter()
+            .filter_map(|r| {
+                std::fs::metadata(r.join(format!("{name}.part")))
+                    .ok()
+                    .map(|m| m.len())
+            })
+            .max()
+            .unwrap_or(0)
+    };
     Ok(MODELS
         .iter()
         .map(|(name, size, tier)| ModelInfo {
             name: name.to_string(),
             size_bytes: *size,
-            tier: tier.to_string(),
             present: roots.iter().any(|r| r.join(name).is_file()),
+            partial_bytes: if roots.iter().any(|r| r.join(name).is_file()) {
+                0
+            } else {
+                part_len(name)
+            },
+            tier: tier.to_string(),
             url: format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{name}"),
         })
         .collect())
@@ -90,14 +119,8 @@ pub fn list_models(app: AppHandle) -> CmdResult<Vec<ModelInfo>> {
 
 fn find_model(app: &AppHandle, name: &str) -> Option<PathBuf> {
     let mut roots = vec![models_dir(app)];
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(r) = exe
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.parent())
-        {
-            roots.push(r.join("tools").join("models"));
-        }
+    if let Some(r) = dev_models_root() {
+        roots.push(r);
     }
     roots
         .into_iter()
@@ -105,8 +128,12 @@ fn find_model(app: &AppHandle, name: &str) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-/// User-initiated model download — streams to a temp file then renames
-/// (never a partial model). Only runs when the user clicks download.
+/// User-initiated model download — streams to `<name>.part` then renames
+/// (never installs a partial model). Resumes an existing `.part` with an
+/// HTTP Range request, so a cancelled/interrupted download continues where
+/// it stopped. Integrity is validated before install: exact size match
+/// against the known-good catalog entry + the ggml magic header.
+/// Only runs when the user clicks download — never automatic.
 #[tauri::command]
 pub fn download_model(
     app: AppHandle,
@@ -124,15 +151,37 @@ pub fn download_model(
         std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
         let dest = dest_dir.join(&name);
         let tmp = dest_dir.join(format!("{name}.part"));
-        let resp = ureq::get(&url).call().map_err(|e| e.to_string())?;
+
+        // Resume point: keep a sane `.part`, drop oversized/corrupt ones.
+        let mut got = std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+        if got >= total {
+            let _ = std::fs::remove_file(&tmp);
+            got = 0;
+        }
+
+        let mut req = ureq::get(&url);
+        if got > 0 {
+            req = req.header("Range", format!("bytes={got}-"));
+        }
+        let resp = req.call().map_err(|e| e.to_string())?;
+        let resuming = got > 0 && resp.status() == 206;
+        if got > 0 && !resuming {
+            // Server ignored the range — restart from zero.
+            got = 0;
+        }
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(!resuming)
+            .append(resuming)
+            .open(&tmp)
+            .map_err(|e| e.to_string())?;
         let mut reader = resp.into_body().into_reader();
-        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
         let mut buf = [0u8; 1 << 16];
-        let mut got = 0u64;
         loop {
             if ctx.is_cancelled() {
                 drop(f);
-                let _ = std::fs::remove_file(&tmp);
+                // Keep `.part` — the next download resumes from here.
                 return Err("cancelled".into());
             }
             let n = std::io::Read::read(&mut reader, &mut buf).map_err(|e| e.to_string())?;
@@ -144,6 +193,24 @@ pub fn download_model(
             ctx.progress(got as f32 / total as f32, Some("Downloading model"));
         }
         drop(f);
+
+        // Integrity gate: exact expected size + ggml magic before install.
+        // The header is the LE u32 0x67676d6c → bytes "lmgg" on disk.
+        let len = std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+        let magic_ok = std::fs::File::open(&tmp)
+            .and_then(|mut r| {
+                let mut m = [0u8; 4];
+                std::io::Read::read_exact(&mut r, &mut m).map(|_| m)
+            })
+            .map(|m| u32::from_le_bytes(m) == 0x6767_6d6c)
+            .unwrap_or(false);
+        if len != total || !magic_ok {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(format!(
+                "model download failed integrity check (got {len} bytes, expected {total})"
+            ));
+        }
+
         std::fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
         ctx.progress(1.0, None);
         Ok(serde_json::json!({"model": name}))

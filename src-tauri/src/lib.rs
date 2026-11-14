@@ -82,6 +82,7 @@ pub fn run() {
             render::commands::export_versions,
             render::commands::analyze_subject,
             subtitles::commands::list_models,
+            subtitles::commands::download_model,
             subtitles::commands::transcribe_media,
             subtitles::commands::export_subtitles,
             audio::commands::generate_waveform,

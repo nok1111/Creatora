@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import {
   Captions,
+  CheckCircle2,
   ChevronRight,
   Clock,
   Download,
@@ -14,6 +16,7 @@ import {
   Scissors,
   Trash2,
   Wand2,
+  XCircle,
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/ipc";
@@ -65,11 +68,15 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
   const mutate = useEditor((s) => s.mutate);
   const versionId = useEditor((s) => s.activeVersionId);
 
+  const { t } = useTranslation();
+  const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [model, setModel] = useState("ggml-tiny.bin");
   const [lang, setLang] = useState("auto");
   const [sourceId, setSourceId] = useState("");
   const [job, setJob] = useState<{ id: string; p: number } | null>(null);
+  /** Active model downloads: model name → job id + progress. */
+  const [dls, setDls] = useState<Record<string, { id: string; p: number }>>({});
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
   const [shift, setShift] = useState("0");
@@ -77,6 +84,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
   const listRef = useRef<HTMLDivElement>(null);
 
   const modelsQ = useQuery({ queryKey: ["models"], queryFn: api.listModels });
+  const selModel = modelsQ.data?.find((m) => m.name === model);
   const mediaAssets = useMemo(
     () => [...assets.values()].filter((a) => a.kind !== "image"),
     [assets],
@@ -111,9 +119,45 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
     );
   };
 
+  /** Explicit user-initiated model download (job-driven: real progress,
+   * cancel, resume from `.part`). Auto-selects the model on success. */
+  const download = async (name: string) => {
+    if (dls[name]) return;
+    const id = await api.downloadModel(name).catch((e) => {
+      toast.error(t("subs.dlFailed"), { description: String(e) });
+      return null;
+    });
+    if (!id) return;
+    setDls((s) => ({ ...s, [name]: { id, p: 0 } }));
+    const off = onJobProgress((e) => {
+      if (e.jobId === id)
+        setDls((s) => (s[name] ? { ...s, [name]: { id, p: e.progress } } : s));
+    });
+    const fin = await awaitJob(id);
+    off();
+    setDls((s) => {
+      const n = { ...s };
+      delete n[name];
+      return n;
+    });
+    if (fin.status === "done") {
+      await qc.invalidateQueries({ queryKey: ["models"] });
+      setModel(name);
+      toast.success(t("subs.dlDone"));
+    } else if (fin.status !== "cancelled") {
+      toast.error(t("subs.dlFailed"), { description: fin.error ?? undefined });
+    }
+    void qc.invalidateQueries({ queryKey: ["models"] });
+  };
+
+  const cancelDl = async (name: string) => {
+    const d = dls[name];
+    if (d) await api.cancelJob(d.id).catch(() => {});
+  };
+
   const transcribe = async () => {
     const src = sourceId ? assets.get(sourceId)?.filePath : mediaAssets[0]?.filePath;
-    if (!src || !filePath) return toast.error("import an audio/video asset first");
+    if (!src || !filePath) return toast.error(t("subs.importFirst"));
     // Transcription writes cues into the saved project — save first.
     await useProject.getState().save();
     const id = await api.transcribeMedia(filePath, src, model, lang).catch((e) => {
@@ -134,7 +178,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         });
       });
       const r = res as { cues?: number; withWords?: number };
-      toast.success(`${r.cues ?? 0} cues (${r.withWords ?? 0} with word timing)`);
+      toast.success(t("subs.cuesDone", { cues: r.cues ?? 0, words: r.withWords ?? 0 }));
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -265,38 +309,95 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
       <div className="w-72 shrink-0 space-y-2 overflow-y-auto border-l border-border p-2 text-xs">
         {/* Transcription */}
         <div className="rounded border border-border/60 p-2">
-          <p className="mb-1.5 flex items-center gap-1 font-medium"><Mic2 className="size-3" /> Transcribe</p>
+          <p className="mb-1.5 flex items-center gap-1 font-medium"><Mic2 className="size-3" /> {t("subs.transcribe")}</p>
           <div className="grid grid-cols-2 gap-1">
-            <select value={model} onChange={(e) => setModel(e.target.value)}
-              className="h-6 rounded border border-border bg-transparent px-1 text-[10px]">
-              {modelsQ.data?.map((m) => (
-                <option key={m.name} value={m.name} disabled={!m.present}
-                  className="bg-card">
-                  {m.name.replace("ggml-", "").replace(".bin", "")} · {m.tier}
-                  {m.present ? "" : " (not downloaded)"}
-                </option>
-              ))}
-            </select>
             <select value={lang} onChange={(e) => setLang(e.target.value)}
-              className="h-6 rounded border border-border bg-transparent px-1 text-[10px]">
+              className="h-6 rounded border border-border bg-transparent px-1 text-[10px]"
+              aria-label={t("subs.language")}>
               {["auto","en","es","fr","de","pt","it","ja","zh"].map((l) => (
-                <option key={l} value={l} className="bg-card">{l === "auto" ? "Auto-detect" : l}</option>
+                <option key={l} value={l} className="bg-card">{l === "auto" ? t("subs.autoDetect") : l}</option>
               ))}
             </select>
             <select value={sourceId} onChange={(e) => setSourceId(e.target.value)}
-              className="col-span-2 h-6 rounded border border-border bg-transparent px-1 text-[10px]">
+              className="h-6 rounded border border-border bg-transparent px-1 text-[10px]"
+              aria-label={t("subs.source")}>
               {mediaAssets.map((a) => (
                 <option key={a.id} value={a.id} className="bg-card">{a.name}</option>
               ))}
             </select>
           </div>
-          <Button size="sm" className="mt-1.5 h-6 w-full text-[10px]" disabled={!!job}
+
+          {/* Model picker: installed models are selectable; missing ones
+              offer an explicit download (or resume a `.part`). */}
+          <div className="mt-1.5 space-y-1">
+            {modelsQ.data?.map((m) => {
+              const dl = dls[m.name];
+              const chosen = model === m.name;
+              return (
+                <div key={m.name}
+                  className={`flex items-center gap-1.5 rounded border px-1.5 py-1 text-[10px] ${
+                    chosen && m.present ? "border-primary/60 bg-primary/5" : "border-border/50"
+                  }`}>
+                  <button
+                    className="flex flex-1 items-center gap-1.5 text-left disabled:opacity-60"
+                    disabled={!m.present}
+                    onClick={() => setModel(m.name)}
+                  >
+                    <span className={`font-medium ${m.present ? "" : "text-muted-foreground"}`}>
+                      {m.name.replace("ggml-", "").replace(".bin", "")}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {t(`subs.tier_${m.tier.split(" ")[0]}`, { defaultValue: m.tier })}
+                      {" · "}
+                      {t("subs.sizeMb", { mb: Math.round(m.sizeBytes / 1e6) })}
+                    </span>
+                  </button>
+                  {m.present ? (
+                    chosen ? (
+                      <CheckCircle2 className="size-3.5 shrink-0 text-primary" aria-label={t("subs.installed")} />
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground">{t("subs.installed")}</span>
+                    )
+                  ) : dl ? (
+                    <span className="flex items-center gap-1">
+                      <span className="h-1 w-14 overflow-hidden rounded-full bg-secondary">
+                        <span className="block h-full bg-primary" style={{ width: `${Math.round(dl.p * 100)}%` }} />
+                      </span>
+                      <button
+                        className="text-muted-foreground hover:text-foreground"
+                        title={t("subs.cancelDl")}
+                        aria-label={t("subs.cancelDl")}
+                        onClick={() => void cancelDl(m.name)}
+                      >
+                        <XCircle className="size-3.5" />
+                      </button>
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 shrink-0 px-1.5 text-[10px]"
+                      onClick={() => void download(m.name)}
+                    >
+                      <Download className="size-3" />
+                      {m.partialBytes > 0
+                        ? t("subs.resume")
+                        : t("subs.download")}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <Button size="sm" className="mt-1.5 h-6 w-full text-[10px]"
+            disabled={!!job || !selModel?.present}
             onClick={() => void transcribe()}>
-            {job ? `Transcribing… ${Math.round(job.p * 100)}%` : "Transcribe locally"}
+            {job ? `${t("subs.transcribing")} ${Math.round(job.p * 100)}%` : t("subs.transcribeBtn")}
           </Button>
           {modelsQ.data && !modelsQ.data.some((m) => m.present) && (
             <p className="mt-1 text-[9px] text-warning">
-              No model installed — download one ({Math.round((modelsQ.data[0]?.sizeBytes ?? 0) / 1e6)} MB+) first.
+              {t("subs.noModelWarn")}
             </p>
           )}
         </div>

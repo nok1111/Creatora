@@ -108,9 +108,17 @@ export const api = {
 
   // Subtitles (ADR-025)
   listModels: () =>
-    cmd<{ name: string; sizeBytes: number; present: boolean; tier: string; url: string }[]>(
-      "list_models",
-    ),
+    cmd<
+      {
+        name: string;
+        sizeBytes: number;
+        present: boolean;
+        /** Bytes in `<name>.part` — an interrupted download that can resume. */
+        partialBytes: number;
+        tier: string;
+        url: string;
+      }[]
+    >("list_models"),
   downloadModel: (name: string) => cmd<string>("download_model", { name }),
   transcribeMedia: (projectPath: string, mediaPath: string, model: string, language?: string) =>
     cmd<string>("transcribe_media", { projectPath, mediaPath, model, language }),

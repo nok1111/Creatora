@@ -21,6 +21,8 @@ const KIND_KEYS: Record<string, string> = {
   "reframe.analyze": "kind_reframe_analyze",
   "analytics.sync": "kind_analytics_sync",
   "download.model": "kind_download_model",
+  "subtitles.download": "kind_download_model",
+  "subtitles.transcribe": "kind_transcribe",
 };
 
 const STATUS_TONE: Record<string, string> = {
