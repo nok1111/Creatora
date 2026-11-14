@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useProject } from "@/stores/project";
 import { effectiveDoc } from "@/lib/timeline-engine";
@@ -24,6 +25,7 @@ import {
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import { angleDeg, scaleFromCorner, snapToGuides } from "@/lib/canvas-manip";
+import { Button } from "@/components/ui/button";
 
 /**
  * Preview compositor — one absolutely-positioned media element per active
@@ -721,6 +723,23 @@ export function Preview({
               />
             );
           })}
+
+        {/* Transport — docked inside the canvas box so it stays centered on
+            the real video in every aspect ratio (and per pane in compare),
+            not on letterbox bands or between panes. */}
+        <div
+          className="absolute bottom-1.5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1 backdrop-blur"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-full"
+            onClick={() => setPlaying(!playing)}
+          >
+            {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
+          </Button>
+        </div>
       </div>
     </div>
   );

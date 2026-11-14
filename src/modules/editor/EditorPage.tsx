@@ -10,8 +10,6 @@ import {
   Music4,
   Subtitles,
   ImageIcon,
-  Pause,
-  Play,
   Redo2,
   Save,
   Undo2,
@@ -52,7 +50,6 @@ export function EditorPage() {
   const dirty = useProject((s) => s.dirty);
   const save = useProject((s) => s.save);
 
-  const playing = useEditor((s) => s.playing);
   const setPlaying = useEditor((s) => s.setPlaying);
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const select = useEditor((s) => s.select);
@@ -293,17 +290,6 @@ export function EditorPage() {
               <Preview assets={assetMap} docOverride={doc ?? undefined} />
             </div>
           )}
-          {/* Transport overlay */}
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1 backdrop-blur">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-full"
-              onClick={() => setPlaying(!playing)}
-            >
-              {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
-            </Button>
-          </div>
         </div>
         <div className="w-64 shrink-0">
           <Inspector />
