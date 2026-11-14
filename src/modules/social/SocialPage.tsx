@@ -82,16 +82,20 @@ export function SocialPage() {
       "social://due",
       (e) =>
         toast.warning(
-          `“${e.payload.title}” is due on ${PLATFORM_LABEL[e.payload.platform as never] ?? e.payload.platform} — publish it manually`,
+          t("social.dueReminder", {
+            title: e.payload.title,
+            platform:
+              PLATFORM_LABEL[e.payload.platform as never] ?? e.payload.platform,
+          }),
         ),
     );
     const un2 = listen<{ platform: string; error?: string }>(
       "social://oauth-finished",
       (e) => {
         if (e.payload.error) {
-          toast.error(`OAuth failed: ${e.payload.error}`);
+          toast.error(t("social.oauthFailed"), { description: e.payload.error });
         } else {
-          toast.success("Account connected");
+          toast.success(t("social.accountConnected"));
         }
         void useSocial.getState().refreshAccounts();
       },
@@ -129,7 +133,7 @@ export function SocialPage() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* header */}
       <div className="flex items-center gap-3 border-b border-border px-5 py-3">
-        <h1 className="text-base font-semibold">Social Studio</h1>
+        <h1 className="text-base font-semibold">{t("social.studio")}</h1>
         <div className="ml-2 flex rounded-md border border-input p-0.5 text-xs">
           {(
             [
@@ -149,17 +153,23 @@ export function SocialPage() {
                   : "text-muted-foreground hover:bg-accent",
               )}
             >
-              <Icon className="size-3.5" /> {k}
+              <Icon className="size-3.5" /> {t(`social.tab_${k}`)}
             </button>
           ))}
         </div>
         <div className="flex-1" />
-        <Button size="sm" variant="ghost" onClick={() => void refreshPosts()}>
+        <Button
+          size="sm"
+          variant="ghost"
+          title={t("social.refresh")}
+          aria-label={t("social.refresh")}
+          onClick={() => void refreshPosts()}
+        >
           <RefreshCw className="size-3.5" />
         </Button>
         {tab === "posts" && (
           <Button size="sm" onClick={() => setComposing({})}>
-            <Plus className="mr-1 size-3.5" /> New post
+            <Plus className="mr-1 size-3.5" /> {t("social.newPost")}
           </Button>
         )}
       </div>
@@ -185,11 +195,11 @@ export function SocialPage() {
               }}
               className="h-7 rounded border border-input bg-background px-2 text-xs"
             >
-              <option value="">All statuses</option>
+              <option value="">{t("social.allStatuses")}</option>
               {["draft", "ready", "scheduled", "publishing", "published", "failed"].map(
                 (s) => (
                   <option key={s} value={s}>
-                    {s} {counts[s] ? `(${counts[s]})` : ""}
+                    {t(`social.st_${s}`)} {counts[s] ? `(${counts[s]})` : ""}
                   </option>
                 ),
               )}
@@ -202,7 +212,7 @@ export function SocialPage() {
               }}
               className="h-7 rounded border border-input bg-background px-2 text-xs"
             >
-              <option value="">All platforms</option>
+              <option value="">{t("social.allPlatforms")}</option>
               {Object.entries(PLATFORM_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
@@ -229,7 +239,7 @@ export function SocialPage() {
                     }}
                     onDelete={async () => {
                       await api.deleteSocialPost(p.id);
-                      toast.success("Post deleted");
+                      toast.success(t("social.postDeleted"));
                       void refreshPosts();
                     }}
                   />
@@ -268,12 +278,13 @@ export function SocialPage() {
 }
 
 function EmptyState({ onNew }: { onNew: () => void }) {
+  const { t } = useTranslation();
   return (
     <SharedEmptyState
       icon={Share2}
-      title="No social posts yet"
-      body="Package an exported video for your platforms: pick the post format, write the caption, and queue it for publishing."
-      action={{ label: "New post", onClick: onNew }}
+      title={t("social.emptyTitle")}
+      body={t("social.emptyBody")}
+      action={{ label: t("social.newPost"), onClick: onNew }}
     />
   );
 }
@@ -291,6 +302,7 @@ function PostCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="cursor-pointer rounded-lg border border-border bg-card p-4 hover:border-primary/50"
@@ -305,10 +317,10 @@ function PostCard({
                 STATUS_BADGE[post.status],
               )}
             >
-              {post.status}
+              {t(`social.st_${post.status}`, { defaultValue: post.status })}
             </span>
             <span className="truncate text-sm font-medium">
-              {post.title || "Untitled post"}
+              {post.title || t("social.untitled")}
             </span>
           </div>
           {post.caption && (
@@ -322,7 +334,7 @@ function PostCard({
             ))}
             {post.targets.length === 0 && (
               <span className="text-[10px] italic text-muted-foreground">
-                no platforms selected
+                {t("social.noPlatforms")}
               </span>
             )}
           </div>
@@ -331,13 +343,13 @@ function PostCard({
           className="flex shrink-0 items-center gap-1"
           onClick={(e) => e.stopPropagation()}
         >
-          <Button size="sm" variant="ghost" onClick={onEdit} title="Edit">
+          <Button size="sm" variant="ghost" onClick={onEdit} title={t("social.edit")} aria-label={t("social.edit")}>
             <Pencil className="size-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={onDuplicate} title="Duplicate">
+          <Button size="sm" variant="ghost" onClick={onDuplicate} title={t("social.duplicate")} aria-label={t("social.duplicate")}>
             <Copy className="size-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={onDelete} title="Delete">
+          <Button size="sm" variant="ghost" onClick={onDelete} title={t("social.delete")} aria-label={t("social.delete")}>
             <Trash2 className="size-3.5" />
           </Button>
         </div>

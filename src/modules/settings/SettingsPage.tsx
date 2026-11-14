@@ -149,6 +149,21 @@ export function SettingsPage() {
                 </span>
               }
             />
+            {info.data.noticesPath && (
+              <Row
+                label={t("settings.licenses")}
+                control={
+                  <button
+                    className="text-primary hover:underline"
+                    onClick={() =>
+                      void api.revealPath(info.data!.noticesPath!)
+                    }
+                  >
+                    {t("settings.openNotices")}
+                  </button>
+                }
+              />
+            )}
           </dl>
         )}
         <Button

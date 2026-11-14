@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CaptionStudio } from "./CaptionStudio";
 import { ValidationPanel } from "./ValidationPanel";
+import { useTranslation } from "react-i18next";
 
 interface DraftTarget extends TargetInput {
   enabled: boolean;
@@ -32,6 +33,7 @@ export function ComposerDialog({
   postId?: string;
   onClose: () => void;
 }) {
+  const { t: tr } = useTranslation();
   const { accounts, capabilities } = useSocial();
   const [saving, setSaving] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export function ComposerDialog({
 
   const save = async (markReady: boolean) => {
     if (!title.trim()) {
-      toast.error("Title is required");
+      toast.error(tr("social.titleRequired"));
       return;
     }
     setSaving(true);
@@ -135,7 +137,7 @@ export function ComposerDialog({
           await api.setTargetStatus(saved.id, "ready");
         }
       }
-      toast.success(markReady ? "Post ready" : "Draft saved");
+      toast.success(markReady ? tr("social.postReady") : tr("social.draftSaved"));
       onClose();
     } catch (e) {
       toast.error(String(e));
@@ -166,7 +168,7 @@ export function ComposerDialog({
                 onChange={(e) => setProjectId(e.target.value || null)}
                 className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
               >
-                <option value="">— no project (standalone) —</option>
+                <option value="">{tr("social.noProjectOpt")}</option>
                 {(projectList ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -223,7 +225,7 @@ export function ComposerDialog({
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <label className="space-y-0.5">
-                      <span className="text-muted-foreground">Account</span>
+                      <span className="text-muted-foreground">{tr("social.account")}</span>
                       <select
                         value={t.accountId ?? ""}
                         onChange={(e) =>
@@ -231,7 +233,7 @@ export function ComposerDialog({
                         }
                         className="h-7 w-full rounded border border-input bg-background px-1.5"
                       >
-                        <option value="">— none (local only) —</option>
+                        <option value="">{tr("social.noneLocal")}</option>
                         {platAccounts.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.displayName ?? a.platformUserId}
@@ -283,7 +285,7 @@ export function ComposerDialog({
                           setT(p, { autoPublish: e.target.checked })
                         }
                       />
-                      <span title="Attempts a REAL upload at the scheduled time while the app is open. Off = reminder only.">
+                      <span title={tr("social.autoPublishTip")}>
                         auto-publish
                       </span>
                     </label>
@@ -299,7 +301,7 @@ export function ComposerDialog({
                           },
                         })
                       }
-                      placeholder="Public video URL (IG API can't take local files)"
+                      placeholder={tr("social.videoUrlPh")}
                       className="h-7 w-full rounded border border-input bg-background px-2"
                     />
                   )}
@@ -314,7 +316,7 @@ export function ComposerDialog({
                           },
                         })
                       }
-                      placeholder="Page ID (required for FB/IG publishing)"
+                      placeholder={tr("social.pageIdPh")}
                       className="h-7 w-full rounded border border-input bg-background px-2"
                     />
                   )}
@@ -399,6 +401,7 @@ function VersionSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t: tr } = useTranslation();
   const { data: versions } = useQuery({
     queryKey: ["project-versions", projectId],
     enabled: !!projectId,
@@ -417,7 +420,7 @@ function VersionSelect({
       onChange={(e) => onChange(e.target.value)}
       className="h-7 w-full rounded border border-input bg-background px-1.5"
     >
-      <option value="">base canvas</option>
+      <option value="">{tr("social.baseCanvas")}</option>
       {(versions ?? []).map((v) => (
         <option key={v.id} value={v.id}>
           {v.name}

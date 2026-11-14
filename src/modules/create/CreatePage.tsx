@@ -5,6 +5,7 @@ import { Clapperboard, Smartphone, Square, Settings2, ArrowRight } from "lucide-
 import { useProject } from "@/stores/project";
 import { requestProjectSwitch } from "@/services/project-switch";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 /** Guided creation — /create. Two steps: pick a format, name it, edit. */
 
@@ -20,6 +21,7 @@ const FORMATS = [
 ] as const;
 
 export function CreatePage() {
+  const { t } = useTranslation();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const createNew = useProject((s) => s.createNew);
@@ -36,7 +38,7 @@ export function CreatePage() {
   const dims = fmt === "custom" && size ? size : { w: selected.w, h: selected.h };
 
   const create = () => {
-    const n = name.trim() || "Untitled project";
+    const n = name.trim() || t("create.untitled");
     requestProjectSwitch(async () => {
       setBusy(true);
       try {
@@ -52,7 +54,7 @@ export function CreatePage() {
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-6 p-8">
       <div>
-        <h1 className="text-2xl font-bold">What are you making?</h1>
+        <h1 className="text-2xl font-bold">{t("create.whatMaking")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Pick a format — you can change it or add more inside the editor.
         </p>
@@ -84,7 +86,7 @@ export function CreatePage() {
 
       {fmt === "custom" && (
         <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-sm">
-          <span className="text-muted-foreground">Size:</span>
+          <span className="text-muted-foreground">{t("create.size")}</span>
           <input
             className="w-20 rounded-md border border-input bg-surface-0 px-2 py-1 text-center"
             defaultValue={1280}
@@ -121,7 +123,7 @@ export function CreatePage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void create()}
-          placeholder="Name your project"
+          placeholder={t("create.namePh")}
           className="h-11 flex-1 rounded-xl border border-input bg-surface-1 px-4 text-sm shadow-raise outline-none focus:border-primary"
         />
         <button
@@ -129,11 +131,11 @@ export function CreatePage() {
           disabled={busy}
           className="flex h-11 items-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-raise transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
         >
-          {busy ? "Creating…" : "Start editing"} <ArrowRight className="size-4" />
+          {busy ? t("create.creating") : t("create.startEditing")} <ArrowRight className="size-4" />
         </button>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Next step inside the editor: import your media (drag & drop works).
+        {t("create.nextStep")}
       </p>
     </div>
   );

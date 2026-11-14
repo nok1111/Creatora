@@ -61,8 +61,23 @@ pub fn ffmpeg_version() -> Option<String> {
     if !out.status.success() {
         return None;
     }
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
+    let line = String::from_utf8_lossy(&out.stdout);
+    let line = line.lines().next()?.trim().to_string();
+    // "ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright ..." ->
+    // "9.0.2 (essentials build)" — a readable version, not raw cli output.
+    let ver = line
+        .strip_prefix("ffmpeg version ")
+        .unwrap_or(&line)
+        .split_whitespace()
         .next()
-        .map(|l| l.trim().to_string())
+        .unwrap_or(&line);
+    let (num, tag) = match ver.split_once('-') {
+        Some((n, t)) => (n, t.split('-').next().unwrap_or(t).replace('_', " ")),
+        None => (ver, String::new()),
+    };
+    Some(if tag.is_empty() {
+        num.to_string()
+    } else {
+        format!("{num} ({tag})")
+    })
 }

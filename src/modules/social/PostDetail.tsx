@@ -38,7 +38,7 @@ export function PostDetail({
   onClose: () => void;
 }) {
   const { accounts } = useSocial();
-  const { t } = useTranslation();
+  const { t: tr } = useTranslation();
   const { openById, run } = useOpenInEditor();
   const { data: post, refetch } = useQuery({
     queryKey: ["social-post", postId],
@@ -56,9 +56,9 @@ export function PostDetail({
       const jobId = await api.exportForTarget(t.id, outDir);
       const fin = await awaitJob<{ assetId?: string }>(jobId);
       if (fin.status === "done") {
-        toast.success(`${PLATFORM_LABEL[t.platform]} export linked`);
+        toast.success(tr("social.exportLinked", { platform: PLATFORM_LABEL[t.platform] }));
       } else {
-        toast.error(fin.error ?? "export failed");
+        toast.error(fin.error ?? tr("social.exportFailed"));
       }
     } finally {
       setBusy(null);
@@ -81,7 +81,7 @@ export function PostDetail({
       const asset = fin.result?.imported?.[0];
       if (asset) {
         await api.linkTargetMedia(t.id, asset.id);
-        toast.success("File linked");
+        toast.success(tr("social.fileLinked"));
       }
     } finally {
       setBusy(null);
@@ -101,7 +101,7 @@ export function PostDetail({
             : "Upload accepted by platform",
         );
       } else {
-        toast.error(fin.error ?? "publish failed");
+        toast.error(fin.error ?? tr("social.publishFailed"));
       }
     } catch (e) {
       toast.error(String(e));
@@ -127,7 +127,7 @@ export function PostDetail({
                 onClick={() => run(() => openById(post.projectId!))}
               >
                 <Clapperboard className="mr-1 size-3" />
-                {t("nav.openInEditor")}
+                {tr("nav.openInEditor")}
               </Button>
             )}
           </DialogTitle>
@@ -294,6 +294,7 @@ function TargetRow({
 }
 
 function LinkedFile({ assetId }: { assetId: string }) {
+  const { t: tr } = useTranslation();
   const { data: assets } = useQuery({
     queryKey: ["linked-asset", assetId],
     queryFn: async () => {
@@ -311,7 +312,7 @@ function LinkedFile({ assetId }: { assetId: string }) {
       <FolderOpen className="size-2.5" />
       {assets.name}
       {assets.status === "missing" && (
-        <span className="text-destructive">(missing)</span>
+        <span className="text-destructive">{tr("social.missing")}</span>
       )}
     </button>
   );

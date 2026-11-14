@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import i18n from "@/i18n";
 import { AlertTriangle } from "lucide-react";
 
 interface Props {
@@ -27,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
         <AlertTriangle className="size-10 text-destructive" />
         <div>
-          <h1 className="text-lg font-semibold">Something went wrong</h1>
+          <h1 className="text-lg font-semibold">{i18n.t("common.errorTitle")}</h1>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
             {this.state.error.message}
           </p>
@@ -36,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           onClick={() => this.setState({ error: null })}
         >
-          Try again
+          {i18n.t("common.reload")}
         </button>
       </div>
     );

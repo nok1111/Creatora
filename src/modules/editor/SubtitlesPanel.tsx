@@ -275,9 +275,9 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             onClick={() => mutate((d) => addCue(d, { startMs: playheadMs, endMs: playheadMs + 2000, text: "New cue", words: [] }).doc)}>
             <Plus className="mr-1 size-3" />Add
           </Button>
-          <input placeholder="Find…" value={find} onChange={(e) => setFind(e.target.value)}
+          <input placeholder={t("subs.findPh")} value={find} onChange={(e) => setFind(e.target.value)}
             className="h-6 w-24 rounded border border-border bg-transparent px-1.5 text-[10px]" />
-          <input placeholder="Replace" value={replace} onChange={(e) => setReplace(e.target.value)}
+          <input placeholder={t("subs.replacePh")} value={replace} onChange={(e) => setReplace(e.target.value)}
             className="h-6 w-24 rounded border border-border bg-transparent px-1.5 text-[10px]" />
           <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
             onClick={() => {
@@ -404,7 +404,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
 
         {/* Timing tools */}
         <div className="rounded border border-border/60 p-2">
-          <p className="mb-1.5 flex items-center gap-1 font-medium"><Clock className="size-3" /> Timing</p>
+          <p className="mb-1.5 flex items-center gap-1 font-medium"><Clock className="size-3" />{t("subs.timing")}</p>
           <div className="flex items-center gap-1">
             <input value={shift} onChange={(e) => setShift(e.target.value)}
               className="h-6 w-14 rounded border border-border bg-transparent px-1 text-[10px]" placeholder="±ms" />
@@ -419,9 +419,9 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           </div>
           <div className="mt-1 flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
-              onClick={() => mutate((d) => scaleCueTimes(d, 1.1))}>Slower ×1.1</Button>
+              onClick={() => mutate((d) => scaleCueTimes(d, 1.1))}>{t("subs.slower")}</Button>
             <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
-              onClick={() => mutate((d) => scaleCueTimes(d, 0.9))}>Faster ×0.9</Button>
+              onClick={() => mutate((d) => scaleCueTimes(d, 0.9))}>{t("subs.faster")}</Button>
             <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
               onClick={() => setIssues(diagnoseCues(doc))}>
               <ListChecks className="mr-1 size-3" />Check
@@ -429,7 +429,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           </div>
           {issues && (
             <div className="mt-1 max-h-16 space-y-0.5 overflow-y-auto">
-              {issues.length === 0 && <p className="text-[9px] text-emerald-400">No timing issues.</p>}
+              {issues.length === 0 && <p className="text-[9px] text-emerald-400">{t("subs.noTimingIssues")}</p>}
               {issues.map((i) => (
                 <button key={i.cueId + i.kind}
                   className="block w-full truncate text-left text-[9px] text-amber-300 hover:underline"
@@ -447,7 +447,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         {/* Style */}
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium">
-            <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-accent-foreground">· version</span>}
+            <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-accent-foreground">{t("subs.versionLbl")}</span>}
           </p>
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {SUBTITLE_PRESETS.map((p) => (
@@ -469,7 +469,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                           : undefined,
                     }}
                   >
-                    Your <span style={{ color: p.style.highlightColor }}>captions</span>
+                    Your <span style={{ color: p.style.highlightColor }}>{t("subs.captions")}</span>
                   </span>
                 </div>
                 <div className="bg-card px-1 py-0.5 text-center text-[7px] text-muted-foreground">
@@ -479,7 +479,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             ))}
           </div>
           <div className="mt-1 text-[10px]">
-            <label className="mb-1 block text-muted-foreground">Animation</label>
+            <label className="mb-1 block text-muted-foreground">{t("subs.animation")}</label>
             <div className="grid grid-cols-3 gap-1">
               {([
                 ["none", "Static", "Plain cue text"],
@@ -503,11 +503,11 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             </div>
           </div>
           <div className="mt-1 grid grid-cols-3 items-center gap-1 text-[10px]">
-            <label>Size</label>
+            <label>{t("subs.size")}</label>
             <input type="number" value={style?.text.fontSizePx ?? 32}
               onChange={(e) => style && setStyle({ text: { ...style.text, fontSizePx: +e.target.value } })}
               className="col-span-2 h-6 rounded border border-border bg-transparent px-1" />
-            <label>Margin V</label>
+            <label>{t("subs.marginV")}</label>
             <input type="number" value={style?.marginVPx ?? 48}
               onChange={(e) => setStyle({ marginVPx: +e.target.value })}
               className="col-span-2 h-6 rounded border border-border bg-transparent px-1" />

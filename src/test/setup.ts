@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import "@/i18n";
 
 // Mock Tauri IPC in jsdom — commands are not available outside the webview.
 vi.mock("@tauri-apps/api/core", () => ({

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, List, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/ipc";
 import { PLATFORM_LABEL, type ScheduledItem } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function CalendarView({
 }: {
   onOpenPost: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [mode, setMode] = useState<Mode>("month");
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
   const [statusFilter, setStatusFilter] = useState("");
@@ -115,7 +117,7 @@ export function CalendarView({
     const [h, m] = time.split(":").map(Number);
     d.setHours(h, m, 0, 0);
     await api.schedulePostTarget(tid, isoLocal(d), item.autoPublish);
-    toast.success(`Rescheduled to ${d.toLocaleDateString()}`);
+    toast.success(t("cal.rescheduled", { date: d.toLocaleDateString(i18n.language) }));
     void refetch();
   };
 
@@ -127,8 +129,8 @@ export function CalendarView({
         </Button>
         <span className="w-44 text-center text-sm font-medium">
           {mode === "week"
-            ? `Week of ${new Date(from).toLocaleDateString()}`
-            : cursor.toLocaleDateString(undefined, {
+            ? t("cal.weekOf", { date: new Date(from).toLocaleDateString(i18n.language) })
+            : cursor.toLocaleDateString(i18n.language, {
                 month: "long",
                 year: "numeric",
               })}
@@ -137,15 +139,16 @@ export function CalendarView({
           <ChevronRight className="size-4" />
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setCursor(startOfDay(new Date()))}>
-          Today
+          {t("cal.today")}
         </Button>
         <div className="flex-1" />
         <select
           value={platformFilter}
           onChange={(e) => setPlatformFilter(e.target.value)}
           className="h-7 rounded border border-input bg-background px-1.5"
+          aria-label={t("social.allPlatforms")}
         >
-          <option value="">All platforms</option>
+          <option value="">{t("social.allPlatforms")}</option>
           {Object.entries(PLATFORM_LABEL).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
@@ -156,11 +159,12 @@ export function CalendarView({
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-7 rounded border border-input bg-background px-1.5"
+          aria-label={t("social.allStatuses")}
         >
-          <option value="">All statuses</option>
+          <option value="">{t("social.allStatuses")}</option>
           {["draft", "ready", "scheduled", "published", "failed"].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {t(`social.st_${s}`)}
             </option>
           ))}
         </select>
@@ -170,12 +174,12 @@ export function CalendarView({
               key={m}
               onClick={() => setMode(m)}
               className={cn(
-                "flex items-center gap-1 rounded px-2 py-0.5 capitalize",
+                "flex items-center gap-1 rounded px-2 py-0.5",
                 mode === m && "bg-primary text-primary-foreground",
               )}
             >
               {m === "list" && <List className="size-3" />}
-              {m}
+              {t(`cal.${m}`)}
             </button>
           ))}
         </div>
@@ -191,7 +195,7 @@ export function CalendarView({
                 onClick={() => onOpenPost(i.postId)}
               >
                 <span className="w-40 text-muted-foreground">
-                  {new Date(i.scheduledAt).toLocaleString()}
+                  {new Date(i.scheduledAt).toLocaleString(i18n.language)}
                 </span>
                 <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
                   {PLATFORM_LABEL[i.platform]}
@@ -199,24 +203,26 @@ export function CalendarView({
                 <span className="flex-1 truncate font-medium">{i.title}</span>
                 {i.autoPublish && <Zap className="size-3 text-warning" />}
                 <span className="text-[10px] uppercase text-muted-foreground">
-                  {i.status}
+                  {t(`social.st_${i.status}`, { defaultValue: i.status })}
                 </span>
               </div>
             ))}
             {filtered.length === 0 && (
               <p className="py-8 text-center text-xs text-muted-foreground">
-                Nothing scheduled in this range.
+                {t("cal.empty")}
               </p>
             )}
           </div>
         ) : (
           <div className="grid h-full grid-cols-7 gap-1">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+            {Array.from({ length: 7 }, (_, i) => (
               <div
-                key={d}
+                key={i}
                 className="pb-1 text-center text-[10px] font-medium uppercase text-muted-foreground"
               >
-                {d}
+                {new Intl.DateTimeFormat(i18n.language, { weekday: "short" }).format(
+                  new Date(2024, 0, 7 + i), // a known Sunday
+                )}
               </div>
             ))}
             {days.map((d, i) => {
@@ -253,7 +259,7 @@ export function CalendarView({
                             ? "bg-destructive/15 text-destructive"
                             : "bg-primary/10 text-primary",
                       )}
-                      title={`${PLATFORM_LABEL[it.platform]} · ${it.scheduledAt.slice(11, 16)}${it.autoPublish ? " · auto" : " · reminder"}`}
+                      title={`${PLATFORM_LABEL[it.platform]} · ${it.scheduledAt.slice(11, 16)} · ${it.autoPublish ? t("cal.auto") : t("cal.reminder")}`}
                     >
                       {it.autoPublish && <Zap className="mr-0.5 inline size-2" />}
                       {it.title || PLATFORM_LABEL[it.platform]}
@@ -266,10 +272,7 @@ export function CalendarView({
         )}
       </div>
       <p className="border-t border-border px-5 py-1.5 text-[10px] text-muted-foreground">
-        Local scheduling: items publish automatically only when marked ⚡
-        auto-publish with a connected account + exported file, while the app
-        is open. Everything else is a reminder — nothing is ever marked
-        "published" without a real upload.
+        {t("cal.footer")}
       </p>
     </div>
   );

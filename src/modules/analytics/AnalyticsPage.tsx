@@ -19,20 +19,22 @@ import { SyncPanel } from "./SyncPanel";
 import { ImportPanel } from "./ImportPanel";
 import { PacketsPanel } from "./PacketsPanel";
 import { PlatformView } from "./PlatformView";
+import { useTranslation } from "react-i18next";
 
 type Tab = "dashboard" | "platforms" | "compare" | "insights" | "sync" | "import" | "packets";
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: "dashboard", label: "Dashboard", icon: <BarChart3 size={14} /> },
-  { key: "platforms", label: "Platforms", icon: <Package size={14} /> },
-  { key: "compare", label: "Compare", icon: <GitCompareArrows size={14} /> },
-  { key: "insights", label: "Insights", icon: <Lightbulb size={14} /> },
-  { key: "sync", label: "Sync", icon: <RefreshCw size={14} /> },
-  { key: "import", label: "Import", icon: <Upload size={14} /> },
-  { key: "packets", label: "Publish packets", icon: <Package size={14} /> },
+  { key: "dashboard", label: "ana.tab_dashboard", icon: <BarChart3 size={14} /> },
+  { key: "platforms", label: "ana.tab_platforms", icon: <Package size={14} /> },
+  { key: "compare", label: "ana.tab_compare", icon: <GitCompareArrows size={14} /> },
+  { key: "insights", label: "ana.tab_insights", icon: <Lightbulb size={14} /> },
+  { key: "sync", label: "ana.tab_sync", icon: <RefreshCw size={14} /> },
+  { key: "import", label: "ana.tab_import", icon: <Upload size={14} /> },
+  { key: "packets", label: "ana.tab_packets", icon: <Package size={14} /> },
 ];
 
 export function AnalyticsPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("dashboard");
   const status = useQuery({
     queryKey: ["analytics-sync-status"],
@@ -44,24 +46,24 @@ export function AnalyticsPage() {
       <header className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-3">
           <Activity size={18} className="text-primary" />
-          <h1 className="text-base font-semibold">Analytics</h1>
+          <h1 className="text-base font-semibold">{t("ana.title")}</h1>
           {status.data && (
             <span className="text-[11px] text-muted-foreground">
-              {status.data.syncableTargets} published targets syncable
+              {t("ana.syncableNote", { count: status.data.syncableTargets })}
             </span>
           )}
         </div>
         <nav className="flex gap-1">
-          {TABS.map((t) => (
+          {TABS.map((tab2) => (
             <Button
-              key={t.key}
+              key={tab2.key}
               size="sm"
-              variant={tab === t.key ? "secondary" : "ghost"}
-              className={cn("gap-1.5 text-xs", tab === t.key && "bg-secondary")}
-              onClick={() => setTab(t.key)}
+              variant={tab === tab2.key ? "secondary" : "ghost"}
+              className={cn("gap-1.5 text-xs", tab === tab2.key && "bg-secondary")}
+              onClick={() => setTab(tab2.key)}
             >
-              {t.icon}
-              {t.label}
+              {tab2.icon}
+              {t(`ana.tab_${tab2.key}`)}
             </Button>
           ))}
         </nav>

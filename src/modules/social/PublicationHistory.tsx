@@ -1,19 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, Clock, Ban, ExternalLink } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api, type PublicationHistoryRow } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PLATFORM_LABEL } from "@/lib/social-types";
 
 const PLATFORMS = ["youtube", "tiktok", "instagram", "facebook"];
-const OUTCOMES = [
-  { key: "", label: "All" },
-  { key: "ok", label: "Published" },
-  { key: "failed", label: "Failed" },
-  { key: "uploading", label: "In progress" },
-  { key: "cancelled", label: "Cancelled" },
-];
+const OUTCOME_KEYS = ["", "published", "failed", "uploading", "cancelled"];
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   published: <CheckCircle2 className="size-3.5 text-success" />,
@@ -23,6 +18,7 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
 };
 
 export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string) => void }) {
+  const { t } = useTranslation();
   const [platform, setPlatform] = useState("");
   const [outcome, setOutcome] = useState("");
   const [since, setSince] = useState("");
@@ -46,7 +42,7 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
           onChange={(e) => setPlatform(e.target.value)}
           className="rounded-md border border-border bg-card px-2 py-1"
         >
-          <option value="">All platforms</option>
+          <option value="">{t("pubhist.allPlatforms")}</option>
           {PLATFORMS.map((p) => (
             <option key={p} value={p}>
               {PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p}
@@ -54,16 +50,16 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
           ))}
         </select>
         <div className="flex gap-1 rounded-lg border border-border p-0.5">
-          {OUTCOMES.map((o) => (
+          {OUTCOME_KEYS.map((k) => (
             <button
-              key={o.key}
-              onClick={() => setOutcome(o.key)}
+              key={k}
+              onClick={() => setOutcome(k)}
               className={cn(
                 "rounded-md px-2.5 py-0.5",
-                outcome === o.key ? "bg-secondary" : "text-muted-foreground",
+                outcome === k ? "bg-secondary" : "text-muted-foreground",
               )}
             >
-              {o.label}
+              {t(`pubhist.out_${k || "all"}`)}
             </button>
           ))}
         </div>
@@ -72,21 +68,24 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
           value={since}
           onChange={(e) => setSince(e.target.value)}
           className="rounded-md border border-border bg-card px-2 py-1 text-muted-foreground"
-          title="Attempts since"
+          title={t("pubhist.attemptsSince")}
+          aria-label={t("pubhist.attemptsSince")}
         />
-        <span className="ml-auto text-muted-foreground">{rows.data?.length ?? 0} attempts</span>
+        <span className="ml-auto text-muted-foreground">
+          {t("pubhist.attempts", { count: rows.data?.length ?? 0 })}
+        </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-background text-xs text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-5 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Post</th>
-              <th className="px-3 py-2 text-left">Platform</th>
-              <th className="px-3 py-2 text-left">Started</th>
-              <th className="px-3 py-2 text-left">Finished</th>
-              <th className="px-3 py-2 text-left">Remote ID / error</th>
+              <th className="px-5 py-2 text-left">{t("pubhist.col_status")}</th>
+              <th className="px-3 py-2 text-left">{t("pubhist.col_post")}</th>
+              <th className="px-3 py-2 text-left">{t("pubhist.col_platform")}</th>
+              <th className="px-3 py-2 text-left">{t("pubhist.col_started")}</th>
+              <th className="px-3 py-2 text-left">{t("pubhist.col_finished")}</th>
+              <th className="px-3 py-2 text-left">{t("pubhist.col_remote")}</th>
               <th className="px-5 py-2" />
             </tr>
           </thead>
@@ -94,9 +93,9 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
             {(rows.data ?? []).map((r: PublicationHistoryRow) => (
               <tr key={r.attemptId} className="border-b border-border/50">
                 <td className="px-5 py-2">
-                  <span className="flex items-center gap-1.5 text-xs capitalize">
+                  <span className="flex items-center gap-1.5 text-xs">
                     {STATUS_ICON[r.status] ?? <Clock className="size-3.5" />}
-                    {r.status}
+                    {t(`pubhist.st_${r.status}`, { defaultValue: r.status })}
                   </span>
                 </td>
                 <td className="max-w-[220px] px-3 py-2">
@@ -105,7 +104,7 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
                     onClick={() => onOpenPost(r.postId)}
                     title={r.postTitle}
                   >
-                    {r.postTitle || "(untitled)"}
+                    {r.postTitle || t("pubhist.untitled")}
                   </button>
                 </td>
                 <td className="px-3 py-2 text-xs">{PLATFORM_LABEL[r.platform as keyof typeof PLATFORM_LABEL] ?? r.platform}</td>
@@ -136,7 +135,7 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
                 </td>
                 <td className="px-5 py-2 text-right">
                   <Button size="sm" variant="ghost" onClick={() => onOpenPost(r.postId)}>
-                    Open
+                    {t("pubhist.open")}
                   </Button>
                 </td>
               </tr>
@@ -144,7 +143,7 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
             {(rows.data ?? []).length === 0 && (
               <tr>
                 <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground">
-                  No publication attempts match these filters.
+                  {t("pubhist.empty")}
                 </td>
               </tr>
             )}

@@ -27,6 +27,7 @@ import {
 import { DEFAULT_TEXT_STYLE } from "@/lib/project-types";
 import type { BrandKit, BrandLogo } from "@/lib/project-types";
 import { awaitJob } from "@/services/jobs";
+import { useTranslation } from "react-i18next";
 
 const TEMPLATE_CATEGORIES = ["title", "lowerThird", "callout", "badge", "intro", "outro", "shape", "brand"] as const;
 
@@ -34,6 +35,7 @@ const TEMPLATE_CATEGORIES = ["title", "lowerThird", "callout", "badge", "intro",
 /** Graphics bin (ADR-027): quick-add elements, reusable clip templates,
     brand kits — everything local-file based, no external services. */
 export function GraphicsBin() {
+  const { t } = useTranslation();
   const doc = useProject((s) => s.doc);
   const playheadMs = useEditor((s) => s.playheadMs);
   const mutate = useEditor((s) => s.mutate);
@@ -254,22 +256,22 @@ export function GraphicsBin() {
     <div className="flex h-full flex-col overflow-y-auto border-r border-border bg-card text-xs">
       {/* quick add */}
       <div className="space-y-1 border-b border-border p-2">
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Add element</div>
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("gfxB.addElement")}</div>
         <div className="grid grid-cols-3 gap-1">
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addTitle}>
-            <Type className="size-4" /> <span className="text-[9px]">Title</span>
+            <Type className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_title")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addLowerThird}>
-            <RectangleHorizontal className="size-4" /> <span className="text-[9px]">Lower 3rd</span>
+            <RectangleHorizontal className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_lower3rd")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addShape}>
-            <Square className="size-4" /> <span className="text-[9px]">Shape</span>
+            <Square className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_shape")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addBadge}>
-            <BadgeCheck className="size-4" /> <span className="text-[9px]">Badge</span>
+            <BadgeCheck className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_badge")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addCallout}>
-            <MessageSquare className="size-4" /> <span className="text-[9px]">Callout</span>
+            <MessageSquare className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_callout")}</span>
           </button>
           <button
             className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent"
@@ -291,7 +293,7 @@ export function GraphicsBin() {
               })
             }
           >
-            <Heading className="size-4" /> <span className="text-[9px]">Heading</span>
+            <Heading className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_heading")}</span>
           </button>
         </div>
       </div>
@@ -299,10 +301,10 @@ export function GraphicsBin() {
       {/* templates */}
       <div className="space-y-1 border-b border-border p-2">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Templates</span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("gfxB.templates")}</span>
           <button
             className="rounded p-0.5 hover:bg-accent disabled:opacity-40"
-            title="Save selected element as template"
+            title={t("gfxB.saveTemplate")}
             disabled={useEditor.getState().selection.length !== 1}
             onClick={() => {
               const sel = useEditor.getState().selection[0];
@@ -436,7 +438,7 @@ export function GraphicsBin() {
                 <span className="flex gap-0.5">
                   <button
                     className="text-muted-foreground hover:text-foreground"
-                    title="Export kit JSON"
+                    title={t("gfxB.exportKit")}
                     onClick={async () => {
                       const p = await saveDialog({ defaultPath: `${k.name}.brand.json`, filters: [{ name: "Brand kit", extensions: ["json"] }] });
                       if (p) await api.exportBrandKit(k.id, p);
@@ -478,7 +480,7 @@ export function GraphicsBin() {
             <div className="flex gap-1">
               <input
                 className="min-w-0 flex-1 rounded border border-border bg-background px-1 py-0.5"
-                placeholder="New brand name"
+                placeholder={t("gfxB.newBrandPh")}
                 value={newKitName}
                 onChange={(e) => setNewKitName(e.target.value)}
               />
@@ -487,7 +489,7 @@ export function GraphicsBin() {
               </button>
               <button
                 className="rounded border border-border px-1 hover:bg-accent"
-                title="Import kit JSON"
+                title={t("gfxB.importKit")}
                 onClick={async () => {
                   const p = await openDialog({ filters: [{ name: "Brand kit", extensions: ["json"] }] });
                   if (p && typeof p === "string") {
@@ -550,7 +552,7 @@ export function GraphicsBin() {
       <Dialog open={saveTpl} onOpenChange={(o) => !o && setSaveTpl(false)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base">Save as template</DialogTitle>
+            <DialogTitle className="text-base">{t("gfxB.saveTemplate")}</DialogTitle>
             <DialogDescription>
               Reusable in any project — it keeps text, style, shape and animations.
             </DialogDescription>
@@ -573,7 +575,7 @@ export function GraphicsBin() {
             </select>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setSaveTpl(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setSaveTpl(false)}>{t("gfxB.cancel")}</Button>
             <Button
               disabled={!tplName.trim()}
               onClick={() => void saveSelectionAsTemplate(tplName, tplCat).then(() => setSaveTpl(false))}
@@ -588,6 +590,7 @@ export function GraphicsBin() {
 }
 
 function EditKitInline({ kit, onSaved }: { kit: BrandKit; onSaved: () => void }) {
+  const { t } = useTranslation();
   const mutate = useEditor((s) => s.mutate);
   const [edit, setEdit] = useState(false);
   const [colors, setColors] = useState(kit.colors.join(", "));
@@ -597,7 +600,7 @@ function EditKitInline({ kit, onSaved }: { kit: BrandKit; onSaved: () => void })
   if (!edit) {
     return (
       <button className="w-full rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-accent" onClick={() => setEdit(true)}>
-        Edit kit…
+        {t("gfxB.editKit")}
       </button>
     );
   }
@@ -637,7 +640,7 @@ function EditKitInline({ kit, onSaved }: { kit: BrandKit; onSaved: () => void })
           onSaved();
         }}
       >
-        Save kit
+        {t("gfxB.saveKit")}
       </button>
     </div>
   );

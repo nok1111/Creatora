@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { awaitJob } from "@/services/jobs";
 import { toast } from "sonner";
 import { num } from "./Dashboard";
+import { useTranslation } from "react-i18next";
 
 const METRIC_ORDER = [
   "views", "impressions", "reach", "likes", "comments",
@@ -21,16 +22,17 @@ export function PostStatsDetail({
   targetId: string;
   onBack: () => void;
 }) {
+  const { t } = useTranslation();
   const hist = useQuery({
     queryKey: ["analytics-history", targetId],
     queryFn: () => api.analyticsTargetHistory(targetId),
   });
   const sync = () => {
     void api.analyticsSync(targetId).then(async (job) => {
-      toast.info("Sync started");
+      toast.info(t("ana.syncStarted"));
       const f = await awaitJob(job);
       if (f.status === "done") {
-        toast.success("Stats synced");
+        toast.success(t("ana.statsSynced"));
       } else {
         toast.error(`Sync failed: ${f.error ?? "unknown"}`);
       }
@@ -66,20 +68,20 @@ export function PostStatsDetail({
       {latest && (
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-lg border border-border p-3 space-y-1 text-xs">
-            <div><span className="text-muted-foreground">Remote id:</span> {latest.remoteId ?? "—"}</div>
-            <div><span className="text-muted-foreground">Period:</span> {latest.period}</div>
-            <div><span className="text-muted-foreground">Last sync:</span> {latest.fetchedAt}</div>
-            <div><span className="text-muted-foreground">Snapshots:</span> {hist.data?.length ?? 0}</div>
+            <div><span className="text-muted-foreground">{t("ana.remoteId")}</span> {latest.remoteId ?? "—"}</div>
+            <div><span className="text-muted-foreground">{t("ana.period")}</span> {latest.period}</div>
+            <div><span className="text-muted-foreground">{t("ana.lastSync")}</span> {latest.fetchedAt}</div>
+            <div><span className="text-muted-foreground">{t("ana.snapshots")}</span> {hist.data?.length ?? 0}</div>
           </div>
           <div className="rounded-lg border border-border p-3">
-            <div className="mb-2 text-xs font-medium">Views over time</div>
+            <div className="mb-2 text-xs font-medium">{t("ana.viewsOverTime")}</div>
             <MiniLine points={series("views")} width={280} height={64} />
           </div>
         </div>
       )}
 
       <div className="rounded-lg border border-border">
-        <div className="border-b border-border px-3 py-2 text-xs font-medium">Metrics (latest)</div>
+        <div className="border-b border-border px-3 py-2 text-xs font-medium">{t("ana.metricsLatest")}</div>
         <table className="w-full text-xs">
           <tbody>
             {METRIC_ORDER.map((key) => {
@@ -115,15 +117,15 @@ export function PostStatsDetail({
 
       {(hist.data?.length ?? 0) > 1 && (
         <div className="rounded-lg border border-border p-3">
-          <div className="mb-2 text-xs font-medium">History</div>
+          <div className="mb-2 text-xs font-medium">{t("pubhist.history")}</div>
           <table className="w-full text-xs">
             <thead className="text-muted-foreground">
               <tr>
-                <th className="text-left">Fetched</th>
-                <th className="text-left">Source</th>
-                <th className="text-right">Views</th>
-                <th className="text-right">Likes</th>
-                <th className="text-right">Comments</th>
+                <th className="text-left">{t("ana.fetched")}</th>
+                <th className="text-left">{t("ana.col_source")}</th>
+                <th className="text-right">{t("ana.col_views")}</th>
+                <th className="text-right">{t("ana.col_likes")}</th>
+                <th className="text-right">{t("ana.col_comments")}</th>
               </tr>
             </thead>
             <tbody>

@@ -7,6 +7,7 @@ import { metricValue, type DashboardPost } from "@/lib/analytics-types";
 import { MiniBar, SourceBadge } from "./charts";
 import { PostStatsDetail } from "./PostStatsDetail";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 const WINDOWS = [
   { days: 7, label: "7d" },
@@ -17,6 +18,7 @@ const WINDOWS = [
 const PLATFORMS = ["all", "youtube", "tiktok", "instagram", "facebook"];
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const [days, setDays] = useState(30);
   const [platform, setPlatform] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
@@ -90,14 +92,14 @@ export function Dashboard() {
             </button>
           ))}
         </div>
-        {q.isFetching && <span className="text-xs text-muted-foreground">syncing view…</span>}
+        {q.isFetching && <span className="text-xs text-muted-foreground">{t("ana.syncingView")}</span>}
       </div>
 
       {posts.length === 0 && !q.isFetching && (
         <EmptyState
           icon={BarChart3}
-          title="No stats yet"
-          body="Publish a target with a connected account, then run Sync — or import a CSV/JSON export from a platform."
+          title={t("ana.noStatsTitle")}
+          body={t("ana.noStatsBody")}
         />
       )}
 
@@ -110,7 +112,7 @@ export function Dashboard() {
                 <span className="text-[10px] text-muted-foreground">{s.n} post{s.n === 1 ? "" : "s"}</span>
               </div>
               <div className="mt-1.5 text-lg font-semibold leading-none">{fmt(s.views)}</div>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">views</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("ana.col_views")}</div>
               <div className="mt-2 grid grid-cols-3 gap-1 border-t border-border/60 pt-1.5 text-[11px]">
                 <span className="text-muted-foreground">Likes <b className="text-foreground">{fmt(s.likes)}</b></span>
                 <span className="text-muted-foreground">Com. <b className="text-foreground">{fmt(s.comments)}</b></span>
@@ -122,8 +124,8 @@ export function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        <RankCard title="Top posts" posts={top} onOpen={setSelected} />
-        <RankCard title="Lowest performing" posts={bottom} onOpen={setSelected} />
+        <RankCard title={t("ana.topPosts")} posts={top} onOpen={setSelected} />
+        <RankCard title={t("ana.lowestPerforming")} posts={bottom} onOpen={setSelected} />
       </div>
 
       <div className="rounded-lg border border-border">
@@ -133,14 +135,14 @@ export function Dashboard() {
         <table className="w-full text-xs">
           <thead className="text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-3 py-1.5 text-left">Post</th>
-              <th className="px-2 py-1.5 text-left">Platform</th>
-              <th className="px-2 py-1.5 text-right">Views</th>
-              <th className="px-2 py-1.5 text-right">Likes</th>
-              <th className="px-2 py-1.5 text-right">Comments</th>
-              <th className="px-2 py-1.5 text-right">Shares</th>
-              <th className="px-2 py-1.5 text-left">Source</th>
-              <th className="px-2 py-1.5 text-left">Synced</th>
+              <th className="px-3 py-1.5 text-left">{t("ana.col_post")}</th>
+              <th className="px-2 py-1.5 text-left">{t("ana.col_platform")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.col_views")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.col_likes")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.col_comments")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.col_shares")}</th>
+              <th className="px-2 py-1.5 text-left">{t("ana.col_source")}</th>
+              <th className="px-2 py-1.5 text-left">{t("ana.col_synced")}</th>
             </tr>
           </thead>
           <tbody>
@@ -176,12 +178,13 @@ function RankCard({
   posts: DashboardPost[];
   onOpen: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-lg border border-border">
       <div className="border-b border-border px-3 py-2 text-xs font-medium">{title}</div>
       <div className="divide-y divide-border/50">
         {posts.length === 0 && (
-          <div className="px-3 py-4 text-xs text-muted-foreground">No data</div>
+          <div className="px-3 py-4 text-xs text-muted-foreground">{t("ana.noData")}</div>
         )}
         {posts.map((p) => (
           <button

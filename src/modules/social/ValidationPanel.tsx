@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   ArrowRight,
@@ -26,6 +27,7 @@ const ICON: Record<Finding["severity"], React.ReactNode> = {
 
 /** Validation Center — per-target findings with fix actions. */
 export function ValidationPanel({ postId }: { postId: string }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { openById, run } = useOpenInEditor();
   const { data } = useQuery({
@@ -56,7 +58,7 @@ export function ValidationPanel({ postId }: { postId: string }) {
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-semibold">Pre-flight check</span>
+        <span className="font-semibold">{t("social.preflight")}</span>
         <span className="text-[10px] text-muted-foreground">
           rules v{data.rulesVersion} · updated {data.rulesUpdated}
           {errors > 0 && (

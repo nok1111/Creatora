@@ -5,6 +5,7 @@ import { METRIC_LABEL } from "@/lib/analytics-types";
 import { MiniBar, SourceBadge } from "./charts";
 import { Button } from "@/components/ui/button";
 import { num } from "./Dashboard";
+import { useTranslation } from "react-i18next";
 
 const SORTABLE = [
   "views", "likes", "comments", "shares", "saves",
@@ -12,6 +13,7 @@ const SORTABLE = [
 ];
 
 export function ComparePanel() {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState("views");
   const pool = useQuery({
@@ -82,7 +84,7 @@ export function ComparePanel() {
 
         <div className="col-span-2 rounded-lg border border-border">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <span className="text-xs font-medium">Comparison</span>
+            <span className="text-xs font-medium">{t("ana.comparison")}</span>
             {rows.length > 0 && !samePlatform && (
               <span className="rounded bg-warning/15 px-2 py-0.5 text-[10px] text-warning">
                 Mixed platforms — metrics are not equivalent; compare within one platform for meaning.
@@ -110,9 +112,9 @@ export function ComparePanel() {
             <table className="w-full text-xs">
               <thead className="text-muted-foreground">
                 <tr className="border-b border-border">
-                  <th className="px-3 py-1.5 text-left">Post</th>
-                  <th className="px-2 py-1.5 text-left">Platform</th>
-                  <th className="px-2 py-1.5 text-left">Source</th>
+                  <th className="px-3 py-1.5 text-left">{t("ana.col_post")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("ana.col_platform")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("ana.col_source")}</th>
                   {cmp.data.metricKeys.map((k) => (
                     <th key={k} className="px-2 py-1.5 text-right">
                       {METRIC_LABEL[k] ?? k}
@@ -137,7 +139,7 @@ export function ComparePanel() {
                             <MiniBar values={[r.metrics[k]]} width={34} height={14} />
                           )}
                           {r.noData
-                            ? <span className="text-muted-foreground">no data</span>
+                            ? <span className="text-muted-foreground">{t("ana.noData")}</span>
                             : num(r.metrics[k] ?? null)}
                         </div>
                       </td>

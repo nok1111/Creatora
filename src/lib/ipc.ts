@@ -49,6 +49,7 @@ export interface AppInfo {
   version: string;
   dataDir: string;
   ffmpegVersion: string | null;
+  noticesPath: string | null;
 }
 
 export const api = {

@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import { FolderOpen, Package } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 export function PacketsPanel() {
+  const { t: tr } = useTranslation();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -65,7 +67,7 @@ export function PacketsPanel() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border p-4 space-y-2">
-        <div className="text-sm font-medium">Publish packets</div>
+        <div className="text-sm font-medium">{tr("ana.publishPackets")}</div>
         <p className="text-xs text-muted-foreground">
           Self-contained folder per target: video + thumbnail + metadata.txt +
           publication.json. For platforms without API publishing — everything
@@ -75,7 +77,7 @@ export function PacketsPanel() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-lg border border-border">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-xs font-medium">Targets with exports</span>
+            <span className="text-xs font-medium">{tr("ana.targetsWithExports")}</span>
             <Button
               size="sm"
               disabled={selected.size === 0 || busy}
@@ -102,13 +104,13 @@ export function PacketsPanel() {
                   {t.platform}
                 </span>
                 {!t.hasExport && (
-                  <span className="text-[10px] text-warning">no export</span>
+                  <span className="text-[10px] text-warning">{tr("ana.noExport")}</span>
                 )}
               </label>
             ))}
             {targets.length === 0 && (
               <div className="px-3 py-6 text-xs text-muted-foreground">
-                No targets yet — create posts in Social Studio first.
+                {tr("ana.noTargets")}
               </div>
             )}
           </div>

@@ -7,6 +7,7 @@ import { MiniLine, SourceBadge } from "./charts";
 import { PostStatsDetail } from "./PostStatsDetail";
 import { cn } from "@/lib/utils";
 import { num } from "./Dashboard";
+import { useTranslation } from "react-i18next";
 
 const PLATFORMS = ["youtube", "tiktok", "instagram", "facebook"] as const;
 const PLATFORM_LABELS: Record<string, string> = {
@@ -18,14 +19,15 @@ const PLATFORM_LABELS: Record<string, string> = {
 const WINDOWS = [7, 28, 90];
 
 const ACCOUNT_LABEL: Record<string, string> = {
-  subscriber_count: "Subscribers",
-  follower_count: "Followers",
-  following_count: "Following",
-  media_count: "Posts",
-  video_count: "Videos",
+  subscriber_count: "ana.m_subscribers",
+  follower_count: "ana.m_followers",
+  following_count: "ana.m_following",
+  media_count: "ana.m_posts",
+  video_count: "ana.m_videos",
 };
 
 export function PlatformView() {
+  const { t } = useTranslation();
   const [platform, setPlatform] = useState<string>("youtube");
   const [days, setDays] = useState(28);
   const [detail, setDetail] = useState<string | null>(null);
@@ -113,7 +115,7 @@ export function PlatformView() {
               return (
                 <div key={k} className="min-w-[110px]">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {ACCOUNT_LABEL[k] ?? m.label}
+                    {ACCOUNT_LABEL[k] ? t(ACCOUNT_LABEL[k]) : m.label}
                   </div>
                   <div className="text-lg font-semibold">{num(m.value)}</div>
                   <SourceBadge source={latest!.source} />
@@ -125,7 +127,7 @@ export function PlatformView() {
         {trend.length >= 2 && trendKey && (
           <div className="mt-3">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {ACCOUNT_LABEL[trendKey] ?? trendKey} history
+              {ACCOUNT_LABEL[trendKey] ? t(ACCOUNT_LABEL[trendKey]) : trendKey}
             </div>
             <MiniLine points={trend.map((t) => t.v)} />
             <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
@@ -156,11 +158,11 @@ export function PlatformView() {
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-4 py-2 text-left">Post</th>
-              <th className="px-3 py-2 text-right">Views</th>
-              <th className="px-3 py-2 text-right">Likes</th>
-              <th className="px-3 py-2 text-right">Comments</th>
-              <th className="px-3 py-2 text-left">Source</th>
+              <th className="px-4 py-2 text-left">{t("ana.col_post")}</th>
+              <th className="px-3 py-2 text-right">{t("ana.col_views")}</th>
+              <th className="px-3 py-2 text-right">{t("ana.col_likes")}</th>
+              <th className="px-3 py-2 text-right">{t("ana.col_comments")}</th>
+              <th className="px-3 py-2 text-left">{t("ana.col_source")}</th>
               <th className="px-4 py-2" />
             </tr>
           </thead>
@@ -202,7 +204,7 @@ export function PlatformView() {
       </div>
       {posts.some((p) => p.metrics.unavailable.length > 0) && (
         <div className="rounded-lg border border-border p-3 text-[11px] text-muted-foreground">
-          <b>Unavailable metrics:</b>{" "}
+          <b>{t("ana.unavailable")}</b>{" "}
           {[...new Set(posts.flatMap((p) => p.metrics.unavailable.map((u) => METRIC_LABEL[u.key] ?? u.key)))].join(", ")}{" "}
           — see each post for the reason.
         </div>

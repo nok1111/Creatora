@@ -8,8 +8,10 @@ import type { ImportPreview } from "@/lib/analytics-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SourceBadge } from "./charts";
+import { useTranslation } from "react-i18next";
 
 export function ImportPanel() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
@@ -22,7 +24,7 @@ export function ImportPanel() {
 
   const pick = async () => {
     const p = await open({
-      filters: [{ name: "Analytics export", extensions: ["csv", "json"] }],
+      filters: [{ name: t("ana.fileFilter"), extensions: ["csv", "json"] }],
       multiple: false,
     });
     if (typeof p === "string") setPath(p);
@@ -64,7 +66,7 @@ export function ImportPanel() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border p-4 space-y-3">
-        <div className="text-sm font-medium">Import external stats</div>
+        <div className="text-sm font-medium">{t("ana.importExternal")}</div>
         <p className="text-xs text-muted-foreground">
           CSV or JSON export from a platform/analytics tool. Columns are
           validated; rows whose remote id can't be matched to a published
@@ -87,10 +89,10 @@ export function ImportPanel() {
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Source label:</span>
+          <span className="text-xs text-muted-foreground">{t("ana.sourceLabel")}</span>
           <Input
             className="max-w-xs text-xs"
-            placeholder="e.g. YouTube Studio export 2025-11"
+            placeholder={t("ana.labelPh")}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
@@ -119,10 +121,10 @@ export function ImportPanel() {
           <table className="w-full text-xs">
             <thead className="text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="py-1 text-left">Platform</th>
-                <th className="py-1 text-left">Remote id</th>
-                <th className="py-1 text-left">Metrics</th>
-                <th className="py-1 text-left">Match</th>
+                <th className="py-1 text-left">{t("ana.col_platform")}</th>
+                <th className="py-1 text-left">{t("ana.col_remoteId")}</th>
+                <th className="py-1 text-left">{t("ana.col_metrics")}</th>
+                <th className="py-1 text-left">{t("ana.col_match")}</th>
               </tr>
             </thead>
             <tbody>
@@ -135,9 +137,9 @@ export function ImportPanel() {
                   </td>
                   <td className="py-1">
                     {r.targetId ? (
-                      <span className="text-success">target found</span>
+                      <span className="text-success">{t("ana.targetFound")}</span>
                     ) : (
-                      <span className="text-warning">no match — will skip</span>
+                      <span className="text-warning">{t("ana.noMatch")}</span>
                     )}
                   </td>
                 </tr>
@@ -159,12 +161,12 @@ export function ImportPanel() {
         <table className="w-full text-xs">
           <thead className="text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-3 py-1.5 text-left">File</th>
-              <th className="px-2 py-1.5 text-left">Label</th>
-              <th className="px-2 py-1.5 text-right">Seen</th>
-              <th className="px-2 py-1.5 text-right">Imported</th>
-              <th className="px-2 py-1.5 text-right">Skipped</th>
-              <th className="px-3 py-1.5 text-left">When</th>
+              <th className="px-3 py-1.5 text-left">{t("ana.col_file")}</th>
+              <th className="px-2 py-1.5 text-left">{t("ana.col_label")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.seen")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.imported")}</th>
+              <th className="px-2 py-1.5 text-right">{t("ana.skipped")}</th>
+              <th className="px-3 py-1.5 text-left">{t("ana.col_when")}</th>
             </tr>
           </thead>
           <tbody>
