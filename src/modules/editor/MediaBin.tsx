@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Music, Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput } from "lucide-react";
+import { Music, Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput, Link2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -137,6 +137,28 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
                 )}
               </div>
             </div>
+            {a.status === "missing" && (
+              <button
+                onClick={async () => {
+                  const sel = await openDialog({
+                    title: t("library.relinkTitle", { name: a.name }),
+                  });
+                  if (typeof sel !== "string") return;
+                  try {
+                    await api.relinkAsset(a.id, sel);
+                    toast.success(t("library.relinked"));
+                    void qc.invalidateQueries({ queryKey: ["assets"] });
+                  } catch (e) {
+                    toast.error(String(e));
+                  }
+                }}
+                className="rounded p-1 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+                title={t("library.relink")}
+                aria-label={t("library.relink")}
+              >
+                <Link2 className="size-4" />
+              </button>
+            )}
             <button
               onClick={() => addAt(a)}
               className="rounded p-1 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"

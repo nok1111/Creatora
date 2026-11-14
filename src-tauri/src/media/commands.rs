@@ -308,7 +308,13 @@ pub fn import_media(
             let path = PathBuf::from(p);
             ctx.progress(i as f32 / total, path.file_name().and_then(|n| n.to_str()));
             match import_one(&thumbs_dir, &db, &path) {
-                Ok(a) => imported.push(a),
+                Ok(a) => {
+                    // Authorize the imported file's directory for asset://.
+                    if let Some(dir) = path.parent() {
+                        let _ = app.asset_protocol_scope().allow_directory(dir, true);
+                    }
+                    imported.push(a)
+                }
                 Err(e) => errors.push((p.clone(), e)),
             }
         }
@@ -472,10 +478,18 @@ pub fn scan_missing_assets(db: State<'_, Arc<Db>>) -> CmdResult<u64> {
 }
 
 #[tauri::command]
-pub fn relink_asset(db: State<'_, Arc<Db>>, id: String, new_path: String) -> CmdResult<()> {
+pub fn relink_asset(
+    app: tauri::AppHandle,
+    db: State<'_, Arc<Db>>,
+    id: String,
+    new_path: String,
+) -> CmdResult<()> {
     let p = PathBuf::from(&new_path);
     if !p.is_file() {
         return Err(AppError::NotFound(format!("file not found: {new_path}")));
+    }
+    if let Some(dir) = p.parent() {
+        let _ = app.asset_protocol_scope().allow_directory(dir, true);
     }
     db.with(|c| {
         c.execute(
@@ -488,11 +502,87 @@ pub fn relink_asset(db: State<'_, Arc<Db>>, id: String, new_path: String) -> Cmd
 }
 
 #[tauri::command]
-pub fn delete_asset(db: State<'_, Arc<Db>>, id: String) -> CmdResult<()> {
+pub fn delete_asset(
+    app: tauri::AppHandle,
+    db: State<'_, Arc<Db>>,
+    id: String,
+) -> CmdResult<()> {
+    // Collect generated files first; delete only what no other asset still
+    // references and only under the app data dir — never user media.
+    let data = data_dir(&app)?;
+    let (thumb, proxy): (Option<String>, Option<String>) = db.with(|c| {
+        c.query_row(
+            "SELECT thumbnail_path, proxy_path FROM media_assets WHERE id=?1",
+            [&id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| AppError::NotFound(format!("asset {id}")))
+    })?;
     db.with(|c| {
         c.execute("DELETE FROM media_assets WHERE id = ?1", [&id])?;
         Ok(())
-    })
+    })?;
+    for f in [thumb, proxy].into_iter().flatten() {
+        let path = PathBuf::from(&f);
+        if !path.starts_with(&data) {
+            continue;
+        }
+        let still_used: bool = db.with(|c| {
+            Ok(c.query_row(
+                "SELECT COUNT(*) FROM media_assets
+                 WHERE thumbnail_path=?1 OR proxy_path=?1",
+                [&f],
+                |r| r.get::<_, i64>(0),
+            )? > 0)
+        })?;
+        if !still_used {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    Ok(())
+}
+
+/// Remove generated thumbnails/proxies whose owning asset row no longer
+/// exists. Runs at startup and after deletes; only touches files inside the
+/// app data dir that are not referenced by any remaining asset row.
+pub fn sweep_orphan_media(data: &Path, db: &Db) -> u64 {
+    let mut removed = 0u64;
+    for dir_name in ["thumbs", "proxies"] {
+        let dir = data.join(dir_name);
+        if !dir.is_dir() {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let f = path.to_string_lossy().to_string();
+            let used: i64 = db
+                .with(|c| {
+                    Ok(c.query_row(
+                        "SELECT COUNT(*) FROM media_assets
+                         WHERE thumbnail_path=?1 OR proxy_path=?1",
+                        [&f],
+                        |r| r.get(0),
+                    )?)
+                })
+                .unwrap_or(1); // on error keep the file
+            if used == 0 && std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
+#[tauri::command]
+pub fn sweep_orphan_files(app: tauri::AppHandle, db: State<'_, Arc<Db>>) -> CmdResult<u64> {
+    let data = data_dir(&app)?;
+    Ok(sweep_orphan_media(&data, &db))
 }
 
 #[tauri::command]

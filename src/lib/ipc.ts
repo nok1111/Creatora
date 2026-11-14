@@ -146,6 +146,7 @@ export const api = {
   relinkAsset: (id: string, newPath: string) =>
     cmd<void>("relink_asset", { id, newPath }),
   deleteAsset: (id: string) => cmd<void>("delete_asset", { id }),
+  sweepOrphanFiles: () => cmd<number>("sweep_orphan_files"),
   setAssetFavorite: (id: string, favorite: boolean) =>
     cmd<void>("set_asset_favorite", { id, favorite }),
 

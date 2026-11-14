@@ -36,6 +36,33 @@ pub fn run() {
                 db::Db::open(&data_dir).map_err(|e| format!("open catalog database: {e}"))?,
             );
             log::info!("catalog ready at {}", data_dir.display());
+            // Asset protocol starts with $APPDATA/** only (no arbitrary disk).
+            // Re-authorize every directory that holds a registered media file
+            // so existing projects keep previewing after the restriction.
+            {
+                let scope = app.asset_protocol_scope();
+                let _ = db.with(|c| {
+                    let mut stmt =
+                        c.prepare("SELECT DISTINCT file_path FROM media_assets")?;
+                    let paths = stmt
+                        .query_map([], |r| r.get::<_, String>(0))?
+                        .filter_map(|r| r.ok())
+                        .collect::<Vec<_>>();
+                    for p in paths {
+                        let dir = std::path::Path::new(&p)
+                            .parent()
+                            .map(|d| d.to_path_buf());
+                        if let Some(d) = dir.filter(|d| d.is_dir()) {
+                            let _ = scope.allow_directory(d, true);
+                        }
+                    }
+                    Ok(())
+                });
+            }
+            let removed = media::commands::sweep_orphan_media(&data_dir, &db);
+            if removed > 0 {
+                log::info!("orphan media cleanup removed {removed} file(s)");
+            }
             let jobs = jobs::JobManager::default();
             jobs.attach_db(db.clone());
             jobs.sweep_interrupted();
@@ -67,6 +94,7 @@ pub fn run() {
             media::commands::scan_missing_assets,
             media::commands::relink_asset,
             media::commands::delete_asset,
+            media::commands::sweep_orphan_files,
             media::commands::set_asset_favorite,
             media::commands::list_collections,
             media::commands::create_collection,
