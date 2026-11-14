@@ -20,6 +20,7 @@ export const en = {
     social: "Social",
     analytics: "Analytics",
     settings: "Settings",
+    openInEditor: "Open in editor",
   },
   home: {
     title: "Home",

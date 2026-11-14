@@ -23,6 +23,7 @@ export const es: typeof en = {
     social: "Redes",
     analytics: "Analíticas",
     settings: "Ajustes",
+    openInEditor: "Abrir en el editor",
   },
   home: {
     title: "Inicio",
