@@ -264,6 +264,24 @@ fn atempo_chain(speed: f64) -> String {
     chain.join(",")
 }
 
+/// Keyframed scale rendered through `zoompan` instead of `scale
+/// eval=frame`: that path crashed this ffmpeg build on long per-frame
+/// expressions (heap corruption ~frame 290 on Windows). zoompan evaluates
+/// the same keyframe expression as `z` while keeping the output size
+/// fixed, so the input must already be canvas-sized. Non-uniform
+/// animated scale approximates via the per-axis average (zoompan has a
+/// single zoom channel).
+fn zoom_scale(ex: &str, ey: &str, w: u32, h: u32) -> String {
+    let z = if ex == ey {
+        ex.to_string()
+    } else {
+        format!("(({ex})+({ey}))/2")
+    };
+    format!(
+        ",zoompan=z='max(0.01,{z})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={w}x{h}"
+    )
+}
+
 /// Per-clip video chain: trim → speed → fit/crop/transform/effects → alpha.
 /// `pad_canvas` adds the transparent WxH normalization required by xfade
 /// inputs (transition groups only). Ends in label `[vN]`.
@@ -298,19 +316,22 @@ fn video_chain(seg: &Segment, i: usize, doc: &ProjectDoc, pad_canvas: bool) -> S
             ",crop=w=iw*(1-{cl}-{cr}):h=ih*(1-{ct}-{cb}):x=iw*{cl}:y=ih*{ct}"
         ));
     }
-    // Transform scale — static or keyframed (eval=frame on clip-relative t).
+    // Transform scale — static or keyframed (zoompan on clip-relative
+    // `time`; see zoom_scale). The padded canvas keeps the zoom window
+    // centered on the element regardless of source aspect.
     let kx = seg.keyframes.get("transform.scaleX");
     let ky = seg.keyframes.get("transform.scaleY");
     if kx.is_some() || ky.is_some() {
         let ex = kx
-            .map(|k| kf::expr(k, 0.0, t.scale_x as f64))
+            .map(|k| kf::expr_var(k, 0.0, t.scale_x as f64, "time"))
             .unwrap_or_else(|| format!("{}", t.scale_x));
         let ey = ky
-            .map(|k| kf::expr(k, 0.0, t.scale_y as f64))
+            .map(|k| kf::expr_var(k, 0.0, t.scale_y as f64, "time"))
             .unwrap_or_else(|| format!("{}", t.scale_y));
         c.push_str(&format!(
-            ",scale=w='iw*({ex})':h='ih*({ey})':eval=frame:flags=lanczos"
+            ",pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x00000000"
         ));
+        c.push_str(&zoom_scale(&ex, &ey, w, h));
     } else if t.scale_x != 1.0 || t.scale_y != 1.0 {
         c.push_str(&format!(
             ",scale=w=iw*{}:h=ih*{}:flags=lanczos",
@@ -335,7 +356,7 @@ fn video_chain(seg: &Segment, i: usize, doc: &ProjectDoc, pad_canvas: bool) -> S
     // Opacity — static via colorchannelmixer; keyframed via geq alpha expr.
     let ko = seg.keyframes.get("transform.opacity");
     if let Some(k) = ko {
-        let e = kf::expr_var(k, 0.0, t.opacity as f64, 'T');
+        let e = kf::expr_var(k, 0.0, t.opacity as f64, "T");
         c.push_str(&format!(
             ",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*({e})'"
         ));
@@ -851,22 +872,21 @@ pub fn build_plan_with(
                 }
             }
         }
-        // Scale (eval=frame, clip-relative offset → global t) then rotate —
-        // pivot = canvas center (preview wraps text in a canvas-sized div).
+        // Scale (zoompan, clip-relative offset → global `time`) then
+        // rotate — pivot = canvas center (preview wraps text in a
+        // canvas-sized div). The layer is already canvas-sized.
         let kx = ts.keyframes.get("transform.scaleX");
         let ky = ts.keyframes.get("transform.scaleY");
         let sx = ts.transform.scale_x as f64;
         let sy = ts.transform.scale_y as f64;
         if kx.is_some() || ky.is_some() {
             let ex = kx
-                .map(|k| crate::render::keyframes::expr(k, start_s, sx))
+                .map(|k| crate::render::keyframes::expr_var(k, start_s, sx, "time"))
                 .unwrap_or_else(|| format!("{sx}"));
             let ey = ky
-                .map(|k| crate::render::keyframes::expr(k, start_s, sy))
+                .map(|k| crate::render::keyframes::expr_var(k, start_s, sy, "time"))
                 .unwrap_or_else(|| format!("{sy}"));
-            c.push_str(&format!(
-                ",scale=w='iw*({ex})':h='ih*({ey})':eval=frame:flags=lanczos"
-            ));
+            c.push_str(&zoom_scale(&ex, &ey, w, h));
         } else if sx != 1.0 || sy != 1.0 {
             c.push_str(&format!(",scale=w=iw*{sx}:h=ih*{sy}:flags=lanczos"));
         }
@@ -892,7 +912,7 @@ pub fn build_plan_with(
                 k,
                 start_s,
                 ts.transform.opacity as f64,
-                'T',
+                "T",
             ));
         } else if ts.transform.opacity < 1.0 {
             alpha_terms.push(format!("{}", ts.transform.opacity));

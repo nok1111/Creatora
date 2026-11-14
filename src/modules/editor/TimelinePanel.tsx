@@ -159,10 +159,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           }
         }
         mutateInGesture((d) => {
-          let next = d;
-          if (targetTrackId !== track.id) {
-            next = moveClipToTrack(next, clip.id, targetTrackId, target);
-          }
+          // moveClipToTrack handles both same-track (moveClip) and
+          // cross-track moves, with kind/lock checks built in.
+          const next = moveClipToTrack(d, clip.id, targetTrackId, target);
           const cur = findClip(next, clip.id)?.clip;
           if (!cur) return next;
           const others = moving.filter((id) => id !== clip.id);

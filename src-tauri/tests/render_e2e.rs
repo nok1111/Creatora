@@ -2850,10 +2850,13 @@ fn text_scale_keyframes_grow_on_canvas() {
     add_media(&mut doc, "r", &red);
     let out = render(&dir, &doc, "tscale.mp4");
     // t=1.1 → scale ~0.2 (small text); t=3.8 → ~1.4 (big text).
+    // Glyph coverage doesn't scale linearly in a fixed window (clipping
+    // + AA), and zoompan's zoom<1 sampling differs slightly from the old
+    // scale path — assert robust growth, not an exact ratio.
     let early = white_px(&grab_frame(&out, 1.2, 320, 240), 320, 60, 180, 60, 260);
     let late = white_px(&grab_frame(&out, 3.8, 320, 240), 320, 60, 180, 60, 260);
     assert!(
-        late > early * 2 + 50,
+        late > early * 3 / 2 + 100,
         "scale kf didn't grow text: early={early} late={late}"
     );
 }

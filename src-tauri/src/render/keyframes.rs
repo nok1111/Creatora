@@ -46,12 +46,13 @@ pub fn eval_at(kfs: &[Keyframe], t_ms: i64, base: f64) -> f64 {
 ///   if(lt(t,t1), v0+(v1-v0)*(t-t0)/(t1-t0), …final_v)
 /// wrapped by clamp: before t0 → v0, after last → vlast.
 pub fn expr(kfs: &[Keyframe], clip_start_s: f64, base: f64) -> String {
-    expr_var(kfs, clip_start_s, base, 't')
+    expr_var(kfs, clip_start_s, base, "t")
 }
 
 /// Same as [`expr`] but uses `var` as the time variable. Needed because
-/// geq exposes `T` (uppercase) while overlay/rotate/volume use `t`.
-pub fn expr_var(kfs: &[Keyframe], clip_start_s: f64, base: f64, var: char) -> String {
+/// geq exposes `T` (uppercase), overlay/rotate/volume use `t`, and
+/// zoompan uses `time`.
+pub fn expr_var(kfs: &[Keyframe], clip_start_s: f64, base: f64, var: &str) -> String {
     if kfs.is_empty() {
         return format!("{base}");
     }
