@@ -66,6 +66,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
       {/* friendly one-click presets — additive, skip already-enabled types */}
       <div className="mb-2 flex flex-wrap gap-1">
         {PRESETS.map((p) => (
+
           <button
             key={p.key}
             title={`${p.label} — adds ${p.effects.map((e) => e.type).join(" + ")}`}
@@ -90,6 +91,49 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
             {p.icon} {p.label}
           </button>
         ))}
+        {/* Balance Music — contextual: only when a second audio track
+            exists to act as the voice target. */}
+        {(() => {
+          const otherAudio = doc.timeline.tracks.filter((t) => t.id !== trackId && (t.kind === "audio" || t.clips.some((c) => !c.hidden)));
+          const hasRule = doc.ducking.some((r) => r.sourceTrack === trackId);
+          if (otherAudio.length === 0) {
+            return (
+              <span
+                className="flex items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-[10px] text-muted-foreground"
+                title="Needs a voice clip on another track — ducking lowers this track while the voice plays"
+              >
+                <Guitar className="size-3.5" /> Balance Music · needs a voice track
+              </span>
+            );
+          }
+          return (
+            <select
+              className="rounded-md border border-border bg-card px-1.5 py-1 text-[10px]"
+              value=""
+              title="Duck this track under the chosen voice track"
+              onChange={(e) => {
+                if (!e.target.value) return;
+                mutate((d) =>
+                  upsertDuckingRule(d, {
+                    id: doc.ducking.find((r) => r.sourceTrack === trackId)?.id ?? crypto.randomUUID(),
+                    sourceTrack: trackId,
+                    targetTrack: e.target.value,
+                    thresholdDb: -30,
+                    reductionDb: -12,
+                    attackMs: 80,
+                    releaseMs: 400,
+                    holdMs: 150,
+                  }),
+                );
+              }}
+            >
+              <option value="">{hasRule ? "Balance Music · active — change target…" : "Balance Music → voice track…"}</option>
+              {otherAudio.map((t) => (
+                <option key={t.id} value={t.id}>{t.name ?? t.kind} track</option>
+              ))}
+            </select>
+          );
+        })()}
       </div>
 
       {/* loudness: measure + non-destructive gain suggestion */}

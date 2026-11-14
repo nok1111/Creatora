@@ -5,6 +5,11 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Download,
+  Scissors,
+  Type,
+  Music4,
+  Subtitles,
+  ImageIcon,
   Pause,
   Play,
   Redo2,
@@ -227,6 +232,48 @@ export function EditorPage() {
         <Button variant="ghost" size="icon" className="size-7" disabled={!canRedo} onClick={redo} title="Ctrl+Y">
           <Redo2 className="size-4" />
         </Button>
+        <div className="mx-1 h-4 w-px bg-border" />
+        {/* Common actions — labeled, each routes to the existing workflow. */}
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Split selected clip at playhead (S)"
+          onClick={() => {
+            const es = useEditor.getState();
+            for (const id of es.selection) {
+              mutate((d) => { const r = splitClip(d, id, es.playheadMs); return r ? r.doc : d; });
+            }
+          }}
+        >
+          <Scissors className="size-3.5" /> Trim
+        </button>
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Add text — Graphics bin"
+          onClick={() => setLeftTab("graphics")}
+        >
+          <Type className="size-3.5" /> Text
+        </button>
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Add music — Media bin"
+          onClick={() => setLeftTab("media")}
+        >
+          <Music4 className="size-3.5" /> Music
+        </button>
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Captions — Subtitle Studio"
+          onClick={() => setBottomTab("subtitles")}
+        >
+          <Subtitles className="size-3.5" /> Captions
+        </button>
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Overlay graphics — Graphics bin"
+          onClick={() => setLeftTab("graphics")}
+        >
+          <ImageIcon className="size-3.5" /> Overlay
+        </button>
         <div className="flex-1" />
         <button
           className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"

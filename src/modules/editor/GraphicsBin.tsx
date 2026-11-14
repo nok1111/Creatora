@@ -384,7 +384,8 @@ export function GraphicsBin() {
         {brandOpen && (
           <div className="space-y-1.5">
             {(kitsQ.data ?? []).map((k) => (
-              <div key={k.id} className="flex items-center justify-between rounded px-1 py-0.5 hover:bg-accent">
+              <div key={k.id} className="rounded px-1 py-0.5 hover:bg-accent">
+                <div className="flex items-center justify-between">
                 <button
                   className={`truncate text-left ${doc.brandKitId === k.id ? "text-accent-foreground" : ""}`}
                   onClick={() => mutate((d) => setDocBrandKit(d, doc.brandKitId === k.id ? null : k))}
@@ -413,6 +414,25 @@ export function GraphicsBin() {
                     <Trash2 className="size-3" />
                   </button>
                 </span>
+                </div>
+                {/* Moodboard preview — what will change when applied */}
+                <div className="mt-0.5 flex items-center gap-0.5">
+                  {k.colors.slice(0, 5).map((c) => (
+                    <span key={c} className="inline-block size-3 rounded-sm border border-border/50" style={{ background: c }} title={c} />
+                  ))}
+                  <span className="ml-1 text-[8px] text-muted-foreground">
+                    {k.fonts[0]?.name ?? "—"} · {k.logos.length} logo{k.logos.length === 1 ? "" : "s"}
+                  </span>
+                  {doc.brandKitId === k.id && (
+                    <button
+                      className="ml-auto rounded border border-border px-1 text-[8px] hover:bg-accent"
+                      title="Apply kit colors/fonts to brand-bound clips"
+                      onClick={() => mutate((d) => applyBrandToBoundClips(d))}
+                    >
+                      Apply
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             <div className="flex gap-1">
