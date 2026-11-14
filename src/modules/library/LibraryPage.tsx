@@ -8,8 +8,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Upload, Search, Film, Music, Image as ImageIcon, FileText,
   AlertTriangle, MoreVertical, Link2, Trash2, Copy, Loader2,
-  Star, FolderPlus, Folder, Tag, X, Plus,
+  Star, FolderPlus, Folder, Tag, X, Plus, LayoutGrid, Shapes,
 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/ipc";
 import type { AssetKind, AssetSummary, ImportOutcome } from "@/lib/media-types";
 import { awaitJob, onJobProgress } from "@/services/jobs";
@@ -394,19 +395,23 @@ export function LibraryPage() {
         )}
 
         <div className="mt-4 flex items-center gap-3">
-          <div className="flex gap-1">
-            {KIND_FILTERS.map((k) => (
-              <button
-                key={k}
-                onClick={() => setFilter((f) => ({ ...f, kind: k }))}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                  filter.kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                {t(`library.kind.${k}`)}
-              </button>
-            ))}
+          <div className="flex gap-1 rounded-lg bg-surface-1 p-1">
+            {KIND_FILTERS.map((k) => {
+              const ICONS: Record<string, typeof LayoutGrid> = { all: LayoutGrid, video: Film, audio: Music, image: ImageIcon, graphic: Shapes, font: FileText };
+              const Icon = ICONS[k] ?? LayoutGrid;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setFilter((f) => ({ ...f, kind: k }))}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    filter.kind === k ? "bg-primary text-primary-foreground shadow-raise" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-3.5" />{t(`library.kind.${k}`)}
+                </button>
+              );
+            })}
           </div>
           <div className="relative ml-auto w-56">
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -416,13 +421,18 @@ export function LibraryPage() {
 
         <div className="mt-4 flex-1 overflow-auto scrollbar-slim">
           {assets.isLoading ? (
-            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-          ) : !assets.data?.length ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-center">
-              <FolderPlus className="size-8 text-muted-foreground" />
-              <p className="text-sm font-medium">{t("library.empty")}</p>
-              <p className="text-sm text-muted-foreground">{t("library.emptyHint")}</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="aspect-video animate-pulse rounded-lg bg-surface-2" />
+              ))}
             </div>
+          ) : !assets.data?.length ? (
+            <EmptyState
+              icon={FolderPlus}
+              title={t("library.empty")}
+              body={t("library.emptyHint")}
+              action={{ label: t("library.import"), onClick: () => void pickFiles() }}
+            />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {assets.data.map((a) => (
