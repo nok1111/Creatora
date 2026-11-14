@@ -25,6 +25,10 @@ export const es: typeof en = {
     settings: "Ajustes",
     openInEditor: "Abrir en el editor",
   },
+  openInEditor: {
+    open: "Abrir proyecto",
+    notFound: "No se encontró el proyecto vinculado.",
+  },
   home: {
     title: "Inicio",
     greeting: "¿Qué puedes crear hoy?",

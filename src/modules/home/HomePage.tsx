@@ -96,6 +96,7 @@ export function HomePage() {
     try {
       await project.openFromPath(p.filePath);
       refresh();
+      navigate("/editor");
     } catch (e) {
       toast.error(t("common.error"), { description: String(e) });
     }
@@ -234,6 +235,9 @@ export function HomePage() {
             {project.dirty && <span className="ml-2 text-muted-foreground">({t("home.unsaved")})</span>}
           </span>
           <span className="ml-auto flex gap-2">
+            <Button size="sm" onClick={() => navigate("/editor")}>
+              {t("nav.openInEditor")}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => void project.save()} disabled={!project.dirty}>
               {t("common.save")}
             </Button>

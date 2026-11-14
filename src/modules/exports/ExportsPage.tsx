@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, XCircle, RefreshCw, Rocket } from "lucide-react";
+import { FolderOpen, XCircle, RefreshCw, Rocket, Clapperboard } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { api, type JobRow } from "@/lib/ipc";
+import { useOpenInEditor } from "@/lib/open-in-editor";
 import { awaitJob, onJobFinished } from "@/services/jobs";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
@@ -35,6 +37,8 @@ function jobTitle(j: JobRow): string {
 
 export function ExportsPage() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { openPath, run } = useOpenInEditor();
   const [filter, setFilter] = useState<"all" | "exports" | "running" | "failed">("all");
   const jobs = useQuery({
     queryKey: ["jobs", filter],
@@ -143,6 +147,16 @@ export function ExportsPage() {
                 <td className="px-3 py-2 text-xs text-muted-foreground">{j.finishedAt ?? "—"}</td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex justify-end gap-1">
+                    {j.payload.projectPath && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title={t("openInEditor.open")}
+                        onClick={() => run(() => openPath(j.payload.projectPath!))}
+                      >
+                        <Clapperboard className="size-4" />
+                      </Button>
+                    )}
                     {j.status === "running" && (
                       <Button size="sm" variant="ghost" title="Cancel" onClick={() => void cancel(j)}>
                         <XCircle className="size-4" />

@@ -14,6 +14,7 @@ import {
   type SocialPlatform,
 } from "@/lib/social-types";
 import { cn } from "@/lib/utils";
+import { useOpenInEditor } from "@/lib/open-in-editor";
 
 const ICON: Record<Finding["severity"], React.ReactNode> = {
   error: <XCircle className="size-3.5 text-destructive" />,
@@ -26,14 +27,24 @@ const ICON: Record<Finding["severity"], React.ReactNode> = {
 /** Validation Center — per-target findings with fix actions. */
 export function ValidationPanel({ postId }: { postId: string }) {
   const navigate = useNavigate();
+  const { openById, run } = useOpenInEditor();
   const { data } = useQuery({
     queryKey: ["validate-post", postId],
     queryFn: () => api.validateSocialPost(postId),
   });
+  const post = useQuery({
+    queryKey: ["social-post", postId],
+    queryFn: () => api.getSocialPost(postId),
+  });
   if (!data) return null;
 
   const go = (action: string) => {
-    if (action === "openFormats") navigate("/editor");
+    if (action === "openFormats") {
+      // Load the exact project linked to this post before showing the editor.
+      const pid = post.data?.projectId;
+      if (pid) run(() => openById(pid));
+      else navigate("/editor");
+    }
     // openCaptions/pickFile/connectAccount stay in-module — the composer
     // already shows caption + file pickers; accounts live in the tab.
   };

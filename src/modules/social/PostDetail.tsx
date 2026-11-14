@@ -2,13 +2,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  Clapperboard,
   ExternalLink,
   FolderOpen,
   Loader2,
   Send,
   Upload,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/ipc";
+import { useOpenInEditor } from "@/lib/open-in-editor";
 import { awaitJob } from "@/services/jobs";
 import { useSocial } from "@/stores/social";
 import {
@@ -35,6 +38,8 @@ export function PostDetail({
   onClose: () => void;
 }) {
   const { accounts } = useSocial();
+  const { t } = useTranslation();
+  const { openById, run } = useOpenInEditor();
   const { data: post, refetch } = useQuery({
     queryKey: ["social-post", postId],
     queryFn: () => api.getSocialPost(postId),
@@ -110,8 +115,21 @@ export function PostDetail({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[80vh] max-w-2xl flex-col overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
-          <DialogTitle className="text-sm">
-            {post.title || "Untitled post"}
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <span className="min-w-0 truncate">
+              {post.title || "Untitled post"}
+            </span>
+            {post.projectId && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto mr-6 shrink-0"
+                onClick={() => run(() => openById(post.projectId!))}
+              >
+                <Clapperboard className="mr-1 size-3" />
+                {t("nav.openInEditor")}
+              </Button>
+            )}
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 space-y-4 overflow-y-auto p-5">

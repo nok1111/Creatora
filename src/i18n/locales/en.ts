@@ -22,6 +22,10 @@ export const en = {
     settings: "Settings",
     openInEditor: "Open in editor",
   },
+  openInEditor: {
+    open: "Open project",
+    notFound: "The linked project could not be found.",
+  },
   home: {
     title: "Home",
     greeting: "What can I make today?",
