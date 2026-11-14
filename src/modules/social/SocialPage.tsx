@@ -15,7 +15,9 @@ import {
   RefreshCw,
   Trash2,
   Users,
+  Share2,
 } from "lucide-react";
+import { EmptyState as SharedEmptyState } from "@/components/EmptyState";
 import { api } from "@/lib/ipc";
 import { onJobFinished } from "@/services/jobs";
 import { useSocial } from "@/stores/social";
@@ -262,14 +264,12 @@ export function SocialPage() {
 
 function EmptyState({ onNew }: { onNew: () => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-      <p className="text-sm text-muted-foreground">
-        No social posts yet. Package an exported video for your platforms.
-      </p>
-      <Button size="sm" onClick={onNew}>
-        <Plus className="mr-1 size-3.5" /> New post
-      </Button>
-    </div>
+    <SharedEmptyState
+      icon={Share2}
+      title="No social posts yet"
+      body="Package an exported video for your platforms: pick the post format, write the caption, and queue it for publishing."
+      action={{ label: "New post", onClick: onNew }}
+    />
   );
 }
 

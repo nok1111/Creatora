@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api, type JobRow } from "@/lib/ipc";
 import { awaitJob, onJobFinished } from "@/services/jobs";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 
 const KIND_LABEL: Record<string, string> = {
@@ -169,8 +170,17 @@ export function ExportsPage() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  No jobs match this filter yet.
+                <td colSpan={7} className="px-4 py-6">
+                  <EmptyState
+                    compact
+                    icon={Rocket}
+                    title="No jobs yet"
+                    body={
+                      filter === "failed"
+                        ? "No failed jobs — everything is healthy."
+                        : "Exports, thumbnail jobs and imports will show up here with live progress."
+                    }
+                  />
                 </td>
               </tr>
             )}

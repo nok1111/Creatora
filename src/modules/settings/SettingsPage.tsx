@@ -5,6 +5,7 @@ import { api } from "@/lib/ipc";
 import { useSettings, type Theme } from "@/stores/settings";
 import { SUPPORTED_LANGUAGES, type LanguageCode } from "@/i18n";
 import { Button } from "@/components/ui/button";
+import { Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function Section({
@@ -15,11 +16,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+    <section className="mt-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h2>
-      <div className="mt-3 space-y-4 rounded-lg border border-border bg-card p-5">
+      <div className="mt-2 space-y-4 rounded-xl border border-border bg-card p-4">
         {children}
       </div>
     </section>
@@ -72,10 +73,15 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl p-8">
-      <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {t("settings.storageNote")}
-      </p>
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+          <SettingsIcon className="size-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">{t("settings.title")}</h1>
+          <p className="text-xs text-muted-foreground">{t("settings.storageNote")}</p>
+        </div>
+      </div>
 
       <Section title={t("settings.appearance")}>
         <Row
