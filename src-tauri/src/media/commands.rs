@@ -369,7 +369,6 @@ pub fn regenerate_thumbnail(
         )?;
         Ok(out)
     })
-    .map_err(Into::into)
 }
 
 #[tauri::command]
