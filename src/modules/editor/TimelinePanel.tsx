@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Eye,
   EyeOff,
+  Film,
   Lock,
   LockOpen,
   Magnet,
@@ -547,7 +548,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               </div>
             ))}
             {doc.timeline.tracks.length === 0 && (
-              <div className="p-6 text-sm text-muted-foreground">{t("editor.dropHint")}</div>
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                  <Film className="size-5" />
+                </div>
+                <p className="text-xs font-medium text-foreground">{t("editor.dropHint")}</p>
+                <p className="max-w-xs text-[11px] text-muted-foreground">
+                  Drag media from the left panel, or create a track first.
+                </p>
+              </div>
             )}
 
             {/* Snap indicator */}

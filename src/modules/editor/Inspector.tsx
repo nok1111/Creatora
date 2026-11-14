@@ -1,4 +1,6 @@
 import { useTranslation } from "react-i18next";
+import { SlidersHorizontal } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { Diamond, Plus, Trash2 } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
@@ -36,8 +38,13 @@ export function Inspector() {
 
   if (!doc || selection.length !== 1) {
     return (
-      <div className="flex h-full items-start justify-center border-l border-border bg-card p-4 text-xs text-muted-foreground">
-        {t("editor.inspectorEmpty")}
+      <div className="h-full border-l border-border bg-card">
+        <EmptyState
+          compact
+          icon={SlidersHorizontal}
+          title="Nothing selected"
+          body={t("editor.inspectorEmpty")}
+        />
       </div>
     );
   }

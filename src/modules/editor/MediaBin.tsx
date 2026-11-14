@@ -1,5 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Music, Film, Image as ImageIcon, Plus, AlertTriangle, Zap } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { Music, Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import { addClip } from "@/lib/timeline-engine";
 import type { AssetSummary } from "@/lib/media-types";
+import { EmptyState } from "@/components/EmptyState";
 
 /** Project media bin: imported assets → click + or drag onto a track. */
 export function MediaBin({ assets }: { assets: AssetSummary[] }) {
@@ -48,10 +50,29 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
     toast.success(t("editor.clipAdded"));
   };
 
+  const importFiles = async () => {
+    const selected = await openDialog({
+      multiple: true,
+      filters: [{ name: "Media", extensions: ["mp4","mov","mkv","avi","webm","m4v","mp3","wav","aac","m4a","flac","ogg","png","jpg","jpeg","webp","gif","bmp","tiff"] }],
+    });
+    const paths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+    if (!paths.length) return;
+    const jobId = await api.importMedia(paths);
+    await awaitJob(jobId);
+    await qc.invalidateQueries({ queryKey: ["assets"] });
+  };
+
   return (
     <div className="flex h-full flex-col border-r border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
         {t("editor.mediaBin")}
+        <button
+          className="rounded p-1 hover:bg-accent"
+          title="Import media"
+          onClick={() => void importFiles()}
+        >
+          <FolderInput className="size-3.5" />
+        </button>
         {usable.some((a) => a.kind === "video" && !a.proxyPath) && (
           <button
             className="rounded p-1 hover:bg-accent"
@@ -92,6 +113,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
                 className="size-9 rounded object-cover"
                 alt=""
                 draggable={false}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             ) : (
               <div className="flex size-9 items-center justify-center rounded bg-secondary">
@@ -125,7 +147,13 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
           </div>
         ))}
         {usable.length === 0 && (
-          <p className="px-1 py-4 text-xs text-muted-foreground">{t("editor.emptyBin")}</p>
+          <EmptyState
+            compact
+            icon={Film}
+            title={t("editor.emptyBin")}
+            body="Import videos, audio or images, then drag them onto a track."
+            action={{ label: "Import media", onClick: () => void importFiles() }}
+          />
         )}
       </div>
     </div>

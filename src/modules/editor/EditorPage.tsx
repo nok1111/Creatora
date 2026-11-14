@@ -308,16 +308,16 @@ export function EditorPage() {
       {/* Middle: bin + preview */}
       <div className="flex min-h-0 flex-1">
         <div className="flex w-56 shrink-0 flex-col">
-          <div className="flex gap-1 border-b border-r border-border px-1.5 py-0.5">
-            {(["media", "graphics"] as const).map((tb) => (
+          <div className="flex gap-1 border-b border-r border-border px-1.5 py-1">
+            {([["media", Music4], ["graphics", ImageIcon]] as const).map(([tb, Icon]) => (
               <button
                 key={tb}
                 onClick={() => setLeftTab(tb)}
-                className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                  leftTab === tb ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide transition-colors ${
+                  leftTab === tb ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                {tb}
+                <Icon className="size-3.5" /> {tb}
               </button>
             ))}
           </div>
@@ -359,16 +359,16 @@ export function EditorPage() {
 
       {/* Timeline / Subtitle Studio */}
       <div className="flex h-64 shrink-0 flex-col border-t border-border">
-        <div className="flex gap-1 border-b border-border px-2 py-0.5">
-          {(["timeline", "subtitles"] as const).map((tab) => (
+        <div className="flex gap-1 border-b border-border px-2 py-1">
+          {([["timeline", Scissors, "Timeline"], ["subtitles", Subtitles, "Subtitles"]] as const).map(([tab, Icon, label]) => (
             <button
               key={tab}
               onClick={() => setBottomTab(tab)}
-              className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                bottomTab === tab ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide transition-colors ${
+                bottomTab === tab ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
-              {tab === "timeline" ? "Timeline" : "Subtitles"}
+              <Icon className="size-3.5" /> {label}
             </button>
           ))}
         </div>
