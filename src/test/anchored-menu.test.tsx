@@ -98,10 +98,14 @@ describe("AnchoredMenu", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("receives item clicks and navigates with arrow keys", () => {
+  it("receives item clicks and navigates with arrow keys", async () => {
     const onClose = vi.fn();
     mount(<Harness onClose={onClose} />);
-    // First item focused on open.
+    // First item focused on open (deferred a frame: WebView2 reports items
+    // visibility:hidden briefly after mount and focus() is a no-op then).
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+    });
     expect(document.activeElement?.id).toBe("item-a");
     act(() => {
       document

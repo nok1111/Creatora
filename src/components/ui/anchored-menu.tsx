@@ -233,12 +233,26 @@ export function AnchoredMenu({
     };
   }, [open, onClose, anchor]);
 
-  // Focus first item on open.
+  // Focus first item on open. Live QA: WebView2 reports menu items
+  // visibility:hidden for ~50-80ms after mount even though the container is
+  // already visible, and focus() on a hidden element is a no-op — so retry
+  // per frame until the focus actually lands (bounded).
   useEffect(() => {
     if (!open) return;
     const el = ref.current;
     if (!el) return;
-    (focusables(el)[0] ?? el).focus();
+    let raf = 0;
+    let tries = 0;
+    const tryFocus = () => {
+      const target = focusables(el)[0] ?? el;
+      if (document.activeElement === target) return;
+      target.focus();
+      if (document.activeElement !== target && ++tries < 10) {
+        raf = requestAnimationFrame(tryFocus);
+      }
+    };
+    raf = requestAnimationFrame(tryFocus);
+    return () => cancelAnimationFrame(raf);
   }, [open]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
