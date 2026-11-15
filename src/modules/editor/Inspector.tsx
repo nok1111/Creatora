@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
@@ -35,6 +36,7 @@ export function Inspector() {
   const playheadMs = useEditor((s) => s.playheadMs);
   const mutate = useEditor((s) => s.mutate);
   const activeVersionId = useEditor((s) => s.activeVersionId);
+  const [inspTab, setInspTab] = useState<"video" | "audio" | "fx" | "anim" | "design">("video");
 
   if (!doc || selection.length !== 1) {
     return (
@@ -146,6 +148,41 @@ export function Inspector() {
     </div>
   );
 
+  /** Bounded param — slider + formatted readout, optional keyframe dot. */
+  const slider = (
+    label: string,
+    value: number,
+    min: number,
+    max: number,
+    step: number,
+    onChange: (v: number) => void,
+    kfPath?: AnimatablePath,
+    fmt: (v: number) => string = (v) => v.toFixed(2),
+  ) => (
+    <div className="flex items-center gap-1.5" key={label}>
+      <span className="w-14 text-[10px] text-muted-foreground">{label}</span>
+      <input
+        type="range"
+        className="flex-1"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      <span className="w-12 text-right font-mono text-[10px]">{fmt(value)}</span>
+      {kfPath && (
+        <button
+          className={`rounded p-0.5 ${keyAt(kfPath) ? "text-accent-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          title={t("editor.keyframe")}
+          onClick={() => toggleKey(kfPath, value)}
+        >
+          <Diamond className="size-3" />
+        </button>
+      )}
+    </div>
+  );
+
   const kfCount = (path: string) => clip.keyframes[path]?.length ?? 0;
   const clipTransitions = transitionsFor(doc, clipId);
 
@@ -166,52 +203,187 @@ export function Inspector() {
       track.kind === "text" ||
       track.kind === "graphics");
 
+  const tabs = (
+    isDesign
+      ? [
+          ["design", t("editor.tabDesign")],
+          ["fx", t("editor.sectionEffects")],
+          ["anim", t("editor.tabAnimation")],
+        ]
+      : [
+          ["video", t("editor.tabVideo")],
+          ["audio", t("editor.sectionAudio")],
+          ["fx", t("editor.sectionEffects")],
+          ["anim", t("editor.tabAnimation")],
+        ]
+  ) as [typeof inspTab, string][];
+  const activeTab = tabs.some((tb) => tb[0] === inspTab) ? inspTab : tabs[0][0];
+
   return (
-    <div className="h-full space-y-4 overflow-y-auto border-l border-border bg-card p-3 text-xs">
-      <div className="font-medium text-foreground">{t("editor.inspector")}</div>
+    <div className="flex h-full flex-col border-l border-border bg-card text-xs">
+      <div className="space-y-2 border-b border-border p-3 pb-2">
+        <div className="font-medium text-foreground">{t("editor.inspector")}</div>
+        {version && (
+          <p className="text-[9px] italic text-accent-foreground/80">
+            {t("versions.editingVersion", { name: version.name })}
+          </p>
+        )}
+        <div className="flex gap-1">
+          {tabs.map(([id, label]) => (
+            <button
+              key={id}
+              className={`rounded px-2 py-1 text-[10px] font-medium ${
+                activeTab === id
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setInspTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {isDesign ? (
-        <GraphicsInspector clipId={clipId} />
-      ) : (
-        <>
-          <section className="space-y-1.5">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {t("editor.sectionTransform")}
-            </div>
-            {version && (
-              <p className="text-[9px] italic text-accent-foreground/80">
-                {t("versions.editingVersion", { name: version.name })}
-              </p>
+      <div className="flex-1 space-y-4 overflow-y-auto p-3">
+        {activeTab === "design" && <GraphicsInspector clipId={clipId} />}
+
+        {activeTab === "video" && (
+          <>
+            <section className="space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {t("editor.sectionTransform")}
+              </div>
+              {num("X", clipTransform.x, (v) => patchTransform("x", v), "transform.x")}
+              {num("Y", clipTransform.y, (v) => patchTransform("y", v), "transform.y")}
+              {num(t("editor.propScaleX"), clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
+              {num(t("editor.propScaleY"), clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
+              {num(t("editor.propRotate"), clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
+              {slider(
+                t("editor.propOpacity"),
+                clipTransform.opacity,
+                0, 1, 0.01,
+                (v) => patchTransform("opacity", v),
+                "transform.opacity",
+                (v) => `${Math.round(v * 100)}%`,
+              )}
+            </section>
+
+            {(clipText !== "" || clip.text != null) && (
+              <section className="space-y-1.5">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {t("editor.sectionText")}
+                  {version && <span className="ml-1 text-accent-foreground/80">({t("versions.editingVersionShort")})</span>}
+                </div>
+                <textarea
+                  className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs"
+                  rows={2}
+                  value={clipText}
+                  onChange={(e) => patchText(e.target.value)}
+                />
+                {clipStyle && (
+                  <div className="space-y-1">
+                    {num(t("editor.propFontPx"), clipStyle.fontSizePx, (v) => patchStyle("fontSizePx", Math.max(1, v)))}
+                    <div className="flex items-center gap-1">
+                      <span className="w-14 text-[10px] text-muted-foreground">Color</span>
+                      <input type="color" className="h-5 w-10" value={clipStyle.color.slice(0, 7)}
+                        onChange={(e) => patchStyle("color", e.target.value)} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-14 text-[10px] text-muted-foreground">Align</span>
+                      <select className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
+                        value={clipStyle.alignH} onChange={(e) => patchStyle("alignH", e.target.value)}>
+                        <option value="left">←</option><option value="center">↔</option><option value="right">→</option>
+                      </select>
+                      <select className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
+                        value={clipStyle.alignV} onChange={(e) => patchStyle("alignV", e.target.value)}>
+                        <option value="top">↑</option><option value="middle">↕</option><option value="bottom">↓</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-14 text-[10px] text-muted-foreground">Outline</span>
+                      <input type="color" className="h-5 w-10"
+                        value={(clipStyle.outlineColor ?? "#000000").slice(0, 7)}
+                        onChange={(e) => patchStyle("outlineColor", e.target.value)} />
+                      <input type="number" className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs"
+                        min={0} step={0.5} value={clipStyle.outlineWidth}
+                        onChange={(e) => patchStyle("outlineWidth", Math.max(0, Number(e.target.value)))} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-14 text-[10px] text-muted-foreground">Box</span>
+                      <input type="checkbox" checked={!!clipStyle.backgroundColor}
+                        onChange={(e) => patchStyle("backgroundColor", e.target.checked ? "#000000AA" : null)} />
+                      {clipStyle.backgroundColor && (
+                        <input type="color" className="h-5 w-10"
+                          value={clipStyle.backgroundColor.slice(0, 7)}
+                          onChange={(e) => patchStyle("backgroundColor", e.target.value + "AA")} />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-14 text-[10px] text-muted-foreground">Shadow</span>
+                      <input type="checkbox" checked={!!clipStyle.shadowColor}
+                        onChange={(e) => patchStyle("shadowColor", e.target.checked ? "#000000CC" : null)} />
+                      {clipStyle.shadowColor && (
+                        <>
+                          <input type="color" className="h-5 w-10"
+                            value={clipStyle.shadowColor.slice(0, 7)}
+                            onChange={(e) => patchStyle("shadowColor", e.target.value + "CC")} />
+                          <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
+                            value={clipStyle.shadowX ?? 0} title={t("gfxI.shadowXPx")}
+                            onChange={(e) => patchStyle("shadowX", Number(e.target.value))} />
+                          <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
+                            value={clipStyle.shadowY ?? 0} title={t("gfxI.shadowYPx")}
+                            onChange={(e) => patchStyle("shadowY", Number(e.target.value))} />
+                        </>
+                      )}
+                    </div>
+                    {num(t("gfxI.lineSpacing"), clipStyle.lineSpacingPx ?? 0, (v) => patchStyle("lineSpacingPx", v))}
+                  </div>
+                )}
+              </section>
             )}
-            {num("X", clipTransform.x, (v) => patchTransform("x", v), "transform.x")}
-            {num("Y", clipTransform.y, (v) => patchTransform("y", v), "transform.y")}
-            {num(t("editor.propScaleX"), clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
-            {num(t("editor.propScaleY"), clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
-            {num(t("editor.propRotate"), clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
-            {num(t("editor.propOpacity"), clipTransform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
-          </section>
+          </>
+        )}
 
+        {activeTab === "audio" && (
           <section className="space-y-1.5">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
               {t("editor.sectionAudio")}
             </div>
-            {num(t("editor.propVolume"), clip.volume, (v) => mutate((d) => updateClip(d, clipId, { volume: Math.max(0, Math.min(8, v)) })), "volume", 0.05)}
+            {slider(
+              t("editor.propVolume"),
+              clip.volume, 0, 2, 0.01,
+              (v) => mutate((d) => updateClip(d, clipId, { volume: v })),
+              "volume",
+              (v) => `${Math.round(v * 100)}%`,
+            )}
             {num(t("editor.propSpeed"), clip.speed, (v) => mutate((d) => updateClip(d, clipId, { speed: Math.max(0.1, Math.min(8, v)) })), undefined, 0.1)}
-            {num(t("editor.propPan"), clip.pan ?? 0, (v) => mutate((d) => updateClip(d, clipId, { pan: Math.max(-1, Math.min(1, v)) })), undefined, 0.05)}
-            {num(t("editor.propFadeIn"), clip.fadeInMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v) })), undefined, 50)}
-            {num(t("editor.propFadeOut"), clip.fadeOutMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v) })), undefined, 50)}
-            <AudioTools clipId={clipId} trackId={track.id} />
+            {slider(
+              t("editor.propPan"),
+              clip.pan ?? 0, -1, 1, 0.01,
+              (v) => mutate((d) => updateClip(d, clipId, { pan: v })),
+              undefined,
+              (v) => (v === 0 ? "C" : v < 0 ? `L ${Math.round(-v * 100)}` : `R ${Math.round(v * 100)}`),
+            )}
+            {num(t("editor.propFadeIn"), (clip.fadeInMs ?? 0) / 1000, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v * 1000) })), undefined, 0.1)}
+            {num(t("editor.propFadeOut"), (clip.fadeOutMs ?? 0) / 1000, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v * 1000) })), undefined, 0.1)}
+            <details className="rounded border border-border p-1.5">
+              <summary className="cursor-pointer text-[10px] uppercase tracking-wide text-muted-foreground">
+                {t("editor.audioTools")}
+              </summary>
+              <div className="pt-2">
+                <AudioTools clipId={clipId} trackId={track.id} />
+              </div>
+            </details>
           </section>
+        )}
 
-          <GraphicsSection clipId={clipId} />
-        </>
-      )}
-
-      <section className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            {t("editor.sectionEffects")}
-          </span>
+        {activeTab === "fx" && (
+          <section className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {t("editor.sectionEffects")}
+              </span>
           <select
             className="rounded border border-border bg-background px-1 py-0.5 text-[10px]"
             value=""
@@ -292,15 +464,19 @@ export function Inspector() {
             </div>
           );
         })}
-        {clip.effects.length === 0 && (
-          <p className="text-[10px] text-muted-foreground">{t("editor.noEffects")}</p>
+            {clip.effects.length === 0 && (
+              <p className="text-[10px] text-muted-foreground">{t("editor.noEffects")}</p>
+            )}
+          </section>
         )}
-      </section>
 
-      <section className="space-y-1.5">
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {t("editor.sectionKeyframes")}
-        </div>
+        {activeTab === "anim" && (
+          <>
+            {!isDesign && <GraphicsSection clipId={clipId} />}
+            <section className="space-y-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {t("editor.sectionKeyframes")}
+              </div>
         {ANIMATABLE_PATHS.filter((pth) => kfCount(pth) > 0).map((pth) => (
           <div key={pth} className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">{pth}</span>
@@ -314,113 +490,42 @@ export function Inspector() {
         )}
       </section>
 
-      {!isDesign && (clipText !== "" || clip.text != null) ? (
-        <section className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            {t("editor.sectionText")}
-            {version && <span className="ml-1 text-accent-foreground/80">({t("versions.editingVersionShort")})</span>}
-          </div>
-          <textarea
-            className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs"
-            rows={2}
-            value={clipText}
-            onChange={(e) => patchText(e.target.value)}
-          />
-          {clipStyle && (
-            <div className="space-y-1">
-              {num(t("editor.propFontPx"), clipStyle.fontSizePx, (v) => patchStyle("fontSizePx", Math.max(1, v)))}
-              <div className="flex items-center gap-1">
-                <span className="w-14 text-[10px] text-muted-foreground">Color</span>
-                <input type="color" className="h-5 w-10" value={clipStyle.color.slice(0, 7)}
-                  onChange={(e) => patchStyle("color", e.target.value)} />
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-14 text-[10px] text-muted-foreground">Align</span>
-                <select className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
-                  value={clipStyle.alignH} onChange={(e) => patchStyle("alignH", e.target.value)}>
-                  <option value="left">←</option><option value="center">↔</option><option value="right">→</option>
-                </select>
-                <select className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
-                  value={clipStyle.alignV} onChange={(e) => patchStyle("alignV", e.target.value)}>
-                  <option value="top">↑</option><option value="middle">↕</option><option value="bottom">↓</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-14 text-[10px] text-muted-foreground">Outline</span>
-                <input type="color" className="h-5 w-10"
-                  value={(clipStyle.outlineColor ?? "#000000").slice(0, 7)}
-                  onChange={(e) => patchStyle("outlineColor", e.target.value)} />
-                <input type="number" className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs"
-                  min={0} step={0.5} value={clipStyle.outlineWidth}
-                  onChange={(e) => patchStyle("outlineWidth", Math.max(0, Number(e.target.value)))} />
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-14 text-[10px] text-muted-foreground">Box</span>
-                <input type="checkbox" checked={!!clipStyle.backgroundColor}
-                  onChange={(e) => patchStyle("backgroundColor", e.target.checked ? "#000000AA" : null)} />
-                {clipStyle.backgroundColor && (
-                  <input type="color" className="h-5 w-10"
-                    value={clipStyle.backgroundColor.slice(0, 7)}
-                    onChange={(e) => patchStyle("backgroundColor", e.target.value + "AA")} />
+            <section className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {t("editor.sectionTransitions")}
+                </span>
+                {nextClip && !hasOut && (
+                  <button
+                    className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent"
+                    onClick={() =>
+                      mutate((d) => addTransition(d, track.id, clipId, nextClip.id, 500)?.doc ?? d)
+                    }
+                  >
+                    <Plus className="size-3" /> {t("editor.addTransition")}
+                  </button>
                 )}
               </div>
-              <div className="flex items-center gap-1">
-                <span className="w-14 text-[10px] text-muted-foreground">Shadow</span>
-                <input type="checkbox" checked={!!clipStyle.shadowColor}
-                  onChange={(e) => patchStyle("shadowColor", e.target.checked ? "#000000CC" : null)} />
-                {clipStyle.shadowColor && (
-                  <>
-                    <input type="color" className="h-5 w-10"
-                      value={clipStyle.shadowColor.slice(0, 7)}
-                      onChange={(e) => patchStyle("shadowColor", e.target.value + "CC")} />
-                    <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
-                      value={clipStyle.shadowX ?? 0} title={t("gfxI.shadowXPx")}
-                      onChange={(e) => patchStyle("shadowX", Number(e.target.value))} />
-                    <input type="number" className="w-11 rounded border border-border bg-background px-1 py-0.5 text-xs"
-                      value={clipStyle.shadowY ?? 0} title={t("gfxI.shadowYPx")}
-                      onChange={(e) => patchStyle("shadowY", Number(e.target.value))} />
-                  </>
-                )}
-              </div>
-              {num(t("gfxI.lineSpacing"), clipStyle.lineSpacingPx ?? 0, (v) => patchStyle("lineSpacingPx", v))}
-            </div>
-          )}
-        </section>
-      ) : null}
-
-      <section className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            {t("editor.sectionTransitions")}
-          </span>
-          {nextClip && !hasOut && (
-            <button
-              className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent"
-              onClick={() =>
-                mutate((d) => addTransition(d, track.id, clipId, nextClip.id, 500)?.doc ?? d)
-              }
-            >
-              <Plus className="size-3" /> {t("editor.addTransition")}
-            </button>
-          )}
-        </div>
-        {clipTransitions.map((tr) => (
-          <div key={tr.id} className="flex items-center justify-between rounded border border-border p-1.5">
-            <span>
-              {tr.type} · {(tr.durationMs / 1000).toFixed(2)}s
-            </span>
-            <button
-              className="text-muted-foreground hover:text-destructive"
-              onClick={() => mutate((d) => removeTransition(d, track.id, tr.id))}
-            >
-              <Trash2 className="size-3" />
-            </button>
-          </div>
-        ))}
-        {clipTransitions.length === 0 && (
-          <p className="text-[10px] text-muted-foreground">{t("editor.noTransitions")}</p>
+              {clipTransitions.map((tr) => (
+                <div key={tr.id} className="flex items-center justify-between rounded border border-border p-1.5">
+                  <span>
+                    {tr.type} · {(tr.durationMs / 1000).toFixed(2)}s
+                  </span>
+                  <button
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => mutate((d) => removeTransition(d, track.id, tr.id))}
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              ))}
+              {clipTransitions.length === 0 && (
+                <p className="text-[10px] text-muted-foreground">{t("editor.noTransitions")}</p>
+              )}
+            </section>
+          </>
         )}
-      </section>
+      </div>
     </div>
   );
 }
