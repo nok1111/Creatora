@@ -637,7 +637,7 @@ export function updateEffect(
   doc: ProjectDoc,
   clipId: string,
   effectId: string,
-  patch: Partial<Pick<Effect, "enabled">> & { params?: Record<string, number> },
+  patch: Partial<Pick<Effect, "enabled" | "inMs" | "outMs">> & { params?: Record<string, number> },
 ): ProjectDoc {
   const next = cloneDoc(doc);
   const hit = findClip(next, clipId);
@@ -645,6 +645,8 @@ export function updateEffect(
   const fx = hit.clip.effects.find((e) => e.id === effectId);
   if (!fx) return next;
   if (patch.enabled !== undefined) fx.enabled = patch.enabled;
+  if (patch.inMs !== undefined) fx.inMs = patch.inMs;
+  if (patch.outMs !== undefined) fx.outMs = patch.outMs;
   if (patch.params) Object.assign(fx.params, patch.params);
   return next;
 }

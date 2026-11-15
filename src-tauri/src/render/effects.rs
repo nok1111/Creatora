@@ -40,6 +40,18 @@ fn saturation_matrix(s: f64) -> String {
     )
 }
 
+/// Wrap a filter fragment in an activation window when the effect carries
+/// in/out ms (clip-relative; setpts already reset this layer's PTS to 0).
+fn with_enable(e: &Effect, frag: String) -> String {
+    let cond = match (e.in_ms, e.out_ms) {
+        (None, None) => return frag,
+        (Some(a), Some(b)) => format!("between(t,{},{})", a / 1000.0, b / 1000.0),
+        (Some(a), None) => format!("gte(t,{})", a / 1000.0),
+        (None, Some(b)) => format!("lt(t,{})", b / 1000.0),
+    };
+    format!("{}:enable='{}'", frag, cond)
+}
+
 /// Ordered ffmpeg filter fragment for a clip's enabled effect stack.
 /// Returns "" when nothing applies.
 pub fn effects_chain(effects: &[Effect]) -> String {
@@ -82,7 +94,7 @@ pub fn effects_chain(effects: &[Effect]) -> String {
             }
             _ => continue,
         };
-        parts.push(frag);
+        parts.push(with_enable(e, frag));
     }
     parts.join(",")
 }
@@ -98,11 +110,29 @@ mod tests {
             id: "e1".into(),
             kind: kind.into(),
             enabled: true,
+            in_ms: None,
+            out_ms: None,
             params: params
                 .iter()
                 .map(|(k, v)| (k.to_string(), *v))
                 .collect::<BTreeMap<_, _>>(),
         }
+    }
+
+    #[test]
+    fn windowed_effect_gets_enable() {
+        let mut e = fx("brightness", &[("amount", 0.5)]);
+        e.in_ms = Some(1000.0);
+        e.out_ms = Some(2000.0);
+        let c = effects_chain(std::slice::from_ref(&e));
+        assert!(c.contains("enable='between(t,1,2)'"), "{c}");
+        // Unbounded edges map to gte/lt; no window → no enable clause.
+        e.out_ms = None;
+        let c2 = effects_chain(std::slice::from_ref(&e));
+        assert!(c2.contains("enable='gte(t,1)'"), "{c2}");
+        e.in_ms = None;
+        let c3 = effects_chain(std::slice::from_ref(&e));
+        assert!(!c3.contains("enable"), "{c3}");
     }
 
     #[test]

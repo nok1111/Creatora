@@ -143,6 +143,18 @@ export function effectDef(type: string): EffectDef | undefined {
  * Combined CSS `filter:` string for an enabled stack, preserving order.
  * Matrix effects are emitted separately via `svgFilterFor`.
  */
+/** Effects active at clip-relative `relMs` — an undefined window edge is
+ *  unbounded, so legacy whole-clip effects always pass. Mirrors the
+ *  `enable='between(t,…)'` the render emits. */
+export function effectsActiveAt(effects: Effect[], relMs: number): Effect[] {
+  return effects.filter(
+    (e) =>
+      e.enabled &&
+      (e.inMs == null || relMs >= e.inMs) &&
+      (e.outMs == null || relMs < e.outMs),
+  );
+}
+
 export function cssFilterFor(effects: Effect[]): string {
   return effects
     .filter((e) => e.enabled)

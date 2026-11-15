@@ -523,6 +523,39 @@ export function Inspector() {
                     </span>
                   </div>
                 ))}
+              <div className="flex items-center gap-1.5">
+                <span className="w-14 text-[10px] text-muted-foreground">{t("editor.fxWindow")}</span>
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1 text-right font-mono text-[10px]"
+                  min={0}
+                  step={50}
+                  value={Math.round(fx.inMs ?? 0)}
+                  onChange={(e) =>
+                    mutate((d) =>
+                      updateEffect(d, clipId, fx.id, {
+                        inMs: Math.max(0, Math.min(Number(e.target.value) || 0, (fx.outMs ?? clip.durationMs) - 50)),
+                      }),
+                    )
+                  }
+                />
+                <span className="text-[9px] text-muted-foreground">→</span>
+                <input
+                  type="number"
+                  className="w-14 rounded border border-border bg-background px-1 text-right font-mono text-[10px]"
+                  min={50}
+                  step={50}
+                  value={Math.round(fx.outMs ?? clip.durationMs)}
+                  onChange={(e) =>
+                    mutate((d) =>
+                      updateEffect(d, clipId, fx.id, {
+                        outMs: Math.max((fx.inMs ?? 0) + 50, Math.min(Number(e.target.value) || clip.durationMs, clip.durationMs)),
+                      }),
+                    )
+                  }
+                />
+                <span className="text-[9px] text-muted-foreground">ms</span>
+              </div>
             </div>
           );
         })}

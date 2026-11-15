@@ -332,6 +332,13 @@ pub struct Effect {
     /// Canonical params; units defined per effect kind (see EFFECTS registry).
     #[serde(default)]
     pub params: std::collections::BTreeMap<String, f64>,
+    /// Clip-relative activation window start (ms); None = from clip start.
+    /// Render encodes it as ffmpeg `enable='between(t,…)'`.
+    #[serde(rename = "inMs", default, skip_serializing_if = "Option::is_none")]
+    pub in_ms: Option<f64>,
+    /// Clip-relative activation window end (ms); None = to clip end.
+    #[serde(rename = "outMs", default, skip_serializing_if = "Option::is_none")]
+    pub out_ms: Option<f64>,
 }
 
 fn default_true() -> bool {

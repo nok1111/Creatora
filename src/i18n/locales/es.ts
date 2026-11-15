@@ -203,6 +203,7 @@ export const es: typeof en = {
     removeTransitions: "Quitar transiciones",
     removeTransitionItem: "Quitar transición {{type}}",
     transitionDurationMs: "Duración de la transición (ms)",
+    fxWindow: "Ventana",
     tabTimeline: "Timeline",
     tabSubtitles: "Subtítulos",
     emptyTitle: "Nada abierto aún",

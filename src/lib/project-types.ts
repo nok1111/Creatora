@@ -88,6 +88,10 @@ export interface Effect {
   type: string;
   enabled: boolean;
   params: Record<string, number>;
+  /** Clip-relative activation window in ms — undefined edge = unbounded
+      (whole clip). Render encodes it as ffmpeg `enable='between(t,…)'`. */
+  inMs?: number;
+  outMs?: number;
 }
 
 export interface TextStyle {

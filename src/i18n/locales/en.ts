@@ -200,6 +200,7 @@ export const en = {
     removeTransitions: "Remove transitions",
     removeTransitionItem: "Remove {{type}} transition",
     transitionDurationMs: "Transition duration (ms)",
+    fxWindow: "Window",
     tabTimeline: "Timeline",
     tabSubtitles: "Subtitles",
     emptyTitle: "Nothing open yet",

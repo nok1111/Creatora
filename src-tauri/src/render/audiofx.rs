@@ -77,6 +77,8 @@ mod tests {
             id: "x".into(),
             kind: ty.into(),
             enabled: true,
+            in_ms: None,
+            out_ms: None,
             params: params
                 .iter()
                 .map(|(k, v)| (k.to_string(), *v))

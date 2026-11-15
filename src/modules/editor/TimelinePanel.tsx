@@ -49,6 +49,7 @@ import {
   timelineDuration,
   transitionsFor,
   trimClip,
+  updateEffect,
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
@@ -62,7 +63,7 @@ import {
   AnchoredMenuSeparator,
 } from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
-import type { Clip, Track, TrackKind, ProjectDoc, Transition } from "@/lib/project-types";
+import type { Clip, Effect, Track, TrackKind, ProjectDoc, Transition } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
 /**
@@ -292,6 +293,56 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       setMoveLane(null);
       endGesture();
       setSnapLine(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  /** Effect-window bar inside a clip: drag body = move the window, edges =
+      stretch it. Window is clip-relative ms (inMs/outMs on the effect). */
+  const onFxBarPointerDown = (
+    e: React.PointerEvent,
+    track: Track,
+    clip: Clip,
+    fx: Effect,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (track.locked) return;
+    const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
+    const laneRect = lane.getBoundingClientRect();
+    const in0 = fx.inMs ?? 0;
+    const out0 = fx.outMs ?? clip.durationMs;
+    const inX = laneRect.left + msToPx(clip.startMs + in0);
+    const outX = laneRect.left + msToPx(clip.startMs + out0);
+    const edge = e.clientX - inX < 8 ? "left" : outX - e.clientX < 8 ? "right" : "move";
+    const startX = e.clientX;
+    const MIN = 50;
+    beginGesture();
+    document.body.style.cursor = edge === "move" ? "grabbing" : "ew-resize";
+    const onMove = (ev: PointerEvent) => {
+      const dms = pxToMs(ev.clientX - startX);
+      let ni = in0;
+      let no = out0;
+      if (edge === "move") {
+        ni = in0 + dms;
+        no = out0 + dms;
+      } else if (edge === "left") {
+        ni = in0 + dms;
+      } else {
+        no = out0 + dms;
+      }
+      ni = Math.max(0, Math.min(ni, clip.durationMs - MIN));
+      no = Math.max(ni + MIN, Math.min(no, clip.durationMs));
+      mutateInGesture((d) =>
+        updateEffect(d, clip.id, fx.id, { inMs: Math.round(ni), outMs: Math.round(no) }),
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      endGesture();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -954,6 +1005,26 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "right");
                         }}
                       />
+                      {/* Effect windows — one bar per effect at the clip's
+                          bottom edge; drag to move, edges to stretch. */}
+                      {clip.effects.map((fx, i) => {
+                        const inMs = fx.inMs ?? 0;
+                        const outMs = fx.outMs ?? clip.durationMs;
+                        const BAR_COLORS = ["bg-violet-400", "bg-cyan-400", "bg-pink-400", "bg-lime-400"];
+                        return (
+                          <div
+                            key={fx.id}
+                            className={`absolute h-[5px] rounded-sm ${BAR_COLORS[i % BAR_COLORS.length]} ${fx.enabled ? "" : "opacity-40"}`}
+                            style={{
+                              left: msToPx(inMs),
+                              width: Math.max(4, msToPx(outMs - inMs)),
+                              bottom: 1 + i * 6,
+                            }}
+                            title={`${fx.type} · ${(inMs / 1000).toFixed(1)}–${(outMs / 1000).toFixed(1)}s`}
+                            onPointerDown={(e) => onFxBarPointerDown(e, track, clip, fx)}
+                          />
+                        );
+                      })}
                     </div>
                   );
                 })}

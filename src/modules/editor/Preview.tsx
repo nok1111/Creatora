@@ -14,7 +14,7 @@ import {
   transitionAlpha,
   updateClip,
 } from "@/lib/timeline-engine";
-import { cssFilterFor, evalKeyframes, svgMatrixFor } from "@/lib/effects";
+import { cssFilterFor, effectsActiveAt, evalKeyframes, svgMatrixFor } from "@/lib/effects";
 import { resumeAudio } from "@/services/audio-preview";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
@@ -262,7 +262,7 @@ export function Preview({
         {/* SVG defs for matrix-based effects (temperature). */}
         <svg width="0" height="0" className="absolute">
           {visual.map(({ clip }) => {
-            const m = svgMatrixFor(clip.effects);
+            const m = svgMatrixFor(effectsActiveAt(clip.effects, playheadMs - clip.startMs));
             if (!m) return null;
             return (
               <filter key={clip.id} id={`fx-${clip.id}`}>
@@ -306,9 +306,10 @@ export function Preview({
             asset.width ?? viewDoc.canvas.width,
             asset.height ?? viewDoc.canvas.height,
           );
+          const fxAt = effectsActiveAt(clip.effects, playheadMs - clip.startMs);
           const filters = [
-            svgMatrixFor(clip.effects) ? `url(#fx-${clip.id})` : "",
-            cssFilterFor(clip.effects),
+            svgMatrixFor(fxAt) ? `url(#fx-${clip.id})` : "",
+            cssFilterFor(fxAt),
           ]
             .filter(Boolean)
             .join(" ");
