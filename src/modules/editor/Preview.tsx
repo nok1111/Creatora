@@ -301,7 +301,7 @@ export function Preview({
           const evalT = evalTransform(clip);
           const evalClip: Clip = { ...clip, transform: evalT };
           const r = clipRect(
-            doc,
+            viewDoc,
             evalClip,
             asset.width ?? viewDoc.canvas.width,
             asset.height ?? viewDoc.canvas.height,
