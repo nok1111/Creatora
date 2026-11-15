@@ -62,6 +62,8 @@ import type { AssetSummary } from "@/lib/media-types";
  */
 
 const TRACK_H = 44;
+/** dropHint.trackId sentinel for the "new track" zone (not a real lane). */
+const NEW_TRACK = "__new_track__";
 const HEADER_W = 176;
 const SNAP_PX = 10;
 
@@ -389,6 +391,66 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     toast.success(t("editor.clipAdded"));
   };
 
+  /** Drop outside any lane (empty timeline, or the space below the last
+      lane): the timeline routes the asset by kind — audio creates/joins an
+      audio track, video and images a video track. */
+  const onDragOverNew = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes("application/x-creatora-asset")) {
+      e.dataTransfer.dropEffect = "none";
+      setHint(null);
+      return;
+    }
+    const payload = getDragPayload();
+    const lane = e.currentTarget as HTMLElement;
+    const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+    e.dataTransfer.dropEffect = "copy";
+    setHint({
+      trackId: NEW_TRACK,
+      startMs: ms,
+      durationMs: payload?.durationMs ?? 3000,
+      valid: true,
+    });
+  };
+
+  const onDropNew = (e: React.DragEvent) => {
+    e.preventDefault();
+    setHint(null);
+    const assetId = e.dataTransfer.getData("application/x-creatora-asset");
+    if (!assetId) return;
+    const kind = getDragPayload()?.kind ?? assets.get(assetId)?.kind;
+    const lane = e.currentTarget as HTMLElement;
+    const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+    const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
+    const filePath = e.dataTransfer.getData("application/x-creatora-path");
+    mutate((d) => {
+      const r = addClip(d, {
+        mediaRef: assetId,
+        startMs: ms,
+        durationMs: dur,
+        sourceDurationMs: dur,
+        trackKind: kind === "audio" ? "audio" : "video",
+      });
+      if (filePath && !r.doc.mediaRefs.some((m) => m.assetId === assetId)) {
+        r.doc.mediaRefs.push({ assetId, path: filePath, hash: null });
+      }
+      return r.doc;
+    });
+    toast.success(t("editor.clipAdded"));
+  };
+
+  /** Ghost shown while hovering empty space — mirrors the lane ghost. */
+  const newTrackGhost = (
+    <div
+      className="pointer-events-none absolute top-1 rounded border-2 border-dashed border-primary/80 bg-primary/20"
+      style={{
+        left: msToPx(dropHint?.trackId === NEW_TRACK ? dropHint.startMs : 0),
+        width: Math.max(6, msToPx(dropHint?.trackId === NEW_TRACK ? dropHint.durationMs : 0)),
+        height: TRACK_H - 8,
+      }}
+    />
+  );
+
   // --- render ---
 
   const rulerTicks: number[] = [];
@@ -589,7 +651,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           </div>
 
           {/* Ruler + lanes */}
-          <div className="relative flex-1">
+          <div className="relative flex flex-1 flex-col">
             <div
               className="sticky top-0 z-10 h-6 cursor-ew-resize border-b border-border bg-card/95 backdrop-blur"
               onPointerDown={onRulerPointerDown}
@@ -718,8 +780,35 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 })}
               </div>
             ))}
+            {/* Drop zone below the last lane — creates a track of the
+                dragged asset's kind. Only rendered when lanes exist;
+                the empty state below is the whole-zone equivalent. */}
+            {doc.timeline.tracks.length > 0 && (
+              <div
+                className={cn(
+                  "relative min-h-[28px] flex-1",
+                  dropHint?.trackId === NEW_TRACK &&
+                    "bg-primary/15 outline-1 -outline-offset-1 outline-primary/60",
+                )}
+                style={{ width: lanesW }}
+                onDragOver={onDragOverNew}
+                onDrop={onDropNew}
+              >
+                {dropHint?.trackId === NEW_TRACK && newTrackGhost}
+              </div>
+            )}
             {doc.timeline.tracks.length === 0 && (
-              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+              <div
+                className={cn(
+                  "relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center",
+                  dropHint?.trackId === NEW_TRACK &&
+                    "bg-primary/15 outline-1 -outline-offset-1 outline-primary/60",
+                )}
+                style={{ width: lanesW }}
+                onDragOver={onDragOverNew}
+                onDrop={onDropNew}
+              >
+                {dropHint?.trackId === NEW_TRACK && newTrackGhost}
                 <div className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
                   <Film className="size-5" />
                 </div>
