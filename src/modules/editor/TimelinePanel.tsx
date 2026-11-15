@@ -53,7 +53,6 @@ import {
   AnchoredMenuSeparator,
 } from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import type { Clip, Track, TrackKind, ProjectDoc } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
@@ -747,9 +746,6 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   // Still images import as kind "video" but have no
                   // duration — only timed sources get a filmstrip.
                   const isVideo = asset?.kind === "video" && asset.durationMs != null;
-                  const thumb = asset?.thumbnailPath
-                    ? convertFileSrc(asset.thumbnailPath)
-                    : null;
                   const tone = CLIP_TONES[track.kind];
                   return (
                     <div
@@ -774,15 +770,6 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "left");
                         }}
                       />
-                      {thumb && !isVideo && (
-                        <div
-                          className="pointer-events-none absolute inset-y-0 right-2 left-2 opacity-25"
-                          style={{
-                            backgroundImage: `url("${thumb}")`,
-                            backgroundSize: "cover",
-                          }}
-                        />
-                      )}
                       {isVideo && clip.mediaRef && (
                         <FilmstripCanvas
                           srcPath={
