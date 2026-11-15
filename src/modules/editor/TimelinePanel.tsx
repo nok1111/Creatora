@@ -43,6 +43,7 @@ import {
   trimClip,
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
+import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
 import { getDragPayload } from "@/lib/drag-payload";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -775,9 +776,22 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           className="pointer-events-none absolute inset-y-0 right-2 left-2 opacity-40"
                           style={{
                             backgroundImage: `url("${thumb}")`,
-                            backgroundSize: "auto 100%",
-                            backgroundRepeat: "repeat-x",
+                            backgroundSize:
+                              asset?.kind === "video" ? "auto 100%" : "cover",
+                            backgroundRepeat:
+                              asset?.kind === "video" ? "repeat-x" : "no-repeat",
                           }}
+                        />
+                      )}
+                      {asset?.kind === "video" && clip.mediaRef && (
+                        <FilmstripCanvas
+                          srcPath={
+                            doc.mediaRefs.find((m) => m.assetId === clip.mediaRef)?.path ?? ""
+                          }
+                          sourceInMs={clip.sourceInMs}
+                          durationMs={clip.durationMs}
+                          heightPx={TRACK_H - 8}
+                          widthPx={Math.max(6, msToPx(clip.durationMs))}
                         />
                       )}
                       {clip.mediaRef &&
