@@ -15,6 +15,7 @@ import {
   removeEffect,
   removeKeyframe,
   removeTransition,
+  setTransitionDuration,
   setKeyframe,
   setVersionClipOverride,
   transitionsFor,
@@ -568,9 +569,23 @@ export function Inspector() {
                 )}
               </div>
               {clipTransitions.map((tr) => (
-                <div key={tr.id} className="flex items-center justify-between rounded border border-border p-1.5">
-                  <span>
-                    {tr.type} · {(tr.durationMs / 1000).toFixed(2)}s
+                <div key={tr.id} className="flex items-center justify-between gap-1 rounded border border-border p-1.5">
+                  <span className="min-w-0 truncate">{tr.type}</span>
+                  <span className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      className="w-14 rounded border border-border bg-background px-1 text-right font-mono text-[10px]"
+                      min={50}
+                      step={50}
+                      value={Math.round(tr.durationMs)}
+                      title={t("editor.transitionDurationMs")}
+                      onChange={(e) =>
+                        mutate((d) =>
+                          setTransitionDuration(d, track.id, tr.id, Math.max(50, Number(e.target.value) || 50)),
+                        )
+                      }
+                    />
+                    <span className="text-[9px] text-muted-foreground">ms</span>
                   </span>
                   <button
                     className="text-muted-foreground hover:text-destructive"

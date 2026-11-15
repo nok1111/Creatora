@@ -202,6 +202,7 @@ export const es: typeof en = {
     removeAnimation: "Quitar animación",
     removeTransitions: "Quitar transiciones",
     removeTransitionItem: "Quitar transición {{type}}",
+    transitionDurationMs: "Duración de la transición (ms)",
     tabTimeline: "Timeline",
     tabSubtitles: "Subtítulos",
     emptyTitle: "Nada abierto aún",

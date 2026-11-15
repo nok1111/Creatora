@@ -728,6 +728,32 @@ export function addTransition(
   return { doc: next, transitionId: tr.id };
 }
 
+/** Re-size an existing transition: re-aligns B so it overlaps A's tail by
+ *  exactly `durationMs` (clamped to both clip lengths). */
+export function setTransitionDuration(
+  doc: ProjectDoc,
+  trackId: string,
+  transitionId: string,
+  durationMs: number,
+): ProjectDoc {
+  const track = doc.timeline.tracks.find((t) => t.id === trackId);
+  const tr = track?.transitions.find((x) => x.id === transitionId);
+  if (!track || !tr || track.locked) return doc;
+  const a = track.clips.find((c) => c.id === tr.clipA);
+  const b = track.clips.find((c) => c.id === tr.clipB);
+  if (!a || !b) return doc;
+  const d = Math.max(1, Math.min(durationMs, a.durationMs - 1, b.durationMs - 1));
+  if (d <= 0) return doc;
+  const next = cloneDoc(doc);
+  const nt = next.timeline.tracks.find((t) => t.id === trackId)!;
+  const nb = nt.clips.find((c) => c.id === tr.clipB)!;
+  const ntr = nt.transitions.find((x) => x.id === transitionId)!;
+  nb.startMs = snapToFrame(a.startMs + a.durationMs - d, next);
+  ntr.durationMs = d;
+  nt.clips.sort((x, y) => x.startMs - y.startMs);
+  return next;
+}
+
 export function removeTransition(doc: ProjectDoc, trackId: string, transitionId: string): ProjectDoc {
   const next = cloneDoc(doc);
   const t = next.timeline.tracks.find((x) => x.id === trackId);

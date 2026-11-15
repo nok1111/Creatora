@@ -199,6 +199,7 @@ export const en = {
     removeAnimation: "Remove animation",
     removeTransitions: "Remove transitions",
     removeTransitionItem: "Remove {{type}} transition",
+    transitionDurationMs: "Transition duration (ms)",
     tabTimeline: "Timeline",
     tabSubtitles: "Subtitles",
     emptyTitle: "Nothing open yet",
