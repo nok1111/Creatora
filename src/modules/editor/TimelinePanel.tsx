@@ -208,6 +208,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     const laneRect = lane.getBoundingClientRect();
     const grabOffsetMs = pxToMs(e.clientX - laneRect.left) - clip.startMs;
     const moving = sel.includes(clip.id) ? sel : [clip.id];
+    // Per-frame displacement of the dragged clip — applied to the rest of
+    // the selection so multi-clip drags move together. (Delta vs the
+    // snapped target is ~0 and would leave the selection behind.)
+    let prevStartMs = clip.startMs;
 
     const onMove = (ev: PointerEvent) => {
       const cursorMs = pxToMs(ev.clientX - laneRect.left);
@@ -241,9 +245,11 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           const next = moveClipToTrack(d, clip.id, targetTrackId, target);
           const cur = findClip(next, clip.id)?.clip;
           if (!cur) return next;
+          const delta = cur.startMs - prevStartMs;
+          prevStartMs = cur.startMs;
           const others = moving.filter((id) => id !== clip.id);
-          return others.length
-            ? moveClips(next, others, target - cur.startMs)
+          return others.length && delta
+            ? moveClips(next, others, delta)
             : next;
         });
       } else {
