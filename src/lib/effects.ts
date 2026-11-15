@@ -73,18 +73,6 @@ export const EFFECTS: EffectDef[] = [
     toCss: (ps) => `sepia(${p(ps, "amount", 1).toFixed(4)})`,
   },
   {
-    type: "invert",
-    label: "Invert",
-    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => `invert(${p(ps, "amount", 1).toFixed(4)})`,
-  },
-  {
-    type: "hueRotate",
-    label: "Hue rotate",
-    params: { deg: { def: 45, min: -180, max: 180, step: 1 } },
-    toCss: (ps) => `hue-rotate(${p(ps, "deg", 45).toFixed(1)}deg)`,
-  },
-  {
     type: "sharpen",
     label: "Sharpen",
     params: { amount: { def: 1, min: 0, max: 3, step: 0.05 } },
@@ -118,195 +106,6 @@ export const EFFECTS: EffectDef[] = [
         `<feComposite in="fxNoiseA" in2="SourceGraphic" operator="in" result="fxGrain"/>`,
         `<feBlend in="SourceGraphic" in2="fxGrain" mode="overlay"/>`,
       ].join("");
-    },
-  },
-  {
-    type: "channelSwap",
-    label: "Channel swap",
-    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
-    // R↔B swap (aerochrome vibe). amount interpolates identity→swap.
-    toMatrix: (ps) => {
-      const a = p(ps, "amount", 1);
-      const i = 1 - a;
-      return [i, 0, a, 0, 0, 0, 1, 0, 0, 0, a, 0, i, 0, 0, 0, 0, 0, 1, 0];
-    },
-  },
-  {
-    type: "posterize",
-    label: "Posterize",
-    params: { levels: { def: 8, min: 2, max: 32, step: 1 } },
-    // Quantize to N levels — exact same staircase as the lutrgb render.
-    toSvg: (ps) => {
-      const l = Math.max(2, Math.round(p(ps, "levels", 8)));
-      const t = Array.from({ length: l }, (_, i) => (i / (l - 1)).toFixed(4)).join(" ");
-      return `<feComponentTransfer><feFuncR type="discrete" tableValues="${t}"/><feFuncG type="discrete" tableValues="${t}"/><feFuncB type="discrete" tableValues="${t}"/></feComponentTransfer>`;
-    },
-  },
-  {
-    type: "scanlines",
-    label: "Scanlines",
-    params: { strength: { def: 0.4, min: 0, max: 1, step: 0.01 } },
-    toOverlay: (ps) => {
-      const a = p(ps, "strength", 0.4);
-      return `repeating-linear-gradient(0deg, rgba(0,0,0,${a.toFixed(3)}) 0px, rgba(0,0,0,${a.toFixed(3)}) 1px, transparent 1px, transparent 3px)`;
-    },
-  },
-  {
-    type: "rgbShift",
-    label: "RGB shift",
-    params: { shift: { def: 6, min: 0, max: 40, step: 0.5 } },
-    // Per-channel offsets — same geometry as ffmpeg rgbashift (smear edges
-    // approximated by screen-blending the isolated channels back).
-    toSvg: (ps) => {
-      const s = p(ps, "shift", 6);
-      const iso = (vals: string, res: string) =>
-        `<feColorMatrix in="SourceGraphic" type="matrix" values="${vals}" result="${res}"/>`;
-      return [
-        iso("1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0", "fxR"),
-        `<feOffset in="fxR" dx="${s}" dy="0" result="fxRo"/>`,
-        iso("0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0", "fxG"),
-        iso("0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0", "fxB"),
-        `<feOffset in="fxB" dx="${-s}" dy="0" result="fxBo"/>`,
-        `<feBlend in="fxRo" in2="fxG" mode="screen" result="fxRG"/>`,
-        `<feBlend in="fxRG" in2="fxBo" mode="screen"/>`,
-      ].join("");
-    },
-  },
-  {
-    type: "edges",
-    label: "Neon edges",
-    params: { amount: { def: 0.5, min: 0, max: 1, step: 0.01 } },
-    // Laplacian edge kernel ≈ ffmpeg edgedetect=colormix.
-    toSvg: (ps) => {
-      const a = p(ps, "amount", 0.5);
-      const k = 1 + 3 * a; // edge gain with amount
-      return `<feConvolveMatrix order="3" kernelMatrix="0 ${(-k).toFixed(2)} 0 ${(-k).toFixed(2)} ${(4 * k).toFixed(2)} ${(-k).toFixed(2)} 0 ${(-k).toFixed(2)} 0" preserveAlpha="true"/>`;
-    },
-  },
-  {
-    type: "filmNoir",
-    label: "Film noir",
-    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => `grayscale(${p(ps, "amount", 1).toFixed(3)}) contrast(1.35)`,
-    toBoxShadow: () => "inset 0 0 60px rgba(0,0,0,0.5)",
-  },
-  {
-    type: "dreamGlow",
-    label: "Dream glow",
-    params: { amount: { def: 0.5, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => {
-      const a = p(ps, "amount", 0.5);
-      return `blur(${(a * 5).toFixed(2)}px) brightness(${(1 + 0.24 * a).toFixed(3)}) saturate(${(1 + 0.2 * a).toFixed(3)})`;
-    },
-  },
-  {
-    type: "blockbuster",
-    label: "Blockbuster",
-    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
-    // Teal shadows / orange highlights grade — single channel mix.
-    toMatrix: (ps) => {
-      const a = p(ps, "amount", 1);
-      const l = (from: number, to: number) => from + (to - from) * a;
-      return [
-        l(1, 1.15), 0, l(0, -0.08), 0, 0,
-        l(0, -0.02), 1, 0, 0, 0,
-        l(0, 0.08), l(0, 0.02), l(1, 0.92), 0, 0,
-        0, 0, 0, 1, 0,
-      ];
-    },
-  },
-  {
-    type: "matteFade",
-    label: "Matte fade",
-    params: { amount: { def: 0.7, min: 0, max: 1, step: 0.01 } },
-    // Lifted blacks + gentle desat — the trendy washed look.
-    toCss: (ps) => {
-      const a = p(ps, "amount", 0.7);
-      return `contrast(${(1 - 0.15 * a).toFixed(3)}) brightness(${(1 + 0.12 * a).toFixed(3)}) saturate(${(1 - 0.2 * a).toFixed(3)})`;
-    },
-  },
-  {
-    type: "popColor",
-    label: "Pop color",
-    params: { amount: { def: 0.5, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => {
-      const a = p(ps, "amount", 0.5);
-      return `saturate(${(1 + 1.1 * a).toFixed(3)}) contrast(${(1 + 0.24 * a).toFixed(3)})`;
-    },
-  },
-  {
-    type: "retro",
-    label: "Retro film",
-    params: { amount: { def: 0.8, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => {
-      const a = p(ps, "amount", 0.8);
-      return `sepia(${(0.35 * a).toFixed(3)}) saturate(${(1 - 0.25 * a).toFixed(3)}) brightness(1.05) contrast(0.95)`;
-    },
-    toSvg: (ps) => {
-      const a = p(ps, "amount", 0.8) * 0.35;
-      return [
-        `<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="fxNoise"/>`,
-        `<feComponentTransfer in="fxNoise" result="fxNoiseA"><feFuncA type="linear" slope="${(a * 1.6).toFixed(3)}" intercept="0"/></feComponentTransfer>`,
-        `<feComposite in="fxNoiseA" in2="SourceGraphic" operator="in" result="fxGrain"/>`,
-        `<feBlend in="SourceGraphic" in2="fxGrain" mode="overlay"/>`,
-      ].join("");
-    },
-  },
-  {
-    type: "crt",
-    label: "CRT monitor",
-    params: { amount: { def: 0.6, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => `saturate(${(1 - 0.25 * p(ps, "amount", 0.6)).toFixed(3)})`,
-    toSvg: (ps) => {
-      const s = 2.5 * p(ps, "amount", 0.6);
-      const iso = (vals: string, res: string) =>
-        `<feColorMatrix in="SourceGraphic" type="matrix" values="${vals}" result="${res}"/>`;
-      return [
-        iso("1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0", "fxR"),
-        `<feOffset in="fxR" dx="${s.toFixed(2)}" dy="0" result="fxRo"/>`,
-        iso("0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0", "fxG"),
-        iso("0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0", "fxB"),
-        `<feOffset in="fxB" dx="${(-s).toFixed(2)}" dy="0" result="fxBo"/>`,
-        `<feBlend in="fxRo" in2="fxG" mode="screen" result="fxRG"/>`,
-        `<feBlend in="fxRG" in2="fxBo" mode="screen"/>`,
-      ].join("");
-    },
-    toOverlay: (ps) => {
-      const a = 0.5 * p(ps, "amount", 0.6);
-      return `repeating-linear-gradient(0deg, rgba(0,0,0,${a.toFixed(3)}) 0px, rgba(0,0,0,${a.toFixed(3)}) 1px, transparent 1px, transparent 3px)`;
-    },
-    toBoxShadow: () => "inset 0 0 80px rgba(0,0,0,0.45)",
-  },
-  {
-    type: "vhs",
-    label: "VHS tape",
-    params: { amount: { def: 0.7, min: 0, max: 1, step: 0.01 } },
-    toCss: (ps) => {
-      const a = p(ps, "amount", 0.7);
-      return `sepia(${(0.3 * a).toFixed(3)}) saturate(${(1 - 0.35 * a).toFixed(3)}) brightness(1.06) contrast(0.92)`;
-    },
-    toSvg: (ps) => {
-      const a = p(ps, "amount", 0.7);
-      const s = 4 * a;
-      const iso = (vals: string, res: string) =>
-        `<feColorMatrix in="SourceGraphic" type="matrix" values="${vals}" result="${res}"/>`;
-      return [
-        iso("1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0", "fxR"),
-        `<feOffset in="fxR" dx="${s.toFixed(2)}" dy="0" result="fxRo"/>`,
-        iso("0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0", "fxG"),
-        iso("0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0", "fxB"),
-        `<feOffset in="fxB" dx="${(-s).toFixed(2)}" dy="0" result="fxBo"/>`,
-        `<feBlend in="fxRo" in2="fxG" mode="screen" result="fxRG"/>`,
-        `<feBlend in="fxRG" in2="fxBo" mode="screen" result="fxBase"/>`,
-        `<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="fxNoise"/>`,
-        `<feComponentTransfer in="fxNoise" result="fxNoiseA"><feFuncA type="linear" slope="${(a * 0.8).toFixed(3)}" intercept="0"/></feComponentTransfer>`,
-        `<feComposite in="fxNoiseA" in2="fxBase" operator="in" result="fxGrain"/>`,
-        `<feBlend in="fxBase" in2="fxGrain" mode="overlay"/>`,
-      ].join("");
-    },
-    toOverlay: (ps) => {
-      const a = 0.4 * p(ps, "amount", 0.7);
-      return `repeating-linear-gradient(0deg, rgba(0,0,0,${a.toFixed(3)}) 0px, rgba(0,0,0,${a.toFixed(3)}) 1px, transparent 1px, transparent 3px)`;
     },
   },
 ];
@@ -391,24 +190,9 @@ export const EFFECT_DROP_PARAMS: Record<string, Record<string, number>> = {
   blur: { radius: 8 },
   grayscale: { amount: 1 },
   sepia: { amount: 0.85 },
-  invert: { amount: 1 },
-  hueRotate: { deg: 120 },
   sharpen: { amount: 1.5 },
   vignette: { amount: 0.6 },
   grain: { amount: 0.45 },
-  channelSwap: { amount: 1 },
-  posterize: { levels: 6 },
-  scanlines: { strength: 0.45 },
-  rgbShift: { shift: 8 },
-  edges: { amount: 0.6 },
-  filmNoir: { amount: 1 },
-  dreamGlow: { amount: 0.6 },
-  blockbuster: { amount: 1 },
-  matteFade: { amount: 0.75 },
-  popColor: { amount: 0.6 },
-  retro: { amount: 0.85 },
-  crt: { amount: 0.65 },
-  vhs: { amount: 0.8 },
 };
 
 /**
