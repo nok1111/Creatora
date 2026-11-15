@@ -282,7 +282,10 @@ export function Preview({
           })}
         </svg>
         {visual.map(({ clip }) => {
-          const asset = clip.mediaRef ? assets.get(clip.mediaRef) : undefined;
+          // Media-less clips (text/shape on text or graphics tracks) render in
+          // their own layer below — they are never "missing media".
+          if (!clip.mediaRef) return null;
+          const asset = assets.get(clip.mediaRef);
           const missing = !asset || asset.status === "missing";
 
           if (missing || !asset) {
