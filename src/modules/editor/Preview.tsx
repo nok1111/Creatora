@@ -657,6 +657,25 @@ export function Preview({
             const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
             window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
           };
+          // Single-axis edge resize — L/R stretch scaleX, T/B stretch
+          // scaleY (sign flips so dragging the edge outward always grows).
+          const edge = (axis: "x" | "y", sign: 1 | -1) => (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            beginGesture();
+            const sx = e.clientX, sy = e.clientY;
+            const bs = hit.clip.transform;
+            const mv = (ev: PointerEvent) => {
+              const f = Math.max(
+                0.05,
+                axis === "x"
+                  ? 1 + (sign * (ev.clientX - sx) * kx) / (box.w / kx)
+                  : 1 + (sign * (ev.clientY - sy) * ky) / (box.h / ky),
+              );
+              write(axis === "x" ? { scaleX: bs.scaleX * f } : { scaleY: bs.scaleY * f });
+            };
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+          };
           const rotate = (e: React.PointerEvent) => {
             e.preventDefault(); e.stopPropagation();
             beginGesture();
@@ -665,14 +684,35 @@ export function Preview({
             const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
             window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
           };
-          const H = "absolute size-2.5 rounded-full border border-accent bg-accent cursor-nwse-resize";
+          const sq = "absolute size-3 rounded-[3px] border border-accent bg-white shadow-sm";
+          const ed = "absolute size-2.5 rounded-[2px] border border-accent bg-white shadow-sm";
+          const corners: [number, number, string][] = [
+            [-6, -6, "cursor-nwse-resize"],
+            [box.w - 6, -6, "cursor-nesw-resize"],
+            [-6, box.h - 6, "cursor-nesw-resize"],
+            [box.w - 6, box.h - 6, "cursor-nwse-resize"],
+          ];
+          const edges: [number, number, string, "x" | "y", 1 | -1][] = [
+            [box.w / 2 - 5, -5, "cursor-ns-resize", "y", -1],
+            [box.w - 5, box.h / 2 - 5, "cursor-ew-resize", "x", 1],
+            [box.w / 2 - 5, box.h - 5, "cursor-ns-resize", "y", 1],
+            [-5, box.h / 2 - 5, "cursor-ew-resize", "x", -1],
+          ];
           return (
-            <div className="pointer-events-none absolute border-2 border-accent" style={box}>
-              <div className="absolute -top-5 left-1/2 -translate-x-1/2 cursor-grab">
-                <div className="pointer-events-auto size-2.5 rounded-full border border-accent bg-accent" onPointerDown={rotate} />
+            <div className="pointer-events-none absolute border-[1.5px] border-accent" style={box}>
+              {/* Rotate knob on a stem — circle reads as rotation, not resize. */}
+              <div className="absolute -top-5 left-1/2 flex -translate-x-1/2 flex-col items-center">
+                <div
+                  className="pointer-events-auto size-3 cursor-grab rounded-full border-2 border-accent bg-background"
+                  onPointerDown={rotate}
+                />
+                <div className="h-2 w-px bg-accent" />
               </div>
-              {[[-5, -5], [box.w - 5, -5], [-5, box.h - 5], [box.w - 5, box.h - 5]].map(([x, y], i) => (
-                <div key={i} className={H} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={corner} />
+              {corners.map(([x, y, cur], i) => (
+                <div key={`c${i}`} className={`${sq} ${cur}`} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={corner} />
+              ))}
+              {edges.map(([x, y, cur, axis, sign], i) => (
+                <div key={`e${i}`} className={`${ed} ${cur}`} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={edge(axis, sign)} />
               ))}
             </div>
           );
