@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
@@ -21,6 +22,8 @@ import {
   updateEffect,
 } from "@/lib/timeline-engine";
 import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
+import { coverScale } from "@/lib/format-presets";
+import { api } from "@/lib/ipc";
 import { AudioTools } from "@/modules/editor/AudioTools";
 import { GraphicsInspector, GraphicsSection } from "@/modules/editor/GraphicsInspector";
 import type { Clip } from "@/lib/project-types";
@@ -37,6 +40,7 @@ export function Inspector() {
   const mutate = useEditor((s) => s.mutate);
   const activeVersionId = useEditor((s) => s.activeVersionId);
   const [inspTab, setInspTab] = useState<"video" | "audio" | "fx" | "anim" | "design">("video");
+  const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.listAssets() });
 
   if (!doc || selection.length !== 1) {
     return (
@@ -64,14 +68,19 @@ export function Inspector() {
   const clipTransform = clip.transform;
 
   const patchTransform = (k: keyof Clip["transform"], v: number) => {
+    patchTransformMany({ [k]: v });
+  };
+
+  /** Multi-field transform write — one mutation, one undo step. */
+  const patchTransformMany = (patch: Partial<Clip["transform"]>) => {
     if (version) {
       mutate((d) =>
         setVersionClipOverride(d, version.id, clipId, {
-          transform: { ...clipTransform, [k]: v },
+          transform: { ...clipTransform, ...patch },
         }),
       );
     } else {
-      mutate((d) => updateClip(d, clipId, { transform: { [k]: v } }));
+      mutate((d) => updateClip(d, clipId, { transform: patch }));
     }
   };
 
@@ -267,6 +276,46 @@ export function Inspector() {
                 "transform.opacity",
                 (v) => `${Math.round(v * 100)}%`,
               )}
+              {slider(
+                t("editor.propZoom"),
+                clipTransform.scaleX,
+                0.1, 4, 0.01,
+                (v) => patchTransformMany({ scaleX: v, scaleY: v }),
+                undefined,
+                (v) => `${Math.round(v * 100)}%`,
+              )}
+              {(() => {
+                const a = clip.mediaRef
+                  ? assetsQ.data?.find((x) => x.id === clip.mediaRef)
+                  : undefined;
+                if (!a?.width || !a.height) return null;
+                const cw = viewDoc.canvas.width;
+                const ch = viewDoc.canvas.height;
+                const fill = coverScale(a.width, a.height, cw, ch) /
+                  Math.min(cw / a.width, ch / a.height);
+                const btn =
+                  "flex-1 rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent";
+                return (
+                  <div className="flex gap-1 pt-0.5">
+                    <button
+                      className={btn}
+                      onClick={() =>
+                        patchTransformMany({ scaleX: 1, scaleY: 1, x: 0, y: 0 })
+                      }
+                    >
+                      {t("editor.fitClip")}
+                    </button>
+                    <button
+                      className={btn}
+                      onClick={() =>
+                        patchTransformMany({ scaleX: fill, scaleY: fill, x: 0, y: 0 })
+                      }
+                    >
+                      {t("editor.fillClip")}
+                    </button>
+                  </div>
+                );
+              })()}
             </section>
 
             {(clipText !== "" || clip.text != null) && (

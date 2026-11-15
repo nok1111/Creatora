@@ -332,15 +332,25 @@ export function Preview({
               : asset.filePath;
           const url = convertFileSrc(srcPath);
           return isImg ? (
-            <img key={clip.id} src={url} style={style} alt={asset.name} draggable={false} data-clip-id={clip.id} />
+            <img
+              key={clip.id}
+              src={url}
+              style={{ ...style, cursor: "move" }}
+              alt={asset.name}
+              draggable={false}
+              data-clip-id={clip.id}
+              onPointerDown={(e) => dragClip(clip.id, e)}
+            />
           ) : (
             <video
               key={clip.id}
               ref={(el) => syncEl(clip.id, el)}
               src={url}
-              style={style}
+              style={{ ...style, cursor: "move" }}
               preload="auto"
               playsInline
+              data-clip-id={clip.id}
+              onPointerDown={(e) => dragClip(clip.id, e)}
             />
           );
         })}
