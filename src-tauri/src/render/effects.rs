@@ -9,10 +9,8 @@
 //! | kind        | param   | ffmpeg                          | preview            |
 //! |-------------|---------|---------------------------------|--------------------|
 //! | brightness  | amount  | colorchannelmixer rr=gg=bb=1+a  | CSS brightness(1+a)|
-//! | exposure    | stops   | colorchannelmixer rr=gg=bb=2^s  | CSS brightness(2^s)|
 //! | contrast    | amount  | lutrgb affine pivot .5          | CSS contrast(1+a)  |
 //! | saturation  | amount  | colorchannelmixer W3C matrix    | CSS saturate(1+a)  |
-//! | temperature | amount  | colorchannelmixer diag matrix   | SVG feColorMatrix  |
 //! | blur        | radius  | gblur sigma=radius              | CSS blur(radius)   |
 //! | grayscale   | amount  | saturate matrix s=1-a           | CSS grayscale(a)   |
 //! | sepia       | amount  | interpolated sepia matrix       | CSS sepia(a)       |
@@ -21,6 +19,19 @@
 //! | sharpen     | amount  | unsharp 5:5:a                   | feConvolveMatrix   |
 //! | vignette    | amount  | vignette angle=PI/2-a*PI/3      | inset box-shadow   |
 //! | grain       | amount  | noise alls=40a, temporal        | SVG feTurbulence   |
+//! | channelSwap | amount  | mixer R↔B interpolated          | feColorMatrix      |
+//! | posterize   | levels  | lutrgb floor staircase          | feFunc* discrete   |
+//! | scanlines   | strength| geq darken every 3rd row        | gradient overlay   |
+//! | rgbShift    | shift   | rgbashift rh=+s bh=-s smear     | feOffset channels  |
+//! | edges       | amount  | edgedetect colormix             | feConvolveMatrix   |
+//! | filmNoir    | amount  | sat-matrix + contrast + vignette| css + box-shadow   |
+//! | dreamGlow   | amount  | gblur + lift + sat              | css trio           |
+//! | blockbuster | amount  | teal-orange mixer               | feColorMatrix      |
+//! | matteFade   | amount  | lutrgb lift + desat             | css trio           |
+//! | popColor    | amount  | sat matrix + contrast           | css pair           |
+//! | retro       | amount  | lift + sepia-mix + desat + grain| css + turbulence   |
+//! | crt         | amount  | rgbashift + desat + geq + vign  | css+svg+overlay    |
+//! | vhs         | amount  | full tape chain (6 frags)       | css+svg+overlay    |
 //!
 //! Unknown kinds are ignored (forward-compat), never fail the render.
 
@@ -59,80 +70,67 @@ fn with_enable(e: &Effect, frag: String) -> String {
     format!("{}:enable='{}'", frag, cond)
 }
 
-/// Ordered ffmpeg filter fragment for a clip's enabled effect stack.
+/// Ordered ffmpeg filter fragments for a clip's enabled effect stack.
+/// Compound looks emit several fragments — each gets its own `enable`
+/// window (a single trailing clause would only gate the last filter).
 /// Returns "" when nothing applies.
 pub fn effects_chain(effects: &[Effect]) -> String {
     let mut parts: Vec<String> = Vec::new();
     for e in effects.iter().filter(|e| e.enabled) {
-        let frag = match e.kind.as_str() {
+        let frags: Vec<String> = match e.kind.as_str() {
             "brightness" => {
                 let f = (1.0 + param(e, "amount", 0.0)).clamp(0.0, 8.0);
-                format!("colorchannelmixer=rr={f}:gg={f}:bb={f}")
-            }
-            "exposure" => {
-                let f = 2f64.powf(param(e, "stops", 0.0)).clamp(0.0, 16.0);
-                format!("colorchannelmixer=rr={f}:gg={f}:bb={f}")
+                vec![format!("colorchannelmixer=rr={f}:gg={f}:bb={f}")]
             }
             "contrast" => {
                 // CSS contrast(c) is an exact per-channel affine map:
-                // out = clip(in*c + 255*(0.5-0.5c), 0, 255). A two-point
-                // curves line collapses to identity for c≤2 — lutrgb is
-                // the direct equivalent (parity with CSS contrast(1+a)).
+                // out = clip(in*c + 255*(0.5-0.5c), 0, 255).
                 let c = (1.0 + param(e, "amount", 0.0)).clamp(0.0, 8.0);
                 let k = 255.0 * (0.5 - 0.5 * c);
-                format!("lutrgb=r='clip(val*{c}+{k},0,255)':g='clip(val*{c}+{k},0,255)':b='clip(val*{c}+{k},0,255)'")
+                vec![format!("lutrgb=r='clip(val*{c}+{k},0,255)':g='clip(val*{c}+{k},0,255)':b='clip(val*{c}+{k},0,255)'")]
             }
             "saturation" => {
                 let s = (1.0 + param(e, "amount", 0.0)).clamp(0.0, 8.0);
-                saturation_matrix(s)
-            }
-            "temperature" => {
-                // Canonical white-balance shift, amount ∈ [-1,1]:
-                // warm = red up, blue down; cool = inverse.
-                let t = param(e, "amount", 0.0).clamp(-1.0, 1.0);
-                let (r, g, b) = (1.0 + 0.15 * t, 1.0 - 0.05 * t, 1.0 - 0.15 * t);
-                format!("colorchannelmixer=rr={r}:gg={g}:bb={b}")
+                vec![saturation_matrix(s)]
             }
             "blur" => {
                 let px = param(e, "radius", 0.0).clamp(0.0, 500.0);
                 if px <= 0.0 {
                     continue;
                 }
-                format!("gblur=sigma={px}")
+                vec![format!("gblur=sigma={px}")]
             }
             "grayscale" => {
                 // CSS grayscale(a) === saturate(1-a) — same luminance matrix.
                 let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
-                saturation_matrix(1.0 - a)
+                vec![saturation_matrix(1.0 - a)]
             }
             "sepia" => {
-                // W3C sepia matrix interpolated identity→full by amount:
-                // m = I + a*(S − I), as colorchannelmixer coefficients.
+                // W3C sepia matrix interpolated identity→full by amount.
                 let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
                 let (rr, rg, rb) = (1.0 - 0.607 * a, 0.769 * a, 0.189 * a);
                 let (gr, gg, gb) = (0.349 * a, 1.0 - 0.314 * a, 0.168 * a);
                 let (br, bg, bb) = (0.272 * a, 0.534 * a, 1.0 - 0.869 * a);
-                format!(
+                vec![format!(
                     "colorchannelmixer=rr={rr}:rg={rg}:rb={rb}:gr={gr}:gg={gg}:gb={gb}:br={br}:bg={bg}:bb={bb}"
-                )
+                )]
             }
             "invert" => {
-                // CSS invert(a) is an exact per-channel affine map:
-                // out = val*(1-2a) + 255a — no clipping needed in 0..=1.
+                // CSS invert(a) is an exact per-channel affine map.
                 let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
                 let (m, k) = (1.0 - 2.0 * a, 255.0 * a);
-                format!("lutrgb=r='val*{m}+{k}':g='val*{m}+{k}':b='val*{m}+{k}'")
+                vec![format!("lutrgb=r='val*{m}+{k}':g='val*{m}+{k}':b='val*{m}+{k}'")]
             }
             "hueRotate" => {
                 let deg = param(e, "deg", 45.0).clamp(-360.0, 360.0);
-                format!("hue=h={deg}")
+                vec![format!("hue=h={deg}")]
             }
             "sharpen" => {
                 let a = param(e, "amount", 1.0).clamp(0.0, 3.0);
                 if a <= 0.0 {
                     continue;
                 }
-                format!("unsharp=5:5:{a}")
+                vec![format!("unsharp=5:5:{a}")]
             }
             "vignette" => {
                 // angle: PI/2 (subtle) → PI/6 (strong) as amount goes 0→1.
@@ -141,18 +139,152 @@ pub fn effects_chain(effects: &[Effect]) -> String {
                     continue;
                 }
                 let ang = std::f64::consts::FRAC_PI_2 - a * std::f64::consts::FRAC_PI_3;
-                format!("vignette=angle={ang}")
+                vec![format!("vignette=angle={ang}")]
             }
             "grain" => {
                 let a = param(e, "amount", 0.35).clamp(0.0, 1.0);
                 if a <= 0.0 {
                     continue;
                 }
-                format!("noise=alls={}:allf=t+u", (a * 40.0).round() as i32)
+                vec![format!("noise=alls={}:allf=t+u", (a * 40.0).round() as i32)]
+            }
+            "channelSwap" => {
+                // R↔B swap interpolated identity→full (aerochrome vibe).
+                let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
+                let i = 1.0 - a;
+                vec![format!(
+                    "colorchannelmixer=rr={i}:rg=0:rb={a}:gr=0:gg=1:gb=0:br={a}:bg=0:bb={i}"
+                )]
+            }
+            "posterize" => {
+                // Staircase quantize — same steps as the SVG discrete table.
+                let l = param(e, "levels", 8.0).clamp(2.0, 64.0);
+                let step = 255.0 / (l - 1.0);
+                vec![format!(
+                    "lutrgb=r='floor(val/{step}+0.5)*{step}':g='floor(val/{step}+0.5)*{step}':b='floor(val/{step}+0.5)*{step}'"
+                )]
+            }
+            "scanlines" => {
+                // Darken every 3rd row — the CRT/VHS signature.
+                let a = param(e, "strength", 0.4).clamp(0.0, 1.0);
+                if a <= 0.0 {
+                    continue;
+                }
+                let f = format!("(1-{a}*eq(mod(Y,3),0))");
+                vec![format!(
+                    "geq=r='r(X,Y)*{f}':g='g(X,Y)*{f}':b='b(X,Y)*{f}'"
+                )]
+            }
+            "rgbShift" => {
+                let s = param(e, "shift", 6.0).clamp(0.0, 100.0);
+                if s <= 0.0 {
+                    continue;
+                }
+                vec![format!("rgbashift=rh={s}:bh={}:edge=smear", -s)]
+            }
+            "edges" => {
+                let a = param(e, "amount", 0.5).clamp(0.0, 1.0);
+                vec![format!(
+                    "edgedetect=low={}:high={}:mode=colormix",
+                    0.04 + 0.12 * a,
+                    0.15 + 0.35 * a
+                )]
+            }
+            "filmNoir" => {
+                let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
+                vec![
+                    saturation_matrix(1.0 - a),
+                    "lutrgb=r='clip(val*1.35+-44.625,0,255)':g='clip(val*1.35+-44.625,0,255)':b='clip(val*1.35+-44.625,0,255)'".to_string(),
+                    format!("vignette=angle={}", std::f64::consts::FRAC_PI_2 - 0.5 * std::f64::consts::FRAC_PI_3),
+                ]
+            }
+            "dreamGlow" => {
+                // Orton-lite: soft blur + lifted luminance + slight sat.
+                let a = param(e, "amount", 0.5).clamp(0.0, 1.0);
+                if a <= 0.0 {
+                    continue;
+                }
+                let lift = 1.0 + 0.24 * a;
+                vec![
+                    format!("gblur=sigma={:.2}", a * 5.0),
+                    format!("colorchannelmixer=rr={lift}:gg={lift}:bb={lift}"),
+                    saturation_matrix(1.0 + 0.2 * a),
+                ]
+            }
+            "blockbuster" => {
+                // Teal shadows / orange highlights — same matrix as preview.
+                let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
+                let l = |from: f64, to: f64| from + (to - from) * a;
+                vec![format!(
+                    "colorchannelmixer=rr={}:rg=0:rb={}:gr={}:gg=1:gb=0:br={}:bg={}:bb={}",
+                    l(1.0, 1.15), l(0.0, -0.08), l(0.0, -0.02),
+                    l(0.0, 0.08), l(0.0, 0.02), l(1.0, 0.92)
+                )]
+            }
+            "matteFade" => {
+                // Lifted blacks + gentle desat.
+                let a = param(e, "amount", 0.7).clamp(0.0, 1.0);
+                let c = 1.0 - 0.15 * a;
+                let k = 255.0 * 0.12 * a;
+                vec![
+                    format!("lutrgb=r='clip(val*{c}+{k},0,255)':g='clip(val*{c}+{k},0,255)':b='clip(val*{c}+{k},0,255)'"),
+                    saturation_matrix(1.0 - 0.2 * a),
+                ]
+            }
+            "popColor" => {
+                let a = param(e, "amount", 0.5).clamp(0.0, 1.0);
+                let c = 1.0 + 0.24 * a;
+                let k = 255.0 * (0.5 - 0.5 * c);
+                vec![
+                    saturation_matrix(1.0 + 1.1 * a),
+                    format!("lutrgb=r='clip(val*{c}+{k},0,255)':g='clip(val*{c}+{k},0,255)':b='clip(val*{c}+{k},0,255)'"),
+                ]
+            }
+            "retro" => {
+                // Lift + warm sepia mix + desat + light grain.
+                let a = param(e, "amount", 0.8).clamp(0.0, 1.0);
+                let (rr, rg, rb) = (1.0 - 0.607 * 0.35 * a, 0.769 * 0.35 * a, 0.189 * 0.35 * a);
+                let (gr, gg, gb) = (0.349 * 0.35 * a, 1.0 - 0.314 * 0.35 * a, 0.168 * 0.35 * a);
+                let (br, bg, bb) = (0.272 * 0.35 * a, 0.534 * 0.35 * a, 1.0 - 0.869 * 0.35 * a);
+                vec![
+                    "lutrgb=r='clip(val*0.95+14,0,255)':g='clip(val*0.95+14,0,255)':b='clip(val*0.95+14,0,255)'".to_string(),
+                    format!("colorchannelmixer=rr={rr}:rg={rg}:rb={rb}:gr={gr}:gg={gg}:gb={gb}:br={br}:bg={bg}:bb={bb}"),
+                    saturation_matrix(1.0 - 0.25 * a),
+                    format!("noise=alls={}:allf=t+u", (a * 14.0).round() as i32),
+                ]
+            }
+            "crt" => {
+                // RGB bleed + scanlines + desat — monitor phospors.
+                let a = param(e, "amount", 0.6).clamp(0.0, 1.0);
+                let s = 2.5 * a;
+                let f = format!("(1-{}*eq(mod(Y,3),0))", 0.5 * a);
+                vec![
+                    format!("rgbashift=rh={s}:bh={}:edge=smear", -s),
+                    saturation_matrix(1.0 - 0.25 * a),
+                    format!("geq=r='r(X,Y)*{f}':g='g(X,Y)*{f}':b='b(X,Y)*{f}'"),
+                    format!("vignette=angle={}", std::f64::consts::FRAC_PI_2 - 0.45 * a * std::f64::consts::FRAC_PI_3),
+                ]
+            }
+            "vhs" => {
+                // The full tape: RGB bleed + lift+sepia+desat + grain + lines.
+                let a = param(e, "amount", 0.7).clamp(0.0, 1.0);
+                let s = 4.0 * a;
+                let f = format!("(1-{}*eq(mod(Y,3),0))", 0.4 * a);
+                let (rr, rg, rb) = (1.0 - 0.607 * 0.3 * a, 0.769 * 0.3 * a, 0.189 * 0.3 * a);
+                let (gr, gg, gb) = (0.349 * 0.3 * a, 1.0 - 0.314 * 0.3 * a, 0.168 * 0.3 * a);
+                let (br, bg, bb) = (0.272 * 0.3 * a, 0.534 * 0.3 * a, 1.0 - 0.869 * 0.3 * a);
+                vec![
+                    format!("rgbashift=rh={s}:bh={}:edge=smear", -s),
+                    "lutrgb=r='clip(val*0.95+16,0,255)':g='clip(val*0.95+16,0,255)':b='clip(val*0.95+16,0,255)'".to_string(),
+                    format!("colorchannelmixer=rr={rr}:rg={rg}:rb={rb}:gr={gr}:gg={gg}:gb={gb}:br={br}:bg={bg}:bb={bb}"),
+                    saturation_matrix(1.0 - 0.35 * a),
+                    format!("noise=alls={}:allf=t+u", (a * 16.0).round() as i32),
+                    format!("geq=r='r(X,Y)*{f}':g='g(X,Y)*{f}':b='b(X,Y)*{f}'"),
+                ]
             }
             _ => continue,
         };
-        parts.push(with_enable(e, frag));
+        parts.extend(frags.into_iter().map(|f| with_enable(e, f)));
     }
     parts.join(",")
 }

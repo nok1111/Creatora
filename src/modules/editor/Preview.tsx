@@ -14,7 +14,7 @@ import {
   transitionAlpha,
   updateClip,
 } from "@/lib/timeline-engine";
-import { boxShadowFor, cssFilterFor, effectsActiveAt, evalKeyframes, svgFilterFragmentFor } from "@/lib/effects";
+import { boxShadowFor, cssFilterFor, effectsActiveAt, evalKeyframes, overlayFor, svgFilterFragmentFor } from "@/lib/effects";
 import { resumeAudio } from "@/services/audio-preview";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
@@ -342,27 +342,49 @@ export function Preview({
               ? asset.proxyPath
               : asset.filePath;
           const url = convertFileSrc(srcPath);
+          // Overlay layers (scanlines…) composite above the media in a
+          // sibling div — keeps pointer/drag handlers on the media itself.
+          const overlay = overlayFor(fxAt);
+          const overlayEl = overlay ? (
+            <div
+              key={`${clip.id}-fxov`}
+              className="pointer-events-none absolute"
+              style={{
+                left: style.left,
+                top: style.top,
+                width: style.width,
+                height: style.height,
+                background: overlay,
+              }}
+            />
+          ) : null;
           return isImg ? (
-            <img
-              key={clip.id}
-              src={url}
-              style={{ ...style, cursor: "move" }}
-              alt={asset.name}
-              draggable={false}
-              data-clip-id={clip.id}
-              onPointerDown={(e) => dragClip(clip.id, e)}
-            />
+            <>
+              <img
+                key={clip.id}
+                src={url}
+                style={{ ...style, cursor: "move" }}
+                alt={asset.name}
+                draggable={false}
+                data-clip-id={clip.id}
+                onPointerDown={(e) => dragClip(clip.id, e)}
+              />
+              {overlayEl}
+            </>
           ) : (
-            <video
-              key={clip.id}
-              ref={(el) => syncEl(clip.id, el)}
-              src={url}
-              style={{ ...style, cursor: "move" }}
-              preload="auto"
-              playsInline
-              data-clip-id={clip.id}
-              onPointerDown={(e) => dragClip(clip.id, e)}
-            />
+            <>
+              <video
+                key={clip.id}
+                ref={(el) => syncEl(clip.id, el)}
+                src={url}
+                style={{ ...style, cursor: "move" }}
+                preload="auto"
+                playsInline
+                data-clip-id={clip.id}
+                onPointerDown={(e) => dragClip(clip.id, e)}
+              />
+              {overlayEl}
+            </>
           );
         })}
 

@@ -22,6 +22,7 @@ import {
   cssFilterFor,
   svgFilterFragmentFor,
   boxShadowFor,
+  overlayFor,
   evalKeyframes,
 } from "@/lib/effects";
 import {
@@ -119,7 +120,11 @@ describe("fx catalog audit", () => {
       );
       const fx = { id: "e", type: def.type, enabled: true, params } as Effect;
       const out =
-        cssFilterFor([fx]) || svgFilterFragmentFor([fx]) || boxShadowFor([fx]) || "";
+        cssFilterFor([fx]) ||
+        svgFilterFragmentFor([fx]) ||
+        boxShadowFor([fx]) ||
+        overlayFor([fx]) ||
+        "";
       expect(out.length, `'${def.type}' produces no preview at drop params`).toBeGreaterThan(0);
       const neutral =
         /brightness\(1(\.0*)?\)|contrast\(1(\.0*)?\)|saturate\(1(\.0*)?\)|blur\(0(\.0*)?px\)|grayscale\(0(\.0*)?\)|sepia\(0(\.0*)?\)|invert\(0(\.0*)?\)|hue-rotate\(0(\.0*)?deg\)/;
