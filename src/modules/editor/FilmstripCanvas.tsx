@@ -92,9 +92,12 @@ export function FilmstripCanvas({
   return (
     <canvas
       ref={canvasRef}
-      width={Math.max(2, Math.round(widthPx))}
+      // Backing store capped — the strip has FRAMES cells, so huge clips
+      // (multi-minute sources) only need a few thousand px of resolution;
+      // uncapped it would exceed the browser canvas limit and waste RAM.
+      width={Math.max(2, Math.min(8192, Math.round(widthPx)))}
       height={Math.max(2, Math.round(heightPx))}
-      className="pointer-events-none absolute inset-0 h-full w-full opacity-40"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-60"
     />
   );
 }

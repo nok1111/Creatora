@@ -73,7 +73,7 @@ export function WaveformCanvas({
   return (
     <canvas
       ref={canvasRef}
-      width={Math.max(2, Math.round(widthPx))}
+      width={Math.max(2, Math.min(8192, Math.round(widthPx)))}
       height={Math.max(2, Math.round(heightPx))}
       className="pointer-events-none absolute inset-0 h-full w-full opacity-80"
     />
