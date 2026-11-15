@@ -195,6 +195,7 @@ export const en = {
     fxNeedsAdjacent: "Clips must be adjacent for a merge effect",
     fxApplied: "Applied {{name}}",
     fxBadge: "Effects / animations on this clip",
+    fxEmpty: "No effects — drop one here, or select the clip and use the Effects tab",
     removeEffects: "Remove effects",
     removeAnimation: "Remove animation",
     removeTransitions: "Remove transitions",

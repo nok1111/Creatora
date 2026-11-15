@@ -82,6 +82,13 @@ const CLIP_TONES: Record<TrackKind, { bg: string; border: string }> = {
 };
 
 const TRACK_H = 44;
+/** Height of each effect strip row below the clip area of a lane. */
+const FX_ROW_H = 10;
+const BAR_COLORS = ["bg-violet-400", "bg-cyan-400", "bg-pink-400", "bg-lime-400"];
+/** Lanes grow one fx row per stacked effect (at least one — every clip
+    gets a visible fx slot to drop onto). */
+const laneHeight = (track: Track) =>
+  TRACK_H + Math.max(1, ...track.clips.map((c) => c.effects.length)) * FX_ROW_H;
 /** dropHint.trackId sentinel for the "new track" zone (not a real lane). */
 const NEW_TRACK = "__new_track__";
 const HEADER_W = 176;
@@ -753,7 +760,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 className={`flex items-center gap-1 border-b border-border/50 px-2 ${
                   track.locked ? "opacity-60" : ""
                 }`}
-                style={{ height: TRACK_H }}
+                style={{ height: laneHeight(track) }}
               >
                 {editingTrack === track.id ? (
                   <input
@@ -856,7 +863,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   moveLane?.trackId === track.id &&
                     (moveLane.valid ? "bg-primary/15" : "bg-destructive/15"),
                 )}
-                style={{ height: TRACK_H, width: lanesW }}
+                style={{ height: laneHeight(track), width: lanesW }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   const lane = e.currentTarget as HTMLElement;
@@ -1005,28 +1012,55 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "right");
                         }}
                       />
-                      {/* Effect windows — one bar per effect at the clip's
-                          bottom edge; drag to move, edges to stretch. */}
-                      {clip.effects.map((fx, i) => {
-                        const inMs = fx.inMs ?? 0;
-                        const outMs = fx.outMs ?? clip.durationMs;
-                        const BAR_COLORS = ["bg-violet-400", "bg-cyan-400", "bg-pink-400", "bg-lime-400"];
-                        return (
-                          <div
-                            key={fx.id}
-                            className={`absolute h-[5px] rounded-sm ${BAR_COLORS[i % BAR_COLORS.length]} ${fx.enabled ? "" : "opacity-40"}`}
-                            style={{
-                              left: msToPx(inMs),
-                              width: Math.max(4, msToPx(outMs - inMs)),
-                              bottom: 1 + i * 6,
-                            }}
-                            title={`${fx.type} · ${(inMs / 1000).toFixed(1)}–${(outMs / 1000).toFixed(1)}s`}
-                            onPointerDown={(e) => onFxBarPointerDown(e, track, clip, fx)}
-                          />
-                        );
-                      })}
                     </div>
                   );
+                })}
+                {/* Effect window strips — one row per effect in a sub-lane
+                    below the clips. Every clip shows at least one empty
+                    slot so there's always a place to drop/configure. */}
+                {track.clips.map((clip) => {
+                  const slots = Math.max(1, clip.effects.length);
+                  return Array.from({ length: slots }, (_, i) => {
+                    const fx = clip.effects[i];
+                    const top = TRACK_H - 2 + i * FX_ROW_H;
+                    if (!fx) {
+                      return (
+                        <div
+                          key={`${clip.id}-fx-empty`}
+                          className="absolute cursor-pointer rounded-sm border border-dashed border-white/10 bg-white/[0.03] hover:border-white/25"
+                          title={t("editor.fxEmpty")}
+                          style={{
+                            left: msToPx(clip.startMs),
+                            width: Math.max(6, msToPx(clip.durationMs)),
+                            top: top + 1,
+                            height: FX_ROW_H - 3,
+                          }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            select([clip.id]);
+                          }}
+                        />
+                      );
+                    }
+                    const inMs = fx.inMs ?? 0;
+                    const outMs = fx.outMs ?? clip.durationMs;
+                    return (
+                      <div
+                        key={fx.id}
+                        className={`absolute flex items-center rounded-sm px-1 text-[8px] font-medium leading-none text-black/80 ${BAR_COLORS[i % BAR_COLORS.length]} ${fx.enabled ? "" : "opacity-40"} ${track.locked ? "cursor-not-allowed" : "cursor-grab"}`}
+                        style={{
+                          left: msToPx(clip.startMs + inMs),
+                          width: Math.max(6, msToPx(outMs - inMs)),
+                          top,
+                          height: FX_ROW_H - 2,
+                        }}
+                        title={`${fx.type} · ${(inMs / 1000).toFixed(1)}–${(outMs / 1000).toFixed(1)}s`}
+                        onPointerDown={(e) => onFxBarPointerDown(e, track, clip, fx)}
+                      >
+                        <span className="truncate">{fx.type}</span>
+                      </div>
+                    );
+                  });
                 })}
                 {/* Transition markers — blend badge centered on each junction. */}
                 {track.transitions.map((tr) => {

@@ -198,6 +198,7 @@ export const es: typeof en = {
     fxNeedsAdjacent: "Los clips deben estar adyacentes para un efecto de unión",
     fxApplied: "{{name}} aplicado",
     fxBadge: "Efectos / animaciones en este clip",
+    fxEmpty: "Sin efectos — arrastra uno aquí, o selecciona el clip y usa la pestaña Efectos",
     removeEffects: "Quitar efectos",
     removeAnimation: "Quitar animación",
     removeTransitions: "Quitar transiciones",
