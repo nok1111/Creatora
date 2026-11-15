@@ -744,6 +744,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 {track.clips.map((clip) => {
                   const sel = selection.includes(clip.id);
                   const asset = clip.mediaRef ? assets.get(clip.mediaRef) : undefined;
+                  // Still images import as kind "video" but have no
+                  // duration — only timed sources get a filmstrip.
+                  const isVideo = asset?.kind === "video" && asset.durationMs != null;
                   const thumb = asset?.thumbnailPath
                     ? convertFileSrc(asset.thumbnailPath)
                     : null;
@@ -754,7 +757,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       className={`group absolute top-1 flex items-stretch overflow-hidden rounded border text-[11px] select-none ${tone.bg} ${
                         sel
                           ? "border-primary ring-1 ring-primary/60 z-20"
-                          : `${tone.border} hover:brightness-125`
+                          : `${tone.border} hover:brightness-110`
                       } ${track.locked ? "cursor-not-allowed opacity-70" : "cursor-grab"}`}
                       style={{
                         left: msToPx(clip.startMs),
@@ -771,19 +774,16 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "left");
                         }}
                       />
-                      {thumb && (
+                      {thumb && !isVideo && (
                         <div
                           className="pointer-events-none absolute inset-y-0 right-2 left-2 opacity-25"
                           style={{
                             backgroundImage: `url("${thumb}")`,
-                            backgroundSize:
-                              asset?.kind === "video" ? "auto 100%" : "cover",
-                            backgroundRepeat:
-                              asset?.kind === "video" ? "repeat-x" : "no-repeat",
+                            backgroundSize: "cover",
                           }}
                         />
                       )}
-                      {asset?.kind === "video" && clip.mediaRef && (
+                      {isVideo && clip.mediaRef && (
                         <FilmstripCanvas
                           srcPath={
                             doc.mediaRefs.find((m) => m.assetId === clip.mediaRef)?.path ?? ""
