@@ -40,6 +40,7 @@ import {
   removeEffect,
   removeTrack,
   removeTransition,
+  setTransitionDuration,
   renameTrack,
   setTrackFlag,
   snapPoints,
@@ -418,6 +419,45 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     window.addEventListener("pointerup", onUp);
   };
 
+  /** Drag a transition strip: edges stretch the overlap, body slides the
+   *  junction — all resolve to setTransitionDuration (clip B realigns). */
+  const onTransitionBarPointerDown = (
+    e: React.PointerEvent,
+    track: Track,
+    tr: Transition,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (track.locked) return;
+    const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    void lane;
+    const edge =
+      e.clientX - rect.left < 8 ? "left" : rect.right - e.clientX < 8 ? "right" : "move";
+    const d0 = tr.durationMs;
+    const startX = e.clientX;
+    const MIN = 50;
+    beginGesture();
+    document.body.style.cursor = edge === "move" ? "grabbing" : "ew-resize";
+    const onMove = (ev: PointerEvent) => {
+      const dms = pxToMs(ev.clientX - startX);
+      // Left edge & body slide the junction (right = shorter overlap);
+      // right edge grows/shrinks into clip A's tail.
+      const nd = edge === "right" ? d0 + dms : d0 - dms;
+      mutateInGesture((d) =>
+        setTransitionDuration(d, track.id, tr.id, Math.max(MIN, nd)),
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      endGesture();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   const onRulerPointerDown = (e: React.PointerEvent) => {
     const el = e.currentTarget as HTMLElement;
     const rect = el.getBoundingClientRect();
@@ -712,7 +752,8 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const clipStripRows = (clip: Clip) =>
     clip.effects.length + clipAnimGroups(clip).length;
   const trackFxRows = (track: Track) =>
-    Math.max(0, ...track.clips.map(clipStripRows));
+    Math.max(0, ...track.clips.map(clipStripRows)) +
+    (track.transitions.length ? 1 : 0);
 
   // --- render ---
 
@@ -1172,6 +1213,44 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       </div>
                     );
                   });
+                })}
+                {/* Transition strips — one shared sub-lane row at the
+                    bottom; edges resize, body slides the junction,
+                    right-click removes. */}
+                {track.transitions.map((tr) => {
+                  const a = track.clips.find((c) => c.id === tr.clipA);
+                  const b = track.clips.find((c) => c.id === tr.clipB);
+                  if (!a || !b) return null;
+                  const top =
+                    TRACK_H - 2 +
+                    Math.max(0, ...track.clips.map(clipStripRows)) * FX_ROW_H;
+                  const start = b.startMs;
+                  const w = Math.max(
+                    12,
+                    msToPx(Math.min(tr.durationMs, a.startMs + a.durationMs - start)),
+                  );
+                  return (
+                    <div
+                      key={`${tr.id}-strip`}
+                      className={`absolute flex items-center rounded-sm bg-violet-500/90 px-1 text-[8px] font-medium leading-none text-white ${track.locked ? "cursor-not-allowed" : "cursor-ew-resize"}`}
+                      style={{
+                        left: msToPx(start),
+                        width: w,
+                        top,
+                        height: FX_ROW_H - 2,
+                      }}
+                      title={`${tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
+                      onPointerDown={(e) => onTransitionBarPointerDown(e, track, tr)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCtxMenu({ x: e.clientX, y: e.clientY, track, clip: b, transition: tr });
+                      }}
+                    >
+                      <Blend className="mr-0.5 size-2.5 shrink-0" />
+                      <span className="truncate">{tr.type}</span>
+                    </div>
+                  );
                 })}
                 {/* Transition markers — blend badge centered on each junction. */}
                 {track.transitions.map((tr) => {
