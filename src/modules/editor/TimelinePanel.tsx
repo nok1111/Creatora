@@ -52,7 +52,8 @@ import {
   AnchoredMenuSeparator,
 } from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
-import type { Clip, Track, ProjectDoc } from "@/lib/project-types";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import type { Clip, Track, TrackKind, ProjectDoc } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
 /**
@@ -60,6 +61,15 @@ import type { AssetSummary } from "@/lib/media-types";
  * All edits funnel through timeline-engine ops → useEditor.mutate, so every
  * interaction is undoable and coalesced per gesture.
  */
+
+/** Soft per-kind clip tint so lanes read at a glance. */
+const CLIP_TONES: Record<TrackKind, { bg: string; border: string }> = {
+  video: { bg: "bg-sky-500/20", border: "border-sky-400/50" },
+  audio: { bg: "bg-red-400/20", border: "border-red-400/50" },
+  image: { bg: "bg-emerald-400/15", border: "border-emerald-400/50" },
+  text: { bg: "bg-white/15", border: "border-white/40" },
+  graphics: { bg: "bg-violet-400/15", border: "border-violet-400/50" },
+};
 
 const TRACK_H = 44;
 /** dropHint.trackId sentinel for the "new track" zone (not a real lane). */
@@ -732,13 +742,18 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 )}
                 {track.clips.map((clip) => {
                   const sel = selection.includes(clip.id);
+                  const asset = clip.mediaRef ? assets.get(clip.mediaRef) : undefined;
+                  const thumb = asset?.thumbnailPath
+                    ? convertFileSrc(asset.thumbnailPath)
+                    : null;
+                  const tone = CLIP_TONES[track.kind];
                   return (
                     <div
                       key={clip.id}
-                      className={`group absolute top-1 flex items-stretch overflow-hidden rounded border text-[11px] select-none ${
+                      className={`group absolute top-1 flex items-stretch overflow-hidden rounded border text-[11px] select-none ${tone.bg} ${
                         sel
-                          ? "border-primary bg-primary/30 ring-1 ring-primary/60 z-20"
-                          : "border-border bg-secondary/60 hover:bg-secondary/80"
+                          ? "border-primary ring-1 ring-primary/60 z-20"
+                          : `${tone.border} hover:brightness-125`
                       } ${track.locked ? "cursor-not-allowed opacity-70" : "cursor-grab"}`}
                       style={{
                         left: msToPx(clip.startMs),
@@ -755,6 +770,16 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "left");
                         }}
                       />
+                      {thumb && (
+                        <div
+                          className="pointer-events-none absolute inset-y-0 right-2 left-2 opacity-40"
+                          style={{
+                            backgroundImage: `url("${thumb}")`,
+                            backgroundSize: "auto 100%",
+                            backgroundRepeat: "repeat-x",
+                          }}
+                        />
+                      )}
                       {clip.mediaRef &&
                         (track.kind === "audio" ||
                           (track.kind === "video" &&
@@ -771,6 +796,12 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       )}
                       <div className="relative flex flex-1 items-center gap-1 truncate px-1">
                         {track.locked && <Lock className="size-3 shrink-0" />}
+                        {clip.shape && (
+                          <span
+                            className="size-3 shrink-0 rounded-sm border border-white/30"
+                            style={{ background: clip.shape.fill }}
+                          />
+                        )}
                         <span className="truncate">
                           {(clip.mediaRef && assets.get(clip.mediaRef)?.name) ?? t("editor.clipFallback")} ·{" "}
                           {(clip.durationMs / 1000).toFixed(1)}s
