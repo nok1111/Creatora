@@ -185,21 +185,21 @@ export function Inspector() {
             )}
             {num("X", clipTransform.x, (v) => patchTransform("x", v), "transform.x")}
             {num("Y", clipTransform.y, (v) => patchTransform("y", v), "transform.y")}
-            {num("Scale X", clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
-            {num("Scale Y", clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
-            {num("Rotate°", clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
-            {num("Opacity", clipTransform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
+            {num(t("editor.propScaleX"), clipTransform.scaleX, (v) => patchTransform("scaleX", v), "transform.scaleX", 0.05)}
+            {num(t("editor.propScaleY"), clipTransform.scaleY, (v) => patchTransform("scaleY", v), "transform.scaleY", 0.05)}
+            {num(t("editor.propRotate"), clipTransform.rotationDeg, (v) => patchTransform("rotationDeg", v), "transform.rotationDeg")}
+            {num(t("editor.propOpacity"), clipTransform.opacity, (v) => patchTransform("opacity", Math.min(1, Math.max(0, v))), "transform.opacity", 0.05)}
           </section>
 
           <section className="space-y-1.5">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
               {t("editor.sectionAudio")}
             </div>
-            {num("Volume", clip.volume, (v) => mutate((d) => updateClip(d, clipId, { volume: Math.max(0, Math.min(8, v)) })), "volume", 0.05)}
-            {num("Speed", clip.speed, (v) => mutate((d) => updateClip(d, clipId, { speed: Math.max(0.1, Math.min(8, v)) })), undefined, 0.1)}
-            {num("Pan", clip.pan ?? 0, (v) => mutate((d) => updateClip(d, clipId, { pan: Math.max(-1, Math.min(1, v)) })), undefined, 0.05)}
-            {num("Fade in ms", clip.fadeInMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v) })), undefined, 50)}
-            {num("Fade out ms", clip.fadeOutMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v) })), undefined, 50)}
+            {num(t("editor.propVolume"), clip.volume, (v) => mutate((d) => updateClip(d, clipId, { volume: Math.max(0, Math.min(8, v)) })), "volume", 0.05)}
+            {num(t("editor.propSpeed"), clip.speed, (v) => mutate((d) => updateClip(d, clipId, { speed: Math.max(0.1, Math.min(8, v)) })), undefined, 0.1)}
+            {num(t("editor.propPan"), clip.pan ?? 0, (v) => mutate((d) => updateClip(d, clipId, { pan: Math.max(-1, Math.min(1, v)) })), undefined, 0.05)}
+            {num(t("editor.propFadeIn"), clip.fadeInMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeInMs: Math.max(0, v) })), undefined, 50)}
+            {num(t("editor.propFadeOut"), clip.fadeOutMs ?? 0, (v) => mutate((d) => updateClip(d, clipId, { fadeOutMs: Math.max(0, v) })), undefined, 50)}
             <AudioTools clipId={clipId} trackId={track.id} />
           </section>
 
@@ -328,7 +328,7 @@ export function Inspector() {
           />
           {clipStyle && (
             <div className="space-y-1">
-              {num("Font px", clipStyle.fontSizePx, (v) => patchStyle("fontSizePx", Math.max(1, v)))}
+              {num(t("editor.propFontPx"), clipStyle.fontSizePx, (v) => patchStyle("fontSizePx", Math.max(1, v)))}
               <div className="flex items-center gap-1">
                 <span className="w-14 text-[10px] text-muted-foreground">Color</span>
                 <input type="color" className="h-5 w-10" value={clipStyle.color.slice(0, 7)}
@@ -382,7 +382,7 @@ export function Inspector() {
                   </>
                 )}
               </div>
-              {num("Line spc", clipStyle.lineSpacingPx ?? 0, (v) => patchStyle("lineSpacingPx", v))}
+              {num(t("gfxI.lineSpacing"), clipStyle.lineSpacingPx ?? 0, (v) => patchStyle("lineSpacingPx", v))}
             </div>
           )}
         </section>

@@ -419,7 +419,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
         </button>
         <button
           className="rounded p-1 hover:bg-accent"
-          title={activeVersionId ? "Hide in this version" : "Hide clip"}
+          title={activeVersionId ? t("editor.hideInVersion") : t("editor.hideClip")}
           onClick={() =>
             mutate((d) => {
               if (activeVersionId) {
@@ -536,10 +536,10 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
             {locked ? <Link2 className="size-3.5" /> : <Link2Off className="size-3.5" />}
           </button>
         </div>
-        <SliderRow label="Scale X" value={clip.transform.scaleX} min={0} max={4} step={0.01} onPatch={(v, tr) => patchScale("scaleX", v, tr)} kfPath="transform.scaleX" kfAt={keyAt} onToggleKey={toggleKey} format={(v) => v.toFixed(2)} />
-        <SliderRow label="Scale Y" value={clip.transform.scaleY} min={0} max={4} step={0.01} onPatch={(v, tr) => patchScale("scaleY", v, tr)} kfPath="transform.scaleY" kfAt={keyAt} onToggleKey={toggleKey} format={(v) => v.toFixed(2)} />
-        <SliderRow label="Rotate°" value={clip.transform.rotationDeg} min={-180} max={180} onPatch={(v, tr) => patchTransform("rotationDeg", v, tr)} kfPath="transform.rotationDeg" kfAt={keyAt} onToggleKey={toggleKey} />
-        <SliderRow label="Opacity" value={clip.transform.opacity} min={0} max={1} step={0.01} onPatch={(v, tr) => patchTransform("opacity", Math.min(1, Math.max(0, v)), tr)} kfPath="transform.opacity" kfAt={keyAt} onToggleKey={toggleKey} format={(v) => `${Math.round(v * 100)}%`} />
+        <SliderRow label={t("editor.propScaleX")} value={clip.transform.scaleX} min={0} max={4} step={0.01} onPatch={(v, tr) => patchScale("scaleX", v, tr)} kfPath="transform.scaleX" kfAt={keyAt} onToggleKey={toggleKey} format={(v) => v.toFixed(2)} />
+        <SliderRow label={t("editor.propScaleY")} value={clip.transform.scaleY} min={0} max={4} step={0.01} onPatch={(v, tr) => patchScale("scaleY", v, tr)} kfPath="transform.scaleY" kfAt={keyAt} onToggleKey={toggleKey} format={(v) => v.toFixed(2)} />
+        <SliderRow label={t("editor.propRotate")} value={clip.transform.rotationDeg} min={-180} max={180} onPatch={(v, tr) => patchTransform("rotationDeg", v, tr)} kfPath="transform.rotationDeg" kfAt={keyAt} onToggleKey={toggleKey} />
+        <SliderRow label={t("editor.propOpacity")} value={clip.transform.opacity} min={0} max={1} step={0.01} onPatch={(v, tr) => patchTransform("opacity", Math.min(1, Math.max(0, v)), tr)} kfPath="transform.opacity" kfAt={keyAt} onToggleKey={toggleKey} format={(v) => `${Math.round(v * 100)}%`} />
         <div className="flex gap-0.5 pt-0.5">
           {(
             [
@@ -979,7 +979,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
           </button>
           <button
             className="rounded p-0.5 hover:bg-accent"
-            title={activeVersionId ? "Hide in this version" : "Hide clip"}
+            title={activeVersionId ? t("editor.hideInVersion") : t("editor.hideClip")}
             onClick={() =>
               mutate((d) => {
                 if (activeVersionId) {
