@@ -21,6 +21,11 @@ export interface EffectDef {
   toCss?: (params: Record<string, number>) => string;
   /** 4×5 matrix (row-major) for SVG feColorMatrix — used for temperature. */
   toMatrix?: (params: Record<string, number>) => number[];
+  /** Raw SVG filter primitives (feConvolveMatrix, feTurbulence chains, …)
+   *  for effects CSS can't express. */
+  toSvg?: (params: Record<string, number>) => string;
+  /** Non-filter preview style (vignette → inset box-shadow approx). */
+  toBoxShadow?: (params: Record<string, number>) => string;
 }
 
 const p = (params: Record<string, number>, k: string, def = 0) => params[k] ?? def;
@@ -67,6 +72,67 @@ export const EFFECTS: EffectDef[] = [
     label: "Blur",
     params: { radius: { def: 0, min: 0, max: 100, step: 0.5 } },
     toCss: (ps) => `blur(${p(ps, "radius").toFixed(2)}px)`,
+  },
+  {
+    type: "grayscale",
+    label: "Grayscale",
+    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
+    // CSS grayscale(a) === saturate(1-a) — same luminance matrix family.
+    toCss: (ps) => `grayscale(${p(ps, "amount", 1).toFixed(4)})`,
+  },
+  {
+    type: "sepia",
+    label: "Sepia",
+    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
+    toCss: (ps) => `sepia(${p(ps, "amount", 1).toFixed(4)})`,
+  },
+  {
+    type: "invert",
+    label: "Invert",
+    params: { amount: { def: 1, min: 0, max: 1, step: 0.01 } },
+    toCss: (ps) => `invert(${p(ps, "amount", 1).toFixed(4)})`,
+  },
+  {
+    type: "hueRotate",
+    label: "Hue rotate",
+    params: { deg: { def: 45, min: -180, max: 180, step: 1 } },
+    toCss: (ps) => `hue-rotate(${p(ps, "deg", 45).toFixed(1)}deg)`,
+  },
+  {
+    type: "sharpen",
+    label: "Sharpen",
+    params: { amount: { def: 1, min: 0, max: 3, step: 0.05 } },
+    // Preview: unsharp-mask convolve kernel (ffmpeg render uses unsharp).
+    toSvg: (ps) => {
+      const a = p(ps, "amount", 1);
+      const c = 1 + 4 * a;
+      return `<feConvolveMatrix order="3" kernelMatrix="0 ${-a} 0 ${-a} ${c} ${-a} 0 ${-a} 0" preserveAlpha="true"/>`;
+    },
+  },
+  {
+    type: "vignette",
+    label: "Vignette",
+    params: { amount: { def: 0.5, min: 0, max: 1, step: 0.01 } },
+    // Preview approximates the ffmpeg vignette with an inset shadow.
+    toBoxShadow: (ps) => {
+      const a = p(ps, "amount", 0.5);
+      return `inset 0 0 ${(a * 120).toFixed(0)}px rgba(0,0,0,${(a * 0.85).toFixed(3)})`;
+    },
+  },
+  {
+    type: "grain",
+    label: "Film grain",
+    params: { amount: { def: 0.35, min: 0, max: 1, step: 0.01 } },
+    // Preview: static turbulence clipped to the source, blended over it.
+    toSvg: (ps) => {
+      const a = p(ps, "amount", 0.35);
+      return [
+        `<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="fxNoise"/>`,
+        `<feComponentTransfer in="fxNoise" result="fxNoiseA"><feFuncA type="linear" slope="${(a * 1.6).toFixed(3)}" intercept="0"/></feComponentTransfer>`,
+        `<feComposite in="fxNoiseA" in2="SourceGraphic" operator="in" result="fxGrain"/>`,
+        `<feBlend in="SourceGraphic" in2="fxGrain" mode="overlay"/>`,
+      ].join("");
+    },
   },
 ];
 
@@ -171,6 +237,31 @@ export function svgMatrixFor(effects: Effect[]): number[] | null {
     if (m) return m;
   }
   return null;
+}
+
+/** Inner `<filter>` markup for all SVG-land effects in the stack:
+ *  feColorMatrix fragments (toMatrix) followed by raw primitives (toSvg),
+ *  preserving effect order. Null when nothing needs SVG. */
+export function svgFilterFragmentFor(effects: Effect[]): string | null {
+  const parts: string[] = [];
+  for (const e of effects) {
+    if (!e.enabled) continue;
+    const def = effectDef(e.type);
+    const m = def?.toMatrix?.(e.params);
+    if (m) parts.push(`<feColorMatrix type="matrix" values="${m.join(" ")}"/>`);
+    const s = def?.toSvg?.(e.params);
+    if (s) parts.push(s);
+  }
+  return parts.length ? parts.join("") : null;
+}
+
+/** Combined box-shadow layers (vignette etc.) for enabled effects. */
+export function boxShadowFor(effects: Effect[]): string | undefined {
+  const layers = effects
+    .filter((e) => e.enabled)
+    .map((e) => effectDef(e.type)?.toBoxShadow?.(e.params))
+    .filter(Boolean);
+  return layers.length ? layers.join(", ") : undefined;
 }
 
 // ---------- keyframes ----------

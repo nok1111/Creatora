@@ -191,6 +191,7 @@ export const en = {
     fxBinFooter: "Drag an effect onto a clip. Merge effects go between two adjacent clips.",
     fxDropOnClip: "Drop the effect on a clip",
     fxNeedsVisualTrack: "Effects apply to video, image, text and graphics tracks",
+    fxNeedsTextTrack: "This effect only works on text or graphics clips",
     fxNeedsNeighbor: "Merge effects need a neighboring clip",
     fxNeedsAdjacent: "Clips must be adjacent for a merge effect",
     fxApplied: "Applied {{name}}",

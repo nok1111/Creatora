@@ -1,21 +1,56 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
+  Aperture,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
   Blend,
+  BringToFront,
+  Circle,
   CircleDashed,
+  CircleDot,
+  Columns2,
+  Columns3,
+  Combine,
   Contrast,
   Droplets,
+  Eraser,
   Expand,
   Eye,
+  Film,
+  FoldVertical,
+  Grid3x3,
   LogIn,
   LogOut,
-  MoveHorizontal,
+  Moon,
+  MoveDown,
+  MoveLeft,
   MoveRight,
+  MoveUp,
+  Palette,
+  RefreshCw,
+  Repeat,
   RotateCw,
+  Rows2,
+  Scan,
+  Shrink,
+  Shuffle,
   Sparkles,
   Sun,
+  SunMoon,
+  Target,
   Thermometer,
+  Type,
+  UnfoldVertical,
   Wand2,
+  Waves,
+  Wind,
   Zap,
+  ZoomIn,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { setDragPayload, type EffectCategory } from "@/lib/drag-payload";
@@ -46,6 +81,24 @@ const preset = (id: string, icon: LucideIcon): FxItem => ({
   label: ANIM_PRESETS.find((p) => p.id === id)?.label ?? id,
 });
 
+const OVERLAY_ICONS: Record<string, LucideIcon> = {
+  brightness: Sun,
+  exposure: Zap,
+  contrast: Contrast,
+  saturation: Sparkles,
+  temperature: Thermometer,
+  blur: Droplets,
+  grayscale: Moon,
+  sepia: SunMoon,
+  invert: RefreshCw,
+  hueRotate: Palette,
+  sharpen: Aperture,
+  vignette: CircleDot,
+  grain: Film,
+};
+
+const tr = (id: string, label: string, icon: LucideIcon): FxItem => ({ id, label, icon });
+
 const CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: FxItem[] }[] = [
   {
     id: "start",
@@ -54,9 +107,13 @@ const CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: 
     items: [
       preset("fadeIn", Eye),
       preset("scaleIn", Expand),
+      preset("bounceIn", Activity),
+      preset("spinIn", RefreshCw),
       preset("slideIn", MoveRight),
       preset("rotateIn", RotateCw),
       preset("blurIn", Droplets),
+      preset("typewriter", Type),
+      preset("wipe", Eraser),
     ],
   },
   {
@@ -65,8 +122,12 @@ const CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: 
     icon: LogOut,
     items: [
       preset("fadeOut", Eye),
-      preset("slideOut", MoveRight),
+      preset("scaleOut", Shrink),
+      preset("slideOut", MoveLeft),
+      preset("rotateOut", RotateCw),
       preset("blurOut", Droplets),
+      preset("typewriterOut", Type),
+      preset("wipeOut", Eraser),
     ],
   },
   {
@@ -74,26 +135,62 @@ const CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: 
     labelKey: "editor.fxCatMerge",
     icon: Blend,
     items: [
-      { id: "crossfade", label: "Crossfade", icon: Blend },
-      { id: "dipToBlack", label: "Dip to black", icon: CircleDashed },
-      { id: "dipToWhite", label: "Dip to white", icon: CircleDashed },
+      tr("crossfade", "Crossfade", Blend),
+      tr("dipToBlack", "Dip to black", Moon),
+      tr("dipToWhite", "Dip to white", Sun),
+      tr("fadegrays", "Grays fade", SunMoon),
+      tr("dissolve", "Dissolve", Shuffle),
+      tr("pixelize", "Pixelize", Grid3x3),
+      tr("hblur", "Blur dissolve", Waves),
+      tr("zoomin", "Zoom", ZoomIn),
+      tr("radial", "Radial", Target),
+      tr("circleopen", "Circle open", Circle),
+      tr("circleclose", "Circle close", CircleDot),
+      tr("circlecrop", "Circle crop", CircleDashed),
+      tr("wipeleft", "Wipe left", ArrowLeft),
+      tr("wiperight", "Wipe right", ArrowRight),
+      tr("wipeup", "Wipe up", ArrowUp),
+      tr("wipedown", "Wipe down", ArrowDown),
+      tr("wipetl", "Wipe corner", ArrowUpLeft),
+      tr("diagtr", "Diagonal", ArrowUpRight),
+      tr("slideleft", "Slide left", MoveLeft),
+      tr("slideright", "Slide right", MoveRight),
+      tr("slideup", "Slide up", MoveUp),
+      tr("slidedown", "Slide down", MoveDown),
+      tr("smoothleft", "Smooth left", ArrowLeft),
+      tr("smoothright", "Smooth right", ArrowRight),
+      tr("coverleft", "Cover left", BringToFront),
+      tr("coverup", "Cover up", BringToFront),
+      tr("revealleft", "Reveal left", Scan),
+      tr("revealright", "Reveal right", Scan),
+      tr("revealup", "Reveal up", Scan),
+      tr("squeezeh", "Squeeze", FoldVertical),
+      tr("vertopen", "Vertical open", UnfoldVertical),
+      tr("horzclose", "Horizontal close", Combine),
+      tr("hlslice", "Blinds", Columns3),
+      tr("vuslice", "Venetian up", Rows2),
+      tr("vdslice", "Venetian down", Columns2),
     ],
   },
   {
     id: "overlay",
     labelKey: "editor.fxCatOverlay",
     icon: Wand2,
-    items: EFFECTS.map((e) => ({
-      id: e.type,
-      label: e.label,
-      icon:
-        e.type === "blur" ? Droplets :
-        e.type === "temperature" ? Thermometer :
-        e.type === "saturation" ? Sparkles :
-        e.type === "contrast" ? Contrast :
-        e.type === "exposure" ? Zap :
-        e.type === "brightness" ? Sun : MoveHorizontal,
-    })),
+    items: [
+      ...EFFECTS.map((e) => ({
+        id: e.type,
+        label: e.label,
+        icon: OVERLAY_ICONS[e.type] ?? Wand2,
+      })),
+      // Combo/emphasis/loop animation presets — the drop handler routes
+      // any ANIM_PRESETS id to the keyframe path regardless of category.
+      preset("fadeInOut", Repeat),
+      preset("slideInOut", Repeat),
+      preset("scaleInOut", Repeat),
+      preset("pulse", Activity),
+      preset("shake", Waves),
+      preset("float", Wind),
+    ],
   },
 ];
 

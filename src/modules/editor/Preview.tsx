@@ -14,7 +14,7 @@ import {
   transitionAlpha,
   updateClip,
 } from "@/lib/timeline-engine";
-import { cssFilterFor, effectsActiveAt, evalKeyframes, svgMatrixFor } from "@/lib/effects";
+import { boxShadowFor, cssFilterFor, effectsActiveAt, evalKeyframes, svgFilterFragmentFor } from "@/lib/effects";
 import { resumeAudio } from "@/services/audio-preview";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
@@ -259,15 +259,18 @@ export function Preview({
           containerType: "size",
         }}
       >
-        {/* SVG defs for matrix-based effects (temperature). */}
+        {/* SVG defs for effects CSS can't express (temperature, sharpen,
+            grain). One filter per clip, primitives in effect order. */}
         <svg width="0" height="0" className="absolute">
           {visual.map(({ clip }) => {
-            const m = svgMatrixFor(effectsActiveAt(clip.effects, playheadMs - clip.startMs));
-            if (!m) return null;
+            const frag = svgFilterFragmentFor(effectsActiveAt(clip.effects, playheadMs - clip.startMs));
+            if (!frag) return null;
             return (
-              <filter key={clip.id} id={`fx-${clip.id}`}>
-                <feColorMatrix type="matrix" values={m.join(" ")} />
-              </filter>
+              <filter
+                key={clip.id}
+                id={`fx-${clip.id}`}
+                dangerouslySetInnerHTML={{ __html: frag }}
+              />
             );
           })}
         </svg>
@@ -308,7 +311,7 @@ export function Preview({
           );
           const fxAt = effectsActiveAt(clip.effects, playheadMs - clip.startMs);
           const filters = [
-            svgMatrixFor(fxAt) ? `url(#fx-${clip.id})` : "",
+            svgFilterFragmentFor(fxAt) ? `url(#fx-${clip.id})` : "",
             cssFilterFor(fxAt),
           ]
             .filter(Boolean)
@@ -324,6 +327,7 @@ export function Preview({
                 ? `rotate(${evalT.rotationDeg}deg)`
                 : undefined,
             filter: filters || undefined,
+            boxShadow: boxShadowFor(fxAt),
             objectFit: "fill",
             position: "absolute",
             // Tailwind preflight sets `video, img { max-width: 100%; height:

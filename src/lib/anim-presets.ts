@@ -153,6 +153,64 @@ export const ANIM_PRESETS: AnimPreset[] = [
     }),
   },
   {
+    id: "bounceIn",
+    label: "Bounce in",
+    category: "in",
+    paths: ["transform.scaleX", "transform.scaleY", "transform.opacity"],
+    build: (c, _cv, o) => ({
+      keyframes: {
+        "transform.scaleX": bakeKfs(o.delayMs, o.durationMs, 0.3, c.transform.scaleX, "bounceOut"),
+        "transform.scaleY": bakeKfs(o.delayMs, o.durationMs, 0.3, c.transform.scaleY, "bounceOut"),
+        "transform.opacity": bakeKfs(o.delayMs, Math.min(o.durationMs, 200), 0, c.transform.opacity, "easeOut"),
+      },
+    }),
+  },
+  {
+    id: "spinIn",
+    label: "Spin in",
+    category: "in",
+    paths: ["transform.rotationDeg", "transform.scaleX", "transform.scaleY", "transform.opacity"],
+    build: (c, _cv, o) => ({
+      keyframes: {
+        "transform.rotationDeg": bakeKfs(o.delayMs, o.durationMs, c.transform.rotationDeg - 180, c.transform.rotationDeg, "backOut"),
+        "transform.scaleX": bakeKfs(o.delayMs, o.durationMs, 0.3, c.transform.scaleX, "backOut"),
+        "transform.scaleY": bakeKfs(o.delayMs, o.durationMs, 0.3, c.transform.scaleY, "backOut"),
+        "transform.opacity": bakeKfs(o.delayMs, Math.min(o.durationMs, 200), 0, c.transform.opacity, "easeOut"),
+      },
+    }),
+  },
+  {
+    id: "scaleOut",
+    label: "Scale out",
+    category: "out",
+    paths: ["transform.scaleX", "transform.scaleY", "transform.opacity"],
+    build: (c, _cv, o) => {
+      const t0 = Math.max(0, c.durationMs - o.durationMs);
+      return {
+        keyframes: {
+          "transform.scaleX": bakeKfs(t0, o.durationMs, c.transform.scaleX, 0.01, o.easing),
+          "transform.scaleY": bakeKfs(t0, o.durationMs, c.transform.scaleY, 0.01, o.easing),
+          "transform.opacity": bakeKfs(Math.max(0, c.durationMs - Math.min(o.durationMs, 250)), Math.min(o.durationMs, 250), c.transform.opacity, 0, "easeIn"),
+        },
+      };
+    },
+  },
+  {
+    id: "rotateOut",
+    label: "Rotate out",
+    category: "out",
+    paths: ["transform.rotationDeg", "transform.opacity"],
+    build: (c, _cv, o) => {
+      const t0 = Math.max(0, c.durationMs - o.durationMs);
+      return {
+        keyframes: {
+          "transform.rotationDeg": bakeKfs(t0, o.durationMs, c.transform.rotationDeg, c.transform.rotationDeg + 90, o.easing),
+          "transform.opacity": bakeKfs(Math.max(0, c.durationMs - Math.min(o.durationMs, 250)), Math.min(o.durationMs, 250), c.transform.opacity, 0, "easeIn"),
+        },
+      };
+    },
+  },
+  {
     id: "typewriter",
     label: "Typewriter",
     category: "in",

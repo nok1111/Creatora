@@ -14,6 +14,13 @@
 //! | saturation  | amount  | colorchannelmixer W3C matrix    | CSS saturate(1+a)  |
 //! | temperature | amount  | colorchannelmixer diag matrix   | SVG feColorMatrix  |
 //! | blur        | radius  | gblur sigma=radius              | CSS blur(radius)   |
+//! | grayscale   | amount  | saturate matrix s=1-a           | CSS grayscale(a)   |
+//! | sepia       | amount  | interpolated sepia matrix       | CSS sepia(a)       |
+//! | invert      | amount  | lutrgb val*(1-2a)+255a          | CSS invert(a)      |
+//! | hueRotate   | deg     | hue h=deg                       | CSS hue-rotate(deg)|
+//! | sharpen     | amount  | unsharp 5:5:a                   | feConvolveMatrix   |
+//! | vignette    | amount  | vignette angle=PI/2-a*PI/3      | inset box-shadow   |
+//! | grain       | amount  | noise alls=40a, temporal        | SVG feTurbulence   |
 //!
 //! Unknown kinds are ignored (forward-compat), never fail the render.
 
@@ -92,6 +99,56 @@ pub fn effects_chain(effects: &[Effect]) -> String {
                 }
                 format!("gblur=sigma={px}")
             }
+            "grayscale" => {
+                // CSS grayscale(a) === saturate(1-a) — same luminance matrix.
+                let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
+                saturation_matrix(1.0 - a)
+            }
+            "sepia" => {
+                // W3C sepia matrix interpolated identity→full by amount:
+                // m = I + a*(S − I), as colorchannelmixer coefficients.
+                let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
+                let (rr, rg, rb) = (1.0 - 0.607 * a, 0.769 * a, 0.189 * a);
+                let (gr, gg, gb) = (0.349 * a, 1.0 - 0.314 * a, 0.168 * a);
+                let (br, bg, bb) = (0.272 * a, 0.534 * a, 1.0 - 0.869 * a);
+                format!(
+                    "colorchannelmixer=rr={rr}:rg={rg}:rb={rb}:gr={gr}:gg={gg}:gb={gb}:br={br}:bg={bg}:bb={bb}"
+                )
+            }
+            "invert" => {
+                // CSS invert(a) is an exact per-channel affine map:
+                // out = val*(1-2a) + 255a — no clipping needed in 0..=1.
+                let a = param(e, "amount", 1.0).clamp(0.0, 1.0);
+                let (m, k) = (1.0 - 2.0 * a, 255.0 * a);
+                format!("lutrgb=r='val*{m}+{k}':g='val*{m}+{k}':b='val*{m}+{k}'")
+            }
+            "hueRotate" => {
+                let deg = param(e, "deg", 45.0).clamp(-360.0, 360.0);
+                format!("hue=h={deg}")
+            }
+            "sharpen" => {
+                let a = param(e, "amount", 1.0).clamp(0.0, 3.0);
+                if a <= 0.0 {
+                    continue;
+                }
+                format!("unsharp=5:5:{a}")
+            }
+            "vignette" => {
+                // angle: PI/2 (subtle) → PI/6 (strong) as amount goes 0→1.
+                let a = param(e, "amount", 0.5).clamp(0.0, 1.0);
+                if a <= 0.01 {
+                    continue;
+                }
+                let ang = std::f64::consts::FRAC_PI_2 - a * std::f64::consts::FRAC_PI_3;
+                format!("vignette=angle={ang}")
+            }
+            "grain" => {
+                let a = param(e, "amount", 0.35).clamp(0.0, 1.0);
+                if a <= 0.0 {
+                    continue;
+                }
+                format!("noise=alls={}:allf=t+u", (a * 40.0).round() as i32)
+            }
             _ => continue,
         };
         parts.push(with_enable(e, frag));
@@ -146,6 +203,28 @@ mod tests {
         let c = effects_chain(&[fx("contrast", &[("amount", 1.0)])]);
         // c=2 → 0/-0.5→0, 1/1.5→1
         assert!(c.contains("curves=m='0/0 1/1'"), "{c}");
+    }
+
+    #[test]
+    fn new_color_effects_map() {
+        // grayscale(1) → saturate(0) luminance matrix
+        let g = effects_chain(&[fx("grayscale", &[("amount", 1.0)])]);
+        assert!(g.contains("colorchannelmixer") && g.contains("0.213"), "{g}");
+        // sepia(1) → full W3C sepia matrix
+        let s = effects_chain(&[fx("sepia", &[("amount", 1.0)])]);
+        assert!(s.contains("0.393") || s.contains("0.769"), "{s}");
+        // invert(1) → full negation
+        let i = effects_chain(&[fx("invert", &[("amount", 1.0)])]);
+        assert!(i.contains("lutrgb") && i.contains("-1") && i.contains("255"), "{i}");
+        // hueRotate → hue filter
+        let h = effects_chain(&[fx("hueRotate", &[("deg", 45.0)])]);
+        assert!(h.contains("hue=h=45"), "{h}");
+        // sharpen / grain / vignette emit their filters; zero params skip
+        assert!(effects_chain(&[fx("sharpen", &[("amount", 1.5)])]).contains("unsharp"));
+        assert!(effects_chain(&[fx("grain", &[("amount", 0.5)])]).contains("noise=alls=20"));
+        assert!(effects_chain(&[fx("vignette", &[("amount", 0.5)])]).contains("vignette"));
+        assert!(effects_chain(&[fx("grain", &[("amount", 0.0)])]).is_empty());
+        assert!(effects_chain(&[fx("blur", &[("radius", 0.0)])]).is_empty());
     }
 
     #[test]

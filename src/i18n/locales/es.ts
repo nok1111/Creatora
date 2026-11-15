@@ -194,6 +194,7 @@ export const es: typeof en = {
     fxBinFooter: "Arrastra un efecto sobre un clip. Los efectos de unión van entre dos clips adyacentes.",
     fxDropOnClip: "Suelta el efecto sobre un clip",
     fxNeedsVisualTrack: "Los efectos aplican a pistas de video, imagen, texto y gráficos",
+    fxNeedsTextTrack: "Este efecto solo funciona en clips de texto o gráficos",
     fxNeedsNeighbor: "Los efectos de unión necesitan un clip vecino",
     fxNeedsAdjacent: "Los clips deben estar adyacentes para un efecto de unión",
     fxApplied: "{{name}} aplicado",

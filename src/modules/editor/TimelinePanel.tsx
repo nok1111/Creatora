@@ -57,6 +57,7 @@ import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
 import { getDragPayload, isEffectPayload, type EffectCategory } from "@/lib/drag-payload";
 import { effectDef } from "@/lib/effects";
+import { ANIM_PRESETS } from "@/lib/anim-presets";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -555,6 +556,30 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       toast.error(t("editor.fxDropOnClip"));
       return;
     }
+    // Animation presets — start/end tiles plus the combo/emphasis/loop
+    // tiles under overlay — route to the keyframe path by id.
+    const preset = ANIM_PRESETS.find((p) => p.id === itemId);
+    if (preset) {
+      // TextFx presets (empty paths) need a text/graphics host clip.
+      if (preset.paths.length === 0 && track.kind !== "text" && track.kind !== "graphics") {
+        toast.error(t("editor.fxNeedsTextTrack"));
+        return;
+      }
+      // Loops bake over the whole clip; in/out presets cap at ~500ms.
+      const fullSpan = preset.category === "loop" || preset.category === "emphasis";
+      const dur = fullSpan
+        ? target.durationMs
+        : Math.min(500, Math.max(50, target.durationMs / 2));
+      mutate((d) =>
+        applyAnimationPreset(d, target.id, itemId, {
+          durationMs: dur,
+          versionId: activeVersionId,
+        }),
+      );
+      const label = itemId.replace(/([A-Z])/g, " $1").trim();
+      toast.success(t("editor.fxApplied", { name: label }));
+      return;
+    }
     if (category === "merge") {
       const sorted = [...track.clips].sort((a, b) => a.startMs - b.startMs);
       const idx = sorted.indexOf(target);
@@ -606,16 +631,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       toast.success(t("editor.fxApplied", { name: def.label }));
       return;
     }
-    // start / end → animation preset; duration capped at half the clip.
-    const dur = Math.min(500, Math.max(50, target.durationMs / 2));
-    mutate((d) =>
-      applyAnimationPreset(d, target.id, itemId, {
-        durationMs: dur,
-        versionId: activeVersionId,
-      }),
-    );
-    const label = itemId.replace(/([A-Z])/g, " $1").trim();
-    toast.success(t("editor.fxApplied", { name: label }));
+    toast.error(t("editor.fxDropOnClip"));
   };
 
   const onDrop = (e: React.DragEvent, track: Track) => {

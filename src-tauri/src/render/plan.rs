@@ -240,10 +240,30 @@ fn group_kind<'a>(doc: &'a ProjectDoc, clip_b_id: &'a str) -> &'a str {
         .unwrap_or("crossfade")
 }
 
-fn xfade_name(kind: &str) -> &'static str {
+/// Transition kind → ffmpeg xfade name. Legacy ids keep their aliases;
+/// the expanded catalog uses ffmpeg names verbatim. Unknown kinds degrade
+/// to a plain alpha crossfade instead of failing the render.
+fn xfade_name<'a>(kind: &'a str) -> &'a str {
+    const XFADES: &[&str] = &[
+        "wipeleft", "wiperight", "wipeup", "wipedown",
+        "wipetl", "wipetr", "wipebl", "wipebr",
+        "slideleft", "slideright", "slideup", "slidedown",
+        "smoothleft", "smoothright", "smoothup", "smoothdown",
+        "coverleft", "coverright", "coverup", "coverdown",
+        "revealleft", "revealright", "revealup", "revealdown",
+        "circleopen", "circleclose", "circlecrop", "radial", "rectcrop",
+        "dissolve", "pixelize", "hblur", "zoomin", "fadegrays",
+        "diagtl", "diagtr", "diagbl", "diagbr",
+        "hlslice", "hrslice", "vuslice", "vdslice",
+        "hlwind", "hrwind", "vuwind", "vdwind",
+        "squeezeh", "squeezev",
+        "vertopen", "vertclose", "horzopen", "horzclose",
+        "distance",
+    ];
     match kind {
         "dipToBlack" => "fadeblack",
         "dipToWhite" => "fadewhite",
+        _ if XFADES.contains(&kind) => kind,
         _ => "fade", // "crossfade" and unknown kinds → linear alpha blend
     }
 }
