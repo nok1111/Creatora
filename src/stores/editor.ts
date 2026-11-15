@@ -29,6 +29,10 @@ interface EditorState {
   clipboard: { kind: TrackKind; clip: Clip }[];
   /** Preview decode source: original files or generated proxies. */
   previewQuality: "full" | "proxy";
+  /** Preview-only monitor volume — multiplies the mixed gain, never
+   *  touches clip/track volume, so exports are unaffected. */
+  previewVolume: number;
+  previewMuted: boolean;
   /** Active format version — null = master. All edits to whitelisted
    *  fields route to this version's overrides (ADR-021). */
   activeVersionId: string | null;
@@ -50,6 +54,8 @@ interface EditorState {
   setSnapEnabled: (v: boolean) => void;
   setClipboard: (entries: { kind: TrackKind; clip: Clip }[]) => void;
   setPreviewQuality: (q: "full" | "proxy") => void;
+  setPreviewVolume: (v: number) => void;
+  setPreviewMuted: (m: boolean) => void;
 
   /** Apply an edit: fn receives a doc draft and returns the new doc. */
   mutate: (fn: (doc: ProjectDoc) => ProjectDoc) => void;
@@ -80,6 +86,8 @@ export const useEditor = create<EditorState>((set, get) => {
     snapEnabled: true,
     clipboard: [],
     previewQuality: "proxy",
+    previewVolume: 1,
+    previewMuted: false,
     activeVersionId: null,
     compareMode: false,
     setActiveVersion: (id) => set({ activeVersionId: id }),
@@ -101,6 +109,8 @@ export const useEditor = create<EditorState>((set, get) => {
     setSnapEnabled: (v) => set({ snapEnabled: v }),
     setClipboard: (entries) => set({ clipboard: entries }),
     setPreviewQuality: (q) => set({ previewQuality: q }),
+    setPreviewVolume: (v) => set({ previewVolume: Math.min(1, Math.max(0, v)) }),
+    setPreviewMuted: (m) => set({ previewMuted: m }),
 
     mutate: (fn) => {
       const doc = useProject.getState().doc;

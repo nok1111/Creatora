@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useProject } from "@/stores/project";
 import { effectiveDoc } from "@/lib/timeline-engine";
@@ -55,6 +56,7 @@ export function Preview({
   /** Render this doc instead of the store's active view (compare mode). */
   docOverride?: import("@/lib/project-types").ProjectDoc;
 }) {
+  const { t } = useTranslation();
   const doc = useProject((s) => s.doc);
   const activeVersionId = useEditor((s) => s.activeVersionId);
   const playheadMs = useEditor((s) => s.playheadMs);
@@ -67,6 +69,10 @@ export function Preview({
   const rmsBuf = useRef(new Uint8Array(new ArrayBuffer(512)));
   const dtMs = useRef(16);
   const previewQuality = useEditor((s) => s.previewQuality);
+  const previewVolume = useEditor((s) => s.previewVolume);
+  const previewMuted = useEditor((s) => s.previewMuted);
+  const setPreviewVolume = useEditor((s) => s.setPreviewVolume);
+  const setPreviewMuted = useEditor((s) => s.setPreviewMuted);
   const mutate = useEditor((s) => s.mutate);
   const mutateInGesture = useEditor((s) => s.mutateInGesture);
   const beginGesture = useEditor((s) => s.beginGesture);
@@ -76,6 +82,15 @@ export function Preview({
   const selection = useEditor((s) => s.selection);
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const [editing, setEditing] = useState<string | null>(null);
+
+  // Any user gesture re-arms the AudioContext: the WebAudio chain
+  // (MediaElementSource → gain → destination) is silent while the context
+  // is suspended, so resume eagerly, not only on the play toggle.
+  useEffect(() => {
+    const onDown = () => resumeAudio();
+    window.addEventListener("pointerdown", onDown);
+    return () => window.removeEventListener("pointerdown", onDown);
+  }, []);
 
   // Master clock: advance playhead while playing. Also monitors real frame
   // times — if the rAF cadence stays ≥1.5× the project's frame budget for a
@@ -229,7 +244,10 @@ export function Preview({
       const srcRms = srcChain ? rmsOf(srcChain, rmsBuf.current) : 0;
       duckG *= duckStep(st, srcRms, r, dtMs.current / 1000 || 0.016);
     }
-    const gain = Math.max(0, vol * fade * (a.track.volume ?? 1)) * audible * duckG;
+    // Monitor gain: previewVolume/previewMuted only affect what the user
+    // hears — clip/track volumes and the export mix are untouched.
+    const monitor = previewMuted ? 0 : previewVolume;
+    const gain = Math.max(0, vol * fade * (a.track.volume ?? 1)) * audible * duckG * monitor;
     const chain = chainFor(el);
     if (chain) {
       chain.gain.gain.value = gain;
@@ -247,7 +265,8 @@ export function Preview({
     if (Math.abs(el.currentTime * 1000 - want) > DRIFT_MS) {
       el.currentTime = want / 1000;
     }
-    if (useEditor.getState().playing && el.paused) void el.play().catch(() => {});
+    if (useEditor.getState().playing && el.paused)
+      void el.play().catch((e) => console.warn("preview element play() rejected:", e));
     if (!useEditor.getState().playing && !el.paused) el.pause();
   };
 
@@ -748,6 +767,35 @@ export function Preview({
           >
             {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
           </Button>
+          <div className="h-4 w-px bg-border" />
+          {/* Preview monitor volume — display-only, never exported. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-full"
+            title={previewMuted ? t("editor.unmutePreview") : t("editor.mutePreview")}
+            onClick={() => setPreviewMuted(!previewMuted)}
+          >
+            {previewMuted || previewVolume === 0 ? (
+              <VolumeX className="size-4" />
+            ) : (
+              <Volume2 className="size-4" />
+            )}
+          </Button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={previewMuted ? 0 : previewVolume}
+            title={t("editor.previewVolume")}
+            aria-label={t("editor.previewVolume")}
+            className="h-1 w-16 cursor-pointer accent-primary"
+            onChange={(e) => {
+              setPreviewVolume(Number(e.target.value));
+              if (previewMuted) setPreviewMuted(false);
+            }}
+          />
         </div>
       </div>
     </div>
