@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import {
   Download,
   Scissors,
-  Type,
   Music4,
   Subtitles,
   ImageIcon,
@@ -205,48 +204,6 @@ export function EditorPage() {
         <Button variant="ghost" size="icon" className="size-7" disabled={!canRedo} onClick={redo} title="Ctrl+Y">
           <Redo2 className="size-4" />
         </Button>
-        <div className="mx-1 h-4 w-px bg-border" />
-        {/* Common actions — labeled, each routes to the existing workflow. */}
-        <button
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title={t("editor.toolTrimTitle")}
-          onClick={() => {
-            const es = useEditor.getState();
-            for (const id of es.selection) {
-              mutate((d) => { const r = splitClip(d, id, es.playheadMs); return r ? r.doc : d; });
-            }
-          }}
-        >
-          <Scissors className="size-3.5" /> {t("editor.toolTrim")}
-        </button>
-        <button
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title={t("editor.toolTextTitle")}
-          onClick={() => setLeftTab("graphics")}
-        >
-          <Type className="size-3.5" /> {t("editor.toolText")}
-        </button>
-        <button
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title={t("editor.toolMusicTitle")}
-          onClick={() => setLeftTab("media")}
-        >
-          <Music4 className="size-3.5" /> {t("editor.toolMusic")}
-        </button>
-        <button
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title={t("editor.toolCaptionsTitle")}
-          onClick={() => setBottomTab("subtitles")}
-        >
-          <Subtitles className="size-3.5" /> {t("editor.toolCaptions")}
-        </button>
-        <button
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-          title={t("editor.toolOverlayTitle")}
-          onClick={() => setLeftTab("graphics")}
-        >
-          <ImageIcon className="size-3.5" /> {t("editor.toolOverlay")}
-        </button>
         <div className="flex-1" />
         <button
           className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"
