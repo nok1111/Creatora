@@ -109,6 +109,7 @@ export const en = {
     width: "Width",
     height: "Height",
     fps: "FPS",
+    viewAll: "View all",
     create: "Create",
     open: "Open",
     favorite: "Favorite",

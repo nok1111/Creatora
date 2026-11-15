@@ -112,6 +112,7 @@ export const es: typeof en = {
     width: "Ancho",
     height: "Alto",
     fps: "FPS",
+    viewAll: "Ver todo",
     create: "Crear",
     open: "Abrir",
     favorite: "Favorito",

@@ -184,7 +184,7 @@ export function HomePage() {
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => navigate("/library")}>
             <Upload />
-            {t("library.importMedia", { defaultValue: "Import media" })}
+            {t("editor.importMedia")}
           </Button>
           <Button onClick={() => navigate("/create")}>
             <FilePlus2 />
@@ -376,7 +376,7 @@ export function HomePage() {
                   <span className="text-xs text-primary">{Math.round(j.progress * 100)}%</span>
                 )}
                 <span className={cn("rounded-full px-2 py-0.5 text-2xs font-medium", JOB_TONE[j.status] ?? JOB_TONE.queued)}>
-                  {j.status}
+                  {t(`exports.status_${j.status}`, { defaultValue: j.status })}
                 </span>
               </li>
             ))}
