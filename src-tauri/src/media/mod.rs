@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod probe;
+pub mod filmstrip;
 
 use std::path::PathBuf;
 use std::process::Command;

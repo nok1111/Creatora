@@ -119,6 +119,8 @@ pub fn run() {
             subtitles::commands::export_subtitles,
             audio::commands::generate_waveform,
             audio::commands::read_waveform,
+            media::commands::generate_filmstrip,
+            media::commands::read_filmstrip,
             audio::commands::analyze_loudness,
             audio::commands::detect_silence,
             audio::commands::suggest_normalize,

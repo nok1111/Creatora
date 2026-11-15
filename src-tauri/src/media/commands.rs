@@ -898,3 +898,53 @@ pub fn delete_proxy(db: State<'_, Arc<Db>>, asset_id: String) -> CmdResult<()> {
     })?;
     Ok(())
 }
+
+// ---------- timeline filmstrips ----------
+
+fn filmstrips_dir(app: &tauri::AppHandle) -> PathBuf {
+    data_dir(app)
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("filmstrips")
+}
+
+fn filmstrip_key(path: &str, frames: usize) -> String {
+    let m = std::fs::metadata(path)
+        .map(|m| (m.len(), m.modified().ok()))
+        .unwrap_or((0, None));
+    format!("{:x}", xxh3_64(format!("{path}:{m:?}:{frames}").as_bytes()))
+}
+
+/// Kicks off a filmstrip job (or returns null on cache hit). The strip is
+/// `frames` tiled JPEG cells covering the whole source duration.
+#[tauri::command]
+pub fn generate_filmstrip(
+    app: tauri::AppHandle,
+    jobs: State<'_, JobManager>,
+    path: String,
+    frames: usize,
+) -> CmdResult<Option<String>> {
+    let out = filmstrips_dir(&app).join(format!("{}.jpg", filmstrip_key(&path, frames)));
+    if out.is_file() {
+        return Ok(None); // cache hit — read_filmstrip returns the path
+    }
+    let dir = filmstrips_dir(&app);
+    let job_id = jobs.spawn(app, "media.filmstrip", move |ctx: &JobCtx| {
+        ctx.progress(0.1, Some("Sampling frames"));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        super::filmstrip::filmstrip(Path::new(&path), &out, frames)?;
+        ctx.progress(1.0, None);
+        serde_json::to_value(out.to_string_lossy()).map_err(|e| e.to_string())
+    });
+    Ok(Some(job_id))
+}
+
+/// Read a cached filmstrip JPEG path (after job completion or cache hit).
+#[tauri::command]
+pub fn read_filmstrip(
+    app: tauri::AppHandle,
+    path: String,
+    frames: usize,
+) -> CmdResult<Option<String>> {
+    let out = filmstrips_dir(&app).join(format!("{}.jpg", filmstrip_key(&path, frames)));
+    Ok(out.is_file().then(|| out.to_string_lossy().into_owned()))
+}

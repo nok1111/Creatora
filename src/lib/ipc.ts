@@ -290,6 +290,13 @@ export const api = {
     cmd<string>("generate_proxies", { assetIds }),
   deleteProxy: (assetId: string) =>
     cmd<void>("delete_proxy", { assetId }),
+
+  /** Kicks off a filmstrip job (or returns null on cache hit). */
+  generateFilmstrip: (path: string, frames: number) =>
+    cmd<string | null>("generate_filmstrip", { path, frames }),
+  /** Cached filmstrip JPEG path, or null while the job runs. */
+  readFilmstrip: (path: string, frames: number) =>
+    cmd<string | null>("read_filmstrip", { path, frames }),
 };
 
 export interface Waveform {

@@ -789,6 +789,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                             doc.mediaRefs.find((m) => m.assetId === clip.mediaRef)?.path ?? ""
                           }
                           sourceInMs={clip.sourceInMs}
+                          sourceDurationMs={
+                            clip.sourceDurationMs ?? asset.durationMs ?? clip.durationMs
+                          }
                           durationMs={clip.durationMs}
                           heightPx={TRACK_H - 8}
                           widthPx={Math.max(6, msToPx(clip.durationMs))}
