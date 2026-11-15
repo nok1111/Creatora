@@ -423,13 +423,18 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
     const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
     const filePath = e.dataTransfer.getData("application/x-creatora-path");
+    const trackKind = kind === "audio" ? "audio" : "video";
     mutate((d) => {
-      const r = addClip(d, {
+      // Empty space means "new lane": always create the track (V2, A2, …)
+      // so a second asset of the same kind does not land on the first lane.
+      const nt = addTrack(d, trackKind);
+      const r = addClip(nt.doc, {
         mediaRef: assetId,
         startMs: ms,
         durationMs: dur,
         sourceDurationMs: dur,
-        trackKind: kind === "audio" ? "audio" : "video",
+        trackKind,
+        trackId: nt.trackId,
       });
       if (filePath && !r.doc.mediaRefs.some((m) => m.assetId === assetId)) {
         r.doc.mediaRefs.push({ assetId, path: filePath, hash: null });
