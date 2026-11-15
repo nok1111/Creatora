@@ -6,9 +6,10 @@ import { awaitJob } from "@/services/jobs";
 /**
  * Timeline filmstrip for a video clip — a `media.filmstrip` job renders
  * FRAMES evenly spaced source frames into a disk-cached tiled JPEG (one
- * ffmpeg pass). The clip draws its [sourceInMs, +durationMs) slice of
- * the strip, so trims stay accurate. Undecodable sources render nothing
- * (the single-thumbnail layer stays behind as fallback).
+ * ffmpeg pass). The clip draws one tile per visible cell, sampled across
+ * its [sourceInMs, +durationMs) window — tile 0 is the clip's first
+ * frame, so trims re-sample from the new edge. Undecodable sources
+ * render nothing (the clip's plain tint remains).
  */
 
 const FRAMES = 48;
@@ -79,13 +80,23 @@ export function FilmstripCanvas({
     const W = cv.width;
     const H = cv.height;
     g.clearRect(0, 0, W, H);
-    const sx = Math.max(0, (sourceInMs / sourceDurationMs) * img.naturalWidth);
-    const sw = Math.min(
-      img.naturalWidth - sx,
-      (durationMs / sourceDurationMs) * img.naturalWidth,
-    );
-    if (sw <= 0) return;
-    g.drawImage(img, sx, 0, sw, img.naturalHeight, 0, 0, W, H);
+    // Tiled thumbnails: one sprite cell per tile, sampled across the
+    // clip's own [sourceIn,+duration) window — tile 0 is the clip's
+    // first frame, so a trim re-samples from the new edge.
+    const cellW = img.naturalWidth / FRAMES;
+    const cellH = img.naturalHeight;
+    const tileW = H * (cellW / cellH);
+    const tiles = Math.max(1, Math.round(W / tileW));
+    const stepMs = durationMs / tiles;
+    for (let i = 0; i < tiles; i++) {
+      const t = Math.min(
+        sourceDurationMs - 1,
+        sourceInMs + (i + 0.5) * stepMs,
+      );
+      const cell = Math.max(0, Math.min(FRAMES - 1, Math.floor((t / sourceDurationMs) * FRAMES)));
+      const x0 = Math.round(i * tileW);
+      g.drawImage(img, cell * cellW, 0, cellW, cellH, x0, 0, Math.round((i + 1) * tileW) - x0, H);
+    }
   }, [img, sourceInMs, sourceDurationMs, durationMs, widthPx, heightPx]);
 
   if (!img) return null;
