@@ -22,7 +22,6 @@ import {
   updateEffect,
 } from "@/lib/timeline-engine";
 import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
-import { coverScale } from "@/lib/format-presets";
 import { api } from "@/lib/ipc";
 import { AudioTools } from "@/modules/editor/AudioTools";
 import { GraphicsInspector, GraphicsSection } from "@/modules/editor/GraphicsInspector";
@@ -291,8 +290,21 @@ export function Inspector() {
                 if (!a?.width || !a.height) return null;
                 const cw = viewDoc.canvas.width;
                 const ch = viewDoc.canvas.height;
-                const fill = coverScale(a.width, a.height, cw, ch) /
-                  Math.min(cw / a.width, ch / a.height);
+                // Cover scale must match clipRect's pipeline (fit → crop →
+                // scale) and account for the rotated bounding box, or a
+                // cropped/rotated clip leaves gaps after Fill.
+                const fitS = Math.min(cw / a.width, ch / a.height);
+                const cx = Math.max(0.01, 1 - clipTransform.cropLeft - clipTransform.cropRight);
+                const cy = Math.max(0.01, 1 - clipTransform.cropTop - clipTransform.cropBottom);
+                const bx = a.width * fitS * cx;
+                const by = a.height * fitS * cy;
+                const rad = (clipTransform.rotationDeg * Math.PI) / 180;
+                const cos = Math.abs(Math.cos(rad));
+                const sin = Math.abs(Math.sin(rad));
+                const fill = Math.max(
+                  cw / (bx * cos + by * sin),
+                  ch / (by * cos + bx * sin),
+                );
                 const btn =
                   "flex-1 rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent";
                 return (
