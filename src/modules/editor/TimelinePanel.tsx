@@ -37,7 +37,9 @@ import {
   moveClipToTrack,
   moveTrackOrder,
   removeClips,
+  removeEffect,
   removeTrack,
+  removeTransition,
   renameTrack,
   setTrackFlag,
   snapPoints,
@@ -45,6 +47,7 @@ import {
   splitClip,
   timecode,
   timelineDuration,
+  transitionsFor,
   trimClip,
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
@@ -59,7 +62,7 @@ import {
   AnchoredMenuSeparator,
 } from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
-import type { Clip, Track, TrackKind, ProjectDoc } from "@/lib/project-types";
+import type { Clip, Track, TrackKind, ProjectDoc, Transition } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
 /**
@@ -108,7 +111,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingTrack, setEditingTrack] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track; clip: Clip } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track; clip: Clip; transition?: Transition } | null>(null);
   // Drop feedback: ghost position + validity for the lane under the pointer.
   const [dropHint, setDropHint] = useState<{
     trackId: string;
@@ -914,15 +917,25 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       )}
                       <div className="relative flex flex-1 items-center gap-1 truncate px-1">
                         {track.locked && <Lock className="size-3 shrink-0" />}
-                        {(clip.effects.length > 0 ||
-                          Object.keys(clip.keyframes ?? {}).length > 0 ||
-                          Object.keys(
-                            (activeVersionId &&
-                              doc.versions.find((v) => v.id === activeVersionId)
-                                ?.clipOverrides[clip.id]?.keyframes) ?? {},
-                          ).length > 0) && (
-                          <Sparkles className="size-3 shrink-0 text-amber-300" />
-                        )}
+                        {(() => {
+                          const ovKf = activeVersionId
+                            ? doc.versions.find((v) => v.id === activeVersionId)
+                                ?.clipOverrides[clip.id]?.keyframes
+                            : undefined;
+                          const n =
+                            clip.effects.length +
+                            Object.keys(clip.keyframes ?? {}).length +
+                            Object.keys(ovKf ?? {}).length;
+                          return n > 0 ? (
+                            <span
+                              className="flex shrink-0 items-center gap-0.5 rounded-sm bg-amber-400 px-0.5 text-[9px] font-bold text-black"
+                              title={t("editor.fxBadge")}
+                            >
+                              <Sparkles className="size-2.5" />
+                              {n}
+                            </span>
+                          ) : null;
+                        })()}
                         {clip.shape && (
                           <span
                             className="size-3 shrink-0 rounded-sm border border-white/30"
@@ -954,8 +967,13 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   return (
                     <div
                       key={tr.id}
-                      className="pointer-events-none absolute top-1 z-10 flex items-center justify-center rounded bg-violet-500/80 text-white"
+                      className="absolute top-1 z-10 flex cursor-context-menu items-center justify-center rounded bg-violet-500/80 text-white hover:bg-violet-400"
                       title={`${tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCtxMenu({ x: e.clientX, y: e.clientY, track, clip: b, transition: tr });
+                      }}
                       style={{ left: msToPx(start), width: w, height: TRACK_H - 8 }}
                     >
                       <Blend className="size-3" />
@@ -1059,6 +1077,86 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   }}
                 >
                   <CopyPlus className="size-3.5" /> {t("editor.duplicate")}
+                </AnchoredMenuItem>
+                {ctxMenu.transition && (
+                  <AnchoredMenuItem
+                    destructive
+                    disabled={locked}
+                    onClick={() => {
+                      const tr = ctxMenu.transition!;
+                      mutate((d) => removeTransition(d, ctxMenu.track.id, tr.id));
+                      setCtxMenu(null);
+                    }}
+                  >
+                    <Blend className="size-3.5" /> {t("editor.removeTransitionItem", { type: ctxMenu.transition.type })}
+                  </AnchoredMenuItem>
+                )}
+                <AnchoredMenuItem
+                  destructive
+                  disabled={locked || !ctxMenu.clip.effects.length}
+                  onClick={() => {
+                    const clipId = ctxMenu.clip.id;
+                    mutate((d) => {
+                      let nd = d;
+                      for (const fx of findClip(d, clipId)?.clip.effects ?? [])
+                        nd = removeEffect(nd, clipId, fx.id);
+                      return nd;
+                    });
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Sparkles className="size-3.5" /> {t("editor.removeEffects")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  destructive
+                  disabled={
+                    locked ||
+                    (!Object.keys(ctxMenu.clip.keyframes ?? {}).length &&
+                      !ctxMenu.clip.textFx &&
+                      !(activeVersionId &&
+                        doc.versions.find((v) => v.id === activeVersionId)
+                          ?.clipOverrides[ctxMenu.clip.id]?.keyframes))
+                  }
+                  onClick={() => {
+                    const clipId = ctxMenu.clip.id;
+                    mutate((d) => {
+                      const next = structuredClone(d);
+                      const hit = findClip(next, clipId);
+                      if (hit) {
+                        hit.clip.keyframes = {};
+                        hit.clip.textFx = null;
+                      }
+                      if (activeVersionId) {
+                        const ov = next.versions.find((v) => v.id === activeVersionId)
+                          ?.clipOverrides[clipId];
+                        if (ov) {
+                          delete ov.keyframes;
+                          ov.textFx = null;
+                        }
+                      }
+                      return next;
+                    });
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Sparkles className="size-3.5" /> {t("editor.removeAnimation")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  destructive
+                  disabled={locked || !transitionsFor(doc, ctxMenu.clip.id).length}
+                  onClick={() => {
+                    const clipId = ctxMenu.clip.id;
+                    const trackId = ctxMenu.track.id;
+                    mutate((d) => {
+                      let nd = d;
+                      for (const tr of transitionsFor(d, clipId))
+                        nd = removeTransition(nd, trackId, tr.id);
+                      return nd;
+                    });
+                    setCtxMenu(null);
+                  }}
+                >
+                  <Blend className="size-3.5" /> {t("editor.removeTransitions")}
                 </AnchoredMenuItem>
                 <AnchoredMenuItem
                   destructive
