@@ -193,6 +193,7 @@ export const en = {
     fxNeedsVisualTrack: "Effects apply to video, image, text and graphics tracks",
     fxNeedsNeighbor: "Merge effects need a neighboring clip",
     fxNeedsAdjacent: "Clips must be adjacent for a merge effect",
+    fxApplied: "Applied {{name}}",
     tabTimeline: "Timeline",
     tabSubtitles: "Subtitles",
     emptyTitle: "Nothing open yet",

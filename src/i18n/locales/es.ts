@@ -196,6 +196,7 @@ export const es: typeof en = {
     fxNeedsVisualTrack: "Los efectos aplican a pistas de video, imagen, texto y gráficos",
     fxNeedsNeighbor: "Los efectos de unión necesitan un clip vecino",
     fxNeedsAdjacent: "Los clips deben estar adyacentes para un efecto de unión",
+    fxApplied: "{{name}} aplicado",
     tabTimeline: "Timeline",
     tabSubtitles: "Subtítulos",
     emptyTitle: "Nada abierto aún",

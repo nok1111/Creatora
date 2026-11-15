@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Blend,
   Copy,
   CopyPlus,
   Eye,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Plus,
   Scissors,
+  Sparkles,
   Trash2,
   Volume2,
   VolumeX,
@@ -409,22 +411,35 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         toast.error(t("editor.fxNeedsAdjacent"));
         return;
       }
-      mutate((d) => addTransition(d, track.id, a.id, b.id, 500, itemId)?.doc ?? d);
+      let ok = false;
+      mutate((d) => {
+        const r = addTransition(d, track.id, a.id, b.id, 500, itemId);
+        if (r) { ok = true; return r.doc; }
+        return d;
+      });
+      if (ok) toast.success(t("editor.fxApplied", { name: itemId }));
+      else toast.error(t("editor.fxNeedsAdjacent"));
       return;
     }
     if (category === "overlay") {
       const def = effectDef(itemId);
       if (!def) return;
+      // Drop defaults are intentionally *visible* — a neutral param would
+      // apply silently and read as "the drag didn't work".
+      const VISIBLE: Record<string, number> = {
+        amount: 0.25, stops: 0.5, radius: 8,
+      };
       mutate((d) =>
         addEffect(d, target.id, {
           id: crypto.randomUUID(),
           type: def.type,
           enabled: true,
           params: Object.fromEntries(
-            Object.entries(def.params).map(([k, s]) => [k, s.def]),
+            Object.entries(def.params).map(([k, s]) => [k, VISIBLE[k] ?? s.def]),
           ),
         }),
       );
+      toast.success(t("editor.fxApplied", { name: def.label }));
       return;
     }
     // start / end → animation preset; duration capped at half the clip.
@@ -435,6 +450,8 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         versionId: activeVersionId,
       }),
     );
+    const label = itemId.replace(/([A-Z])/g, " $1").trim();
+    toast.success(t("editor.fxApplied", { name: label }));
   };
 
   const onDrop = (e: React.DragEvent, track: Track) => {
@@ -897,6 +914,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       )}
                       <div className="relative flex flex-1 items-center gap-1 truncate px-1">
                         {track.locked && <Lock className="size-3 shrink-0" />}
+                        {(clip.effects.length > 0 ||
+                          Object.keys(clip.keyframes ?? {}).length > 0 ||
+                          Object.keys(
+                            (activeVersionId &&
+                              doc.versions.find((v) => v.id === activeVersionId)
+                                ?.clipOverrides[clip.id]?.keyframes) ?? {},
+                          ).length > 0) && (
+                          <Sparkles className="size-3 shrink-0 text-amber-300" />
+                        )}
                         {clip.shape && (
                           <span
                             className="size-3 shrink-0 rounded-sm border border-white/30"
@@ -915,6 +941,24 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "right");
                         }}
                       />
+                    </div>
+                  );
+                })}
+                {/* Transition markers — blend badge centered on each junction. */}
+                {track.transitions.map((tr) => {
+                  const a = track.clips.find((c) => c.id === tr.clipA);
+                  const b = track.clips.find((c) => c.id === tr.clipB);
+                  if (!a || !b) return null;
+                  const start = b.startMs;
+                  const w = Math.max(12, msToPx(Math.min(tr.durationMs, a.startMs + a.durationMs - start)));
+                  return (
+                    <div
+                      key={tr.id}
+                      className="pointer-events-none absolute top-1 z-10 flex items-center justify-center rounded bg-violet-500/80 text-white"
+                      title={`${tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
+                      style={{ left: msToPx(start), width: w, height: TRACK_H - 8 }}
+                    >
+                      <Blend className="size-3" />
                     </div>
                   );
                 })}
