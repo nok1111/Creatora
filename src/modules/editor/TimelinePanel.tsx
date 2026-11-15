@@ -580,7 +580,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         <div className="flex" style={{ width: HEADER_W + lanesW, minWidth: "100%" }}>
           {/* Track headers */}
           <div
-            className="sticky left-0 z-20 shrink-0 border-r border-border bg-card pt-6"
+            className="sticky left-0 z-40 shrink-0 border-r border-border bg-card pt-6"
             style={{ width: HEADER_W }}
           >
             {doc.timeline.tracks.map((track, ti) => (
@@ -658,7 +658,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           {/* Ruler + lanes */}
           <div className="relative flex flex-1 flex-col">
             <div
-              className="sticky top-0 z-10 h-6 cursor-ew-resize border-b border-border bg-card/95 backdrop-blur"
+              className="sticky top-0 z-30 h-6 cursor-ew-resize border-b border-border bg-card/95 backdrop-blur"
               onPointerDown={onRulerPointerDown}
             >
               {rulerTicks.map((ms) => (
@@ -914,7 +914,7 @@ function PlayheadOverlay({ msToPx }: { msToPx: (ms: number) => number }) {
   const playheadMs = useEditor((s) => s.playheadMs);
   return (
     <div
-      className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-destructive"
+      className="pointer-events-none absolute top-0 bottom-0 z-40 w-px bg-destructive"
       style={{ left: msToPx(playheadMs) }}
     >
       <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-destructive" />
