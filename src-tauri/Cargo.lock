@@ -489,6 +489,8 @@ dependencies = [
  "ureq",
  "uuid",
  "webbrowser",
+ "webview2-com",
+ "windows-core",
  "xxhash-rust",
 ]
 

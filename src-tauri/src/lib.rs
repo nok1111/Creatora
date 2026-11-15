@@ -2,6 +2,7 @@ pub mod audio;
 mod commands;
 pub mod db;
 pub mod error;
+mod external_drop;
 pub mod graphics;
 pub mod jobs;
 pub mod media;
@@ -69,6 +70,9 @@ pub fn run() {
             app.manage(jobs);
             social::scheduler::start(app.handle().clone(), db.clone());
             app.manage(db);
+            if let Err(e) = external_drop::install(app.handle()) {
+                log::warn!("external drop bridge not installed: {e}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

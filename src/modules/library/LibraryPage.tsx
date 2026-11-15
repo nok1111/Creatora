@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import {
   Upload, Search, Film, Music, Image as ImageIcon, FileText,
   AlertTriangle, MoreVertical, Link2, Trash2, Copy, Loader2,
@@ -247,19 +248,49 @@ export function LibraryPage() {
     refresh();
   };
 
-  // Drag-drop: Tauri emits window drag events with absolute file paths.
+  // Drag-drop: with Tauri's native drop handler disabled (required for
+  // in-app HTML5 DnD on Windows), OS file drops arrive as DOM events whose
+  // File objects carry no path. The drop forwards them to the host via
+  // postMessageWithAdditionalObjects; Rust answers on this channel with the
+  // real filesystem paths. The Tauri event listener stays as a fallback.
   useEffect(() => {
-    const unlisten = getCurrentWindow().onDragDropEvent((e) => {
-      if (e.payload.type === "over") setDragOver(true);
-      else if (e.payload.type === "leave") setDragOver(false);
-      else if (e.payload.type === "drop") {
+    const unlistenTauri = getCurrentWindow().onDragDropEvent((e) => {
+      if (e.payload.type === "drop") {
         setDragOver(false);
         void runImport(e.payload.paths);
       }
     });
-    return () => { void unlisten.then((f) => f()); };
+    const unlistenDrop = listen<string[]>("creatora://external-file-drop", (e) => {
+      void runImport(e.payload);
+    });
+    return () => {
+      void unlistenTauri.then((f) => f());
+      void unlistenDrop.then((f) => f());
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const onExternalDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragOver(true);
+  };
+  const onExternalDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOver(false);
+  };
+  const onExternalDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    const wv = (window as unknown as {
+      chrome?: { webview?: { postMessageWithAdditionalObjects?: (m: string, o: ArrayLike<object>) => void } };
+    }).chrome?.webview;
+    wv?.postMessageWithAdditionalObjects?.("__CREATORA_EXT_DROP__", files);
+  };
 
   const pickFiles = async () => {
     const selected = await openDialog({ multiple: true, title: t("library.importTitle"), filters: MEDIA_FILTERS });
@@ -380,6 +411,9 @@ export function LibraryPage() {
           "flex min-w-0 flex-1 flex-col p-6 transition-colors",
           dragOver && "bg-accent/30 outline-dashed outline-2 -outline-offset-8 outline-primary",
         )}
+        onDragOver={onExternalDragOver}
+        onDragLeave={onExternalDragLeave}
+        onDrop={onExternalDrop}
       >
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold">{t("library.title")}</h1>
