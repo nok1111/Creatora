@@ -1,7 +1,7 @@
 import type { AssetKind } from "@/lib/media-types";
 
 /**
- * In-flight drag payload for media-bin → timeline drops.
+ * In-flight drag payloads for bin → timeline drops.
  *
  * `dataTransfer.getData` is unreadable during `dragover` (only on `drop`), so
  * the timeline can't know the asset kind/duration to draw a ghost + validate
@@ -15,12 +15,28 @@ export interface MediaDragPayload {
   kind: AssetKind;
 }
 
-let current: MediaDragPayload | null = null;
+export type EffectCategory = "start" | "end" | "merge" | "overlay";
 
-export function setDragPayload(p: MediaDragPayload | null) {
+/** Effects-bin tile → timeline drop. `itemId` is an ANIM_PRESETS id for
+ *  start/end, a transition kind for merge, or an EFFECTS type for overlay. */
+export interface EffectDragPayload {
+  effect: true;
+  category: EffectCategory;
+  itemId: string;
+}
+
+export type DragPayload = MediaDragPayload | EffectDragPayload;
+
+let current: DragPayload | null = null;
+
+export function setDragPayload(p: DragPayload | null) {
   current = p;
 }
 
-export function getDragPayload(): MediaDragPayload | null {
+export function getDragPayload(): DragPayload | null {
   return current;
+}
+
+export function isEffectPayload(p: DragPayload | null): p is EffectDragPayload {
+  return !!p && (p as EffectDragPayload).effect === true;
 }

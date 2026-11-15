@@ -24,7 +24,10 @@ import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
   addClip,
+  addEffect,
   addTrack,
+  addTransition,
+  applyAnimationPreset,
   duplicateClips,
   extractClips,
   findClip,
@@ -44,7 +47,8 @@ import {
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
-import { getDragPayload } from "@/lib/drag-payload";
+import { getDragPayload, isEffectPayload, type EffectCategory } from "@/lib/drag-payload";
+import { effectDef } from "@/lib/effects";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,6 +98,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const setSnapEnabled = useEditor((s) => s.setSnapEnabled);
   const mutate = useEditor((s) => s.mutate);
+  const activeVersionId = useEditor((s) => s.activeVersionId);
   const mutateInGesture = useEditor((s) => s.mutateInGesture);
   const beginGesture = useEditor((s) => s.beginGesture);
   const endGesture = useEditor((s) => s.endGesture);
@@ -366,16 +371,93 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const dropValid = (track: Track, kind: string | undefined) =>
     !track.locked && (!kind || (track.kind === "audio") === (kind === "audio"));
 
+  /** Effects-bin drops apply onto the clip under the cursor — every tile maps
+      to a render-supported primitive (baked keyframes / xfade / clip.fx). */
+  const applyFxDrop = (track: Track, ms: number, category: EffectCategory, itemId: string) => {
+    if (track.locked) {
+      toast.error(t("editor.dropLocked"));
+      return;
+    }
+    if (track.kind === "audio") {
+      toast.error(t("editor.fxNeedsVisualTrack"));
+      return;
+    }
+    const target = track.clips.find(
+      (c) => ms >= c.startMs && ms < c.startMs + c.durationMs,
+    );
+    if (!target) {
+      toast.error(t("editor.fxDropOnClip"));
+      return;
+    }
+    if (category === "merge") {
+      const sorted = [...track.clips].sort((a, b) => a.startMs - b.startMs);
+      const idx = sorted.indexOf(target);
+      const prev = idx > 0 ? sorted[idx - 1] : undefined;
+      const next = idx < sorted.length - 1 ? sorted[idx + 1] : undefined;
+      const beforeMid = ms < target.startMs + target.durationMs / 2;
+      const [a, b] = beforeMid && prev ? [prev, target]
+        : !beforeMid && next ? [target, next]
+        : prev ? [prev, target]
+        : next ? [target, next]
+        : [];
+      if (!a || !b) {
+        toast.error(t("editor.fxNeedsNeighbor"));
+        return;
+      }
+      const gap = b.startMs - (a.startMs + a.durationMs);
+      if (gap > 40) {
+        toast.error(t("editor.fxNeedsAdjacent"));
+        return;
+      }
+      mutate((d) => addTransition(d, track.id, a.id, b.id, 500, itemId)?.doc ?? d);
+      return;
+    }
+    if (category === "overlay") {
+      const def = effectDef(itemId);
+      if (!def) return;
+      mutate((d) =>
+        addEffect(d, target.id, {
+          id: crypto.randomUUID(),
+          type: def.type,
+          enabled: true,
+          params: Object.fromEntries(
+            Object.entries(def.params).map(([k, s]) => [k, s.def]),
+          ),
+        }),
+      );
+      return;
+    }
+    // start / end → animation preset; duration capped at half the clip.
+    const dur = Math.min(500, Math.max(50, target.durationMs / 2));
+    mutate((d) =>
+      applyAnimationPreset(d, target.id, itemId, {
+        durationMs: dur,
+        versionId: activeVersionId,
+      }),
+    );
+  };
+
   const onDrop = (e: React.DragEvent, track: Track) => {
     e.preventDefault();
     setHint(null);
+    const fxJson = e.dataTransfer.getData("application/x-creatora-effect");
+    if (fxJson) {
+      const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
+      const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+      try {
+        const { category, itemId } = JSON.parse(fxJson);
+        applyFxDrop(track, ms, category, itemId);
+      } catch { /* malformed payload — ignore */ }
+      return;
+    }
     const assetId = e.dataTransfer.getData("application/x-creatora-asset");
     if (!assetId) return;
     if (track.locked) {
       toast.error(t("editor.dropLocked"));
       return;
     }
-    const kind = getDragPayload()?.kind ?? assets.get(assetId)?.kind;
+    const pl = getDragPayload();
+    const kind = (pl && !isEffectPayload(pl) ? pl.kind : undefined) ?? assets.get(assetId)?.kind;
     if (!dropValid(track, kind)) {
       toast.error(t("editor.dropWrongTrack"));
       return;
@@ -418,7 +500,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     setHint({
       trackId: NEW_TRACK,
       startMs: ms,
-      durationMs: payload?.durationMs ?? 3000,
+      durationMs: payload && !isEffectPayload(payload) ? payload.durationMs : 3000,
       valid: true,
     });
   };
@@ -428,7 +510,8 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     setHint(null);
     const assetId = e.dataTransfer.getData("application/x-creatora-asset");
     if (!assetId) return;
-    const kind = getDragPayload()?.kind ?? assets.get(assetId)?.kind;
+    const pl2 = getDragPayload();
+    const kind = (pl2 && !isEffectPayload(pl2) ? pl2.kind : undefined) ?? assets.get(assetId)?.kind;
     const lane = e.currentTarget as HTMLElement;
     const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
     const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
@@ -706,19 +789,35 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 onDragOver={(e) => {
                   e.preventDefault();
                   const lane = e.currentTarget as HTMLElement;
+                  const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+                  // Effects-bin drop: ghost highlights the clip it would hit.
+                  if (e.dataTransfer.types.includes("application/x-creatora-effect")) {
+                    const target = track.clips.find(
+                      (c) => ms >= c.startMs && ms < c.startMs + c.durationMs,
+                    );
+                    const valid =
+                      !!target && !track.locked && track.kind !== "audio" &&
+                      isEffectPayload(getDragPayload());
+                    e.dataTransfer.dropEffect = valid ? "copy" : "none";
+                    setHint(
+                      target
+                        ? { trackId: track.id, startMs: target.startMs, durationMs: target.durationMs, valid }
+                        : null,
+                    );
+                    return;
+                  }
                   if (!e.dataTransfer.types.includes("application/x-creatora-asset")) {
                     e.dataTransfer.dropEffect = "none";
                     setHint(null);
                     return;
                   }
                   const payload = getDragPayload();
-                  const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
-                  const valid = dropValid(track, payload?.kind);
+                  const valid = dropValid(track, payload && !isEffectPayload(payload) ? payload.kind : undefined);
                   e.dataTransfer.dropEffect = valid ? "copy" : "none";
                   setHint({
                     trackId: track.id,
                     startMs: ms,
-                    durationMs: payload?.durationMs ?? 3000,
+                    durationMs: payload && !isEffectPayload(payload) ? payload.durationMs : 3000,
                     valid,
                   });
                 }}
