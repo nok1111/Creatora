@@ -325,6 +325,10 @@ export function Preview({
             filter: filters || undefined,
             objectFit: "fill",
             position: "absolute",
+            // Tailwind preflight sets `video, img { max-width: 100%; height:
+            // auto }` — zoomed-in rects legitimately exceed the stage, so the
+            // cap must be lifted or the media collapses to the left edge.
+            maxWidth: "none",
           };
           // Preview decodes the proxy when available + enabled; export always
           // reads originals — a proxy is display-only by design.
