@@ -68,7 +68,7 @@ const CLIP_TONES: Record<TrackKind, { bg: string; border: string }> = {
   video: { bg: "bg-sky-500/20", border: "border-sky-400/50" },
   audio: { bg: "bg-red-400/20", border: "border-red-400/50" },
   image: { bg: "bg-emerald-400/15", border: "border-emerald-400/50" },
-  text: { bg: "bg-white/15", border: "border-white/40" },
+  text: { bg: "bg-zinc-400/10", border: "border-zinc-300/30" },
   graphics: { bg: "bg-violet-400/15", border: "border-violet-400/50" },
 };
 
@@ -773,7 +773,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       />
                       {thumb && (
                         <div
-                          className="pointer-events-none absolute inset-y-0 right-2 left-2 opacity-40"
+                          className="pointer-events-none absolute inset-y-0 right-2 left-2 opacity-25"
                           style={{
                             backgroundImage: `url("${thumb}")`,
                             backgroundSize:
