@@ -376,6 +376,12 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     const edge = e.clientX - inX < 8 ? "left" : outX - e.clientX < 8 ? "right" : "move";
     const startX = e.clientX;
     const MIN = 50;
+    // Track the span as APPLIED — mutateInGesture rewrites the doc every
+    // pointermove, so the map must go from the current span to the target,
+    // not from the original (re-applying a map to remapped times makes the
+    // strip run away and can push tMs negative).
+    let curIn = in0;
+    let curOut = out0;
     beginGesture();
     document.body.style.cursor = edge === "move" ? "grabbing" : "ew-resize";
     const onMove = (ev: PointerEvent) => {
@@ -392,11 +398,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       }
       ni = Math.max(0, Math.min(ni, clip.durationMs - MIN));
       no = Math.max(ni + MIN, Math.min(no, clip.durationMs));
+      const fi = curIn;
+      const fo = curOut;
       const map = (t: number) =>
-        out0 <= in0 ? t + (ni - in0) : ni + (t - in0) * ((no - ni) / (out0 - in0));
+        fo <= fi ? t + (ni - fi) : ni + (t - fi) * ((no - ni) / (fo - fi));
       mutateInGesture((d) =>
         retimeClipKeyframes(d, clip.id, activeVersionId, group.tag, map),
       );
+      curIn = ni;
+      curOut = no;
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -1103,17 +1113,21 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     const fx = i < clip.effects.length ? clip.effects[i] : undefined;
                     const anim = fx ? undefined : anims[i - clip.effects.length];
                     if (anim) {
+                      // Display clamps the strip to the clip; the handler
+                      // keeps the raw span so a drag remaps real data.
+                      const din = Math.max(0, Math.min(clip.durationMs, anim.inMs));
+                      const dout = Math.max(din, Math.min(clip.durationMs, anim.outMs));
                       return (
                         <div
                           key={`${clip.id}-anim-${anim.tag ?? "kf"}`}
                           className={`absolute flex items-center rounded-sm bg-amber-400 px-1 text-[8px] font-medium leading-none text-black/80 ${track.locked ? "cursor-not-allowed" : "cursor-grab"}`}
                           style={{
-                            left: msToPx(clip.startMs + anim.inMs),
-                            width: Math.max(6, msToPx(Math.max(anim.outMs - anim.inMs, 1))),
+                            left: msToPx(clip.startMs + din),
+                            width: Math.max(6, msToPx(Math.max(dout - din, 1))),
                             top,
                             height: FX_ROW_H - 2,
                           }}
-                          title={`${anim.tag ?? "keyframes"} · ${(anim.inMs / 1000).toFixed(1)}–${(anim.outMs / 1000).toFixed(1)}s`}
+                          title={`${anim.tag ?? "keyframes"} · ${(din / 1000).toFixed(1)}–${(dout / 1000).toFixed(1)}s`}
                           onPointerDown={(e) => onAnimBarPointerDown(e, track, clip, anim)}
                         >
                           <span className="truncate">{anim.tag ?? "keyframes"}</span>

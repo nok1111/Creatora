@@ -646,8 +646,12 @@ export function updateEffect(
   const fx = hit.clip.effects.find((e) => e.id === effectId);
   if (!fx) return next;
   if (patch.enabled !== undefined) fx.enabled = patch.enabled;
-  if (patch.inMs !== undefined) fx.inMs = patch.inMs;
-  if (patch.outMs !== undefined) fx.outMs = patch.outMs;
+  // Effect windows are clip-relative — clamp into the clip bounds.
+  const clampT = (t: number) => Math.max(0, Math.min(hit.clip.durationMs, t));
+  if (patch.inMs !== undefined) fx.inMs = clampT(patch.inMs);
+  if (patch.outMs !== undefined) fx.outMs = clampT(patch.outMs);
+  if (fx.inMs !== undefined && fx.outMs !== undefined && fx.outMs <= fx.inMs)
+    fx.outMs = Math.min(hit.clip.durationMs, fx.inMs + 50);
   if (patch.params) Object.assign(fx.params, patch.params);
   return next;
 }
@@ -1207,8 +1211,13 @@ export function retimeClipKeyframes(
   const next = cloneDoc(doc);
   const hit = findClip(next, clipId);
   if (!hit || hit.track.locked) return next;
+  const dur = hit.clip.durationMs;
   const retimeArr = (arr: Keyframe[]) =>
-    arr.map((k) => (k.anim === tag ? { ...k, tMs: Math.round(map(k.tMs)) } : k));
+    arr.map((k) =>
+      k.anim === tag
+        ? { ...k, tMs: Math.max(0, Math.min(dur, Math.round(map(k.tMs)))) }
+        : k,
+    );
   const ov = versionId
     ? next.versions.find((v) => v.id === versionId)?.clipOverrides[clipId]
     : undefined;
