@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "@/lib/ipc";
 import { awaitJob } from "@/services/jobs";
@@ -6,17 +6,22 @@ import { awaitJob } from "@/services/jobs";
 /**
  * Timeline filmstrip for a video clip — a `media.filmstrip` job renders
  * FRAMES evenly spaced source frames into a disk-cached tiled JPEG (one
- * ffmpeg pass). The clip draws one tile per visible cell, sampled across
- * its [sourceInMs, +durationMs) window — tile 0 is the clip's first
- * frame, so trims re-sample from the new edge. Undecodable sources
- * render nothing (the clip's plain tint remains).
+ * ffmpeg pass). The clip tiles it as a CSS background at real cell size,
+ * offset so the first tile is the frame at sourceInMs — trimming shifts
+ * the strip to the clip's new start frame. No canvas, so there is no
+ * backing-store size limit on very long clips.
  */
 
 const FRAMES = 48;
 
-const strips = new Map<string, Promise<HTMLImageElement | null>>();
+interface Strip {
+  url: string;
+  cellAspect: number;
+}
 
-function loadStrip(srcPath: string): Promise<HTMLImageElement | null> {
+const strips = new Map<string, Promise<Strip | null>>();
+
+function loadStrip(srcPath: string): Promise<Strip | null> {
   let p = strips.get(srcPath);
   if (!p) {
     p = (async () => {
@@ -33,7 +38,10 @@ function loadStrip(srcPath: string): Promise<HTMLImageElement | null> {
         const img = new Image();
         img.src = convertFileSrc(jpg);
         await img.decode();
-        return img;
+        return {
+          url: convertFileSrc(jpg),
+          cellAspect: img.naturalWidth / FRAMES / img.naturalHeight,
+        };
       } catch {
         return null; // missing/undecodable source — filmstrip absent
       }
@@ -47,68 +55,39 @@ export function FilmstripCanvas({
   srcPath,
   sourceInMs,
   sourceDurationMs,
-  durationMs,
   heightPx,
-  widthPx,
 }: {
   srcPath: string;
   sourceInMs: number;
   /** Full source-media duration — the strip covers [0, this). */
   sourceDurationMs: number;
-  durationMs: number;
   heightPx: number;
-  widthPx: number;
 }) {
-  const [img, setImg] = useState<HTMLImageElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [strip, setStrip] = useState<Strip | null>(null);
 
   useEffect(() => {
     let live = true;
-    loadStrip(srcPath).then((i) => {
-      if (live) setImg(i);
+    loadStrip(srcPath).then((s) => {
+      if (live) setStrip(s);
     });
     return () => {
       live = false;
     };
   }, [srcPath]);
 
-  useEffect(() => {
-    const cv = canvasRef.current;
-    if (!cv || !img || sourceDurationMs <= 0) return;
-    const g = cv.getContext("2d");
-    if (!g) return;
-    const W = cv.width;
-    const H = cv.height;
-    g.clearRect(0, 0, W, H);
-    // Tiled thumbnails: one sprite cell per tile, sampled across the
-    // clip's own [sourceIn,+duration) window — tile 0 is the clip's
-    // first frame, so a trim re-samples from the new edge.
-    const cellW = img.naturalWidth / FRAMES;
-    const cellH = img.naturalHeight;
-    const tileW = H * (cellW / cellH);
-    const tiles = Math.max(1, Math.round(W / tileW));
-    const stepMs = durationMs / tiles;
-    for (let i = 0; i < tiles; i++) {
-      const t = Math.min(
-        sourceDurationMs - 1,
-        sourceInMs + (i + 0.5) * stepMs,
-      );
-      const cell = Math.max(0, Math.min(FRAMES - 1, Math.floor((t / sourceDurationMs) * FRAMES)));
-      const x0 = Math.round(i * tileW);
-      g.drawImage(img, cell * cellW, 0, cellW, cellH, x0, 0, Math.round((i + 1) * tileW) - x0, H);
-    }
-  }, [img, sourceInMs, sourceDurationMs, durationMs, widthPx, heightPx]);
-
-  if (!img) return null;
+  if (!strip || sourceDurationMs <= 0) return null;
+  const cellW = heightPx * strip.cellAspect;
+  const stripW = cellW * FRAMES;
+  const offset = (sourceInMs / sourceDurationMs) * stripW;
   return (
-    <canvas
-      ref={canvasRef}
-      // Backing store capped — the strip has FRAMES cells, so huge clips
-      // (multi-minute sources) only need a few thousand px of resolution;
-      // uncapped it would exceed the browser canvas limit and waste RAM.
-      width={Math.max(2, Math.min(8192, Math.round(widthPx)))}
-      height={Math.max(2, Math.round(heightPx))}
-      className="pointer-events-none absolute inset-0 h-full w-full opacity-60"
+    <div
+      className="pointer-events-none absolute inset-0 opacity-60"
+      style={{
+        backgroundImage: `url("${strip.url}")`,
+        backgroundSize: `${stripW}px 100%`,
+        backgroundRepeat: "repeat-x",
+        backgroundPositionX: `${-offset}px`,
+      }}
     />
   );
 }

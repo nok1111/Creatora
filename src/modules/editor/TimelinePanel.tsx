@@ -779,9 +779,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           sourceDurationMs={
                             clip.sourceDurationMs ?? asset.durationMs ?? clip.durationMs
                           }
-                          durationMs={clip.durationMs}
                           heightPx={TRACK_H - 8}
-                          widthPx={Math.max(6, msToPx(clip.durationMs))}
                         />
                       )}
                       {clip.mediaRef &&
