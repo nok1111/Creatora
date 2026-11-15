@@ -279,7 +279,7 @@ export function Inspector() {
               {slider(
                 t("editor.propZoom"),
                 clipTransform.scaleX,
-                0.1, 4, 0.01,
+                0.1, 8, 0.01,
                 (v) => patchTransformMany({ scaleX: v, scaleY: v }),
                 undefined,
                 (v) => `${Math.round(v * 100)}%`,

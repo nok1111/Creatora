@@ -69,6 +69,7 @@ export function Preview({
   const endGesture = useEditor((s) => s.endGesture);
   const select = useEditor((s) => s.select);
   const stageRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   const selection = useEditor((s) => s.selection);
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const [editing, setEditing] = useState<string | null>(null);
@@ -243,7 +244,8 @@ export function Preview({
     // inline-size container: the stage below sizes its height from 100cqw
     // so it always fits the pane — regardless of resizable panel widths.
     <div
-      className="flex h-full items-center justify-center bg-black/60 p-4"
+      ref={paneRef}
+      className="relative flex h-full items-center justify-center bg-black/60 p-4"
       style={{ containerType: "inline-size" }}
     >
       <div
@@ -619,104 +621,6 @@ export function Preview({
             );
           })()}
 
-        {/* Selection overlay: outline + resize/rotate handles + snap guides.
-            All gestures write the same transform fields the FFmpeg render
-            plan consumes, honoring active-version overrides. */}
-        {(() => {
-          const stage = stageRef.current;
-          const selId = selection.length === 1 ? selection[0] : null;
-          if (!stage || !selId || editing) return null;
-          const el = stage.querySelector<HTMLElement>(`[data-clip-id="${selId}"]`);
-          const hit = selId ? findClip(viewDoc, selId) : null;
-          if (!el || !hit) return null;
-          const sr = stage.getBoundingClientRect();
-          const r = el.getBoundingClientRect();
-          const box = { left: r.left - sr.left, top: r.top - sr.top, w: r.width, h: r.height };
-          const kx = viewDoc.canvas.width / Math.max(1, sr.width);
-          const ky = viewDoc.canvas.height / Math.max(1, sr.height);
-          const write = (patch: Partial<typeof hit.clip.transform>) => {
-            const versionId = useEditor.getState().activeVersionId;
-            mutateInGesture((dd) =>
-              versionId
-                ? setVersionClipOverride(dd, versionId, selId, {
-                    transform: { ...hit.clip.transform, ...patch },
-                  })
-                : updateClip(dd, selId, { transform: patch }),
-            );
-          };
-          const corner = (e: React.PointerEvent) => {
-            e.preventDefault(); e.stopPropagation();
-            beginGesture();
-            const sx = e.clientX, sy = e.clientY;
-            const bs = hit.clip.transform;
-            const mv = (ev: PointerEvent) => {
-              const ns = scaleFromCorner(bs.scaleX, bs.scaleY, box.w / kx, box.h / ky,
-                (ev.clientX - sx) * kx, (ev.clientY - sy) * ky);
-              write({ scaleX: ns.scaleX, scaleY: ns.scaleY });
-            };
-            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
-            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
-          };
-          // Single-axis edge resize — L/R stretch scaleX, T/B stretch
-          // scaleY (sign flips so dragging the edge outward always grows).
-          const edge = (axis: "x" | "y", sign: 1 | -1) => (e: React.PointerEvent) => {
-            e.preventDefault(); e.stopPropagation();
-            beginGesture();
-            const sx = e.clientX, sy = e.clientY;
-            const bs = hit.clip.transform;
-            const mv = (ev: PointerEvent) => {
-              const f = Math.max(
-                0.05,
-                axis === "x"
-                  ? 1 + (sign * (ev.clientX - sx) * kx) / (box.w / kx)
-                  : 1 + (sign * (ev.clientY - sy) * ky) / (box.h / ky),
-              );
-              write(axis === "x" ? { scaleX: bs.scaleX * f } : { scaleY: bs.scaleY * f });
-            };
-            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
-            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
-          };
-          const rotate = (e: React.PointerEvent) => {
-            e.preventDefault(); e.stopPropagation();
-            beginGesture();
-            const cx = box.left + box.w / 2, cy = box.top + box.h / 2;
-            const mv = (ev: PointerEvent) => write({ rotationDeg: angleDeg(cx, cy, ev.clientX - sr.left, ev.clientY - sr.top) });
-            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
-            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
-          };
-          const sq = "absolute size-3 rounded-[3px] border border-accent bg-white shadow-sm";
-          const ed = "absolute size-2.5 rounded-[2px] border border-accent bg-white shadow-sm";
-          const corners: [number, number, string][] = [
-            [-6, -6, "cursor-nwse-resize"],
-            [box.w - 6, -6, "cursor-nesw-resize"],
-            [-6, box.h - 6, "cursor-nesw-resize"],
-            [box.w - 6, box.h - 6, "cursor-nwse-resize"],
-          ];
-          const edges: [number, number, string, "x" | "y", 1 | -1][] = [
-            [box.w / 2 - 5, -5, "cursor-ns-resize", "y", -1],
-            [box.w - 5, box.h / 2 - 5, "cursor-ew-resize", "x", 1],
-            [box.w / 2 - 5, box.h - 5, "cursor-ns-resize", "y", 1],
-            [-5, box.h / 2 - 5, "cursor-ew-resize", "x", -1],
-          ];
-          return (
-            <div className="pointer-events-none absolute border-[1.5px] border-accent" style={box}>
-              {/* Rotate knob on a stem — circle reads as rotation, not resize. */}
-              <div className="absolute -top-5 left-1/2 flex -translate-x-1/2 flex-col items-center">
-                <div
-                  className="pointer-events-auto size-3 cursor-grab rounded-full border-2 border-accent bg-background"
-                  onPointerDown={rotate}
-                />
-                <div className="h-2 w-px bg-accent" />
-              </div>
-              {corners.map(([x, y, cur], i) => (
-                <div key={`c${i}`} className={`${sq} ${cur}`} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={corner} />
-              ))}
-              {edges.map(([x, y, cur, axis, sign], i) => (
-                <div key={`e${i}`} className={`${ed} ${cur}`} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={edge(axis, sign)} />
-              ))}
-            </div>
-          );
-        })()}
 
         {/* Snap guide lines while dragging. */}
         {guides.v !== null && (
@@ -817,6 +721,107 @@ export function Preview({
           />
         </div>
       </div>
+
+        {/* Selection overlay: outline + resize/rotate handles + snap guides.
+            All gestures write the same transform fields the FFmpeg render
+            plan consumes, honoring active-version overrides. */}
+        {(() => {
+          const stage = stageRef.current;
+          const pane = paneRef.current;
+          const selId = selection.length === 1 ? selection[0] : null;
+          if (!stage || !pane || !selId || editing) return null;
+          const el = stage.querySelector<HTMLElement>(`[data-clip-id="${selId}"]`);
+          const hit = selId ? findClip(viewDoc, selId) : null;
+          if (!el || !hit) return null;
+          const sr = stage.getBoundingClientRect();
+          const pr = pane.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          const box = { left: r.left - pr.left, top: r.top - pr.top, w: r.width, h: r.height };
+          const kx = viewDoc.canvas.width / Math.max(1, sr.width);
+          const ky = viewDoc.canvas.height / Math.max(1, sr.height);
+          const write = (patch: Partial<typeof hit.clip.transform>) => {
+            const versionId = useEditor.getState().activeVersionId;
+            mutateInGesture((dd) =>
+              versionId
+                ? setVersionClipOverride(dd, versionId, selId, {
+                    transform: { ...hit.clip.transform, ...patch },
+                  })
+                : updateClip(dd, selId, { transform: patch }),
+            );
+          };
+          const corner = (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            beginGesture();
+            const sx = e.clientX, sy = e.clientY;
+            const bs = hit.clip.transform;
+            const mv = (ev: PointerEvent) => {
+              const ns = scaleFromCorner(bs.scaleX, bs.scaleY, box.w / kx, box.h / ky,
+                (ev.clientX - sx) * kx, (ev.clientY - sy) * ky);
+              write({ scaleX: ns.scaleX, scaleY: ns.scaleY });
+            };
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+          };
+          // Single-axis edge resize — L/R stretch scaleX, T/B stretch
+          // scaleY (sign flips so dragging the edge outward always grows).
+          const edge = (axis: "x" | "y", sign: 1 | -1) => (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            beginGesture();
+            const sx = e.clientX, sy = e.clientY;
+            const bs = hit.clip.transform;
+            const mv = (ev: PointerEvent) => {
+              const f = Math.max(
+                0.05,
+                axis === "x"
+                  ? 1 + (sign * (ev.clientX - sx) * kx) / (box.w / kx)
+                  : 1 + (sign * (ev.clientY - sy) * ky) / (box.h / ky),
+              );
+              write(axis === "x" ? { scaleX: bs.scaleX * f } : { scaleY: bs.scaleY * f });
+            };
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+          };
+          const rotate = (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            beginGesture();
+            const cx = box.left + box.w / 2, cy = box.top + box.h / 2;
+            const mv = (ev: PointerEvent) => write({ rotationDeg: angleDeg(cx, cy, ev.clientX - pr.left, ev.clientY - pr.top) });
+            const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
+            window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+          };
+          const sq = "absolute size-3 rounded-[3px] border border-accent bg-white shadow-sm";
+          const ed = "absolute size-2.5 rounded-[2px] border border-accent bg-white shadow-sm";
+          const corners: [number, number, string][] = [
+            [-6, -6, "cursor-nwse-resize"],
+            [box.w - 6, -6, "cursor-nesw-resize"],
+            [-6, box.h - 6, "cursor-nesw-resize"],
+            [box.w - 6, box.h - 6, "cursor-nwse-resize"],
+          ];
+          const edges: [number, number, string, "x" | "y", 1 | -1][] = [
+            [box.w / 2 - 5, -5, "cursor-ns-resize", "y", -1],
+            [box.w - 5, box.h / 2 - 5, "cursor-ew-resize", "x", 1],
+            [box.w / 2 - 5, box.h - 5, "cursor-ns-resize", "y", 1],
+            [-5, box.h / 2 - 5, "cursor-ew-resize", "x", -1],
+          ];
+          return (
+            <div className="pointer-events-none absolute border-[1.5px] border-accent" style={box}>
+              {/* Rotate knob on a stem — circle reads as rotation, not resize. */}
+              <div className="absolute -top-5 left-1/2 flex -translate-x-1/2 flex-col items-center">
+                <div
+                  className="pointer-events-auto size-3 cursor-grab rounded-full border-2 border-accent bg-background"
+                  onPointerDown={rotate}
+                />
+                <div className="h-2 w-px bg-accent" />
+              </div>
+              {corners.map(([x, y, cur], i) => (
+                <div key={`c${i}`} className={`${sq} ${cur}`} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={corner} />
+              ))}
+              {edges.map(([x, y, cur, axis, sign], i) => (
+                <div key={`e${i}`} className={`${ed} ${cur}`} style={{ left: x, top: y, pointerEvents: "auto" }} onPointerDown={edge(axis, sign)} />
+              ))}
+            </div>
+          );
+        })()}
     </div>
   );
 }
