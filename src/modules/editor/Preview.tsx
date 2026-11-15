@@ -15,14 +15,7 @@ import {
   updateClip,
 } from "@/lib/timeline-engine";
 import { cssFilterFor, evalKeyframes, svgMatrixFor } from "@/lib/effects";
-import {
-  applyFx,
-  chainFor,
-  duckStep,
-  resumeAudio,
-  rmsOf,
-  type DuckState,
-} from "@/services/audio-preview";
+import { resumeAudio } from "@/services/audio-preview";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import { angleDeg, scaleFromCorner, snapToGuides } from "@/lib/canvas-manip";
@@ -64,9 +57,6 @@ export function Preview({
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setPlaying = useEditor((s) => s.setPlaying);
   const mediaEls = useRef(new Map<string, HTMLMediaElement>());
-  const duckStates = useRef(new Map<string, DuckState>());
-  const fxSigs = useRef(new Map<string, string>());
-  const rmsBuf = useRef(new Uint8Array(new ArrayBuffer(512)));
   const dtMs = useRef(16);
   const previewQuality = useEditor((s) => s.previewQuality);
   const previewVolume = useEditor((s) => s.previewVolume);
@@ -228,38 +218,17 @@ export function Preview({
     // solo gate: when any track solos, only soloed tracks are audible
     const anySolo = active.some((x) => x.track.solo);
     const audible = (!a.track.muted && (!anySolo || a.track.solo)) ? 1 : 0;
-    // ducking: rules targeting this track read the SOURCE element's RMS
-    let duckG = 1;
-    for (const r of viewDoc.ducking ?? []) {
-      if (r.targetTrack !== a.track.id) continue;
-      const srcA = active.find((x) => x.track.id === r.sourceTrack);
-      const srcEl = srcA ? mediaEls.current.get(srcA.clip.id) : null;
-      const srcChain = srcEl ? chainFor(srcEl) : null;
-      const key = `${a.clip.id}:${r.id}`;
-      let st = duckStates.current.get(key);
-      if (!st) {
-        st = { g: 1, hold: 0 };
-        duckStates.current.set(key, st);
-      }
-      const srcRms = srcChain ? rmsOf(srcChain, rmsBuf.current) : 0;
-      duckG *= duckStep(st, srcRms, r, dtMs.current / 1000 || 0.016);
-    }
     // Monitor gain: previewVolume/previewMuted only affect what the user
     // hears — clip/track volumes and the export mix are untouched.
     const monitor = previewMuted ? 0 : previewVolume;
-    const gain = Math.max(0, vol * fade * (a.track.volume ?? 1)) * audible * duckG * monitor;
-    const chain = chainFor(el);
-    if (chain) {
-      chain.gain.gain.value = gain;
-      chain.panner.pan.value = Math.max(-1, Math.min(1, a.clip.pan ?? 0));
-      const fxSig = JSON.stringify(a.clip.effects ?? []);
-      if (fxSigs.current.get(a.clip.id) !== fxSig) {
-        fxSigs.current.set(a.clip.id, fxSig);
-        applyFx(el, chain, a.clip.effects ?? []);
-      }
-    } else {
-      el.volume = Math.min(1, gain);
-    }
+    const gain = Math.max(0, vol * fade * (a.track.volume ?? 1)) * audible * monitor;
+    // NOTE: media is served from http://asset.localhost — cross-origin to
+    // the page, so MediaElementSource captures a CORS-tainted stream that
+    // WebAudio renders as silence (measured rms=0). Until media is served
+    // CORS-clean, gain goes through el.volume; the audio-preview chain
+    // (EQ/comp/pan/ducking metering) stays disabled — it was silent anyway.
+    // Export is unaffected (FFmpeg applies those).
+    el.volume = Math.min(1, gain);
     el.playbackRate = a.clip.speed || 1;
     const want = a.sourceMs;
     if (Math.abs(el.currentTime * 1000 - want) > DRIFT_MS) {
