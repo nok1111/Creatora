@@ -53,6 +53,7 @@ import {
   addGeneratedClip,
   applyAnimationPreset,
   applyClipStyle,
+  retimeClipKeyframes,
   alignClipTo,
   bindClipBrand,
   applyBrandToBoundClips,
@@ -730,6 +731,22 @@ describe("graphics studio (ADR-027)", () => {
     // keyframe presets still work on media clips
     const d3 = applyAnimationPreset(d1, clipId, "fadeIn", { durationMs: 300 });
     expect(findClip(d3, clipId)!.clip.keyframes["transform.opacity"].length).toBeGreaterThan(0);
+  });
+
+  it("baked keyframes carry the preset tag and retime per group", () => {
+    const { doc: d1, clipId } = addClip(doc(), { mediaRef: "a1", startMs: 0, durationMs: 4000 });
+    const d2 = applyAnimationPreset(d1, clipId, "fadeIn", { durationMs: 500 });
+    const c = findClip(d2, clipId)!.clip;
+    const kfs = c.keyframes["transform.opacity"];
+    expect(kfs.every((k) => k.anim === "fadeIn")).toBe(true);
+
+    // Retime only the fadeIn group: 0–500 → 0–1000 doubles the span.
+    const d3 = retimeClipKeyframes(d2, clipId, null, "fadeIn", (t) => t * 2);
+    const rk = findClip(d3, clipId)!.clip.keyframes["transform.opacity"];
+    expect(rk[rk.length - 1].tMs).toBe(1000);
+    // Untagged groups untouched.
+    const d4 = retimeClipKeyframes(d3, clipId, null, "slideIn", (t) => t + 1);
+    expect(findClip(d4, clipId)!.clip.keyframes["transform.opacity"].at(-1)!.tMs).toBe(1000);
   });
 
   it("clipStylePayload + applyClipStyle copy style across clips", () => {

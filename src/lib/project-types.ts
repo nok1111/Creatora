@@ -240,6 +240,9 @@ export interface Keyframe {
   tMs: number;
   v: number;
   ease: string;
+  /** Preset id that baked this keyframe (start/end effects) — lets the
+   *  timeline group and retime each animation independently. */
+  anim?: string;
 }
 
 export interface Clip {

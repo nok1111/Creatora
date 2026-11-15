@@ -50,6 +50,7 @@ import {
   transitionsFor,
   trimClip,
   updateEffect,
+  retimeClipKeyframes,
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
@@ -85,10 +86,10 @@ const TRACK_H = 44;
 /** Height of each effect strip row below the clip area of a lane. */
 const FX_ROW_H = 10;
 const BAR_COLORS = ["bg-violet-400", "bg-cyan-400", "bg-pink-400", "bg-lime-400"];
-/** Lanes grow one fx row per stacked effect (at least one — every clip
-    gets a visible fx slot to drop onto). */
-const laneHeight = (track: Track) =>
-  TRACK_H + Math.max(1, ...track.clips.map((c) => c.effects.length)) * FX_ROW_H;
+/** Lanes grow one row per stacked strip (effect or animation group);
+    at least one row — every clip gets a visible fx slot to drop onto. */
+const laneHeight = (fxRows: number) =>
+  TRACK_H + Math.max(1, fxRows) * FX_ROW_H;
 /** dropHint.trackId sentinel for the "new track" zone (not a real lane). */
 const NEW_TRACK = "__new_track__";
 const HEADER_W = 176;
@@ -343,6 +344,58 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       no = Math.max(ni + MIN, Math.min(no, clip.durationMs));
       mutateInGesture((d) =>
         updateEffect(d, clip.id, fx.id, { inMs: Math.round(ni), outMs: Math.round(no) }),
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      endGesture();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  /** Drag a baked-animation strip (start/end presets + loose keyframes):
+   *  body shifts the whole span, edges retime it proportionally. */
+  const onAnimBarPointerDown = (
+    e: React.PointerEvent,
+    track: Track,
+    clip: Clip,
+    group: { tag: string | undefined; inMs: number; outMs: number },
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (track.locked) return;
+    const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
+    const laneRect = lane.getBoundingClientRect();
+    const in0 = group.inMs;
+    const out0 = group.outMs;
+    const inX = laneRect.left + msToPx(clip.startMs + in0);
+    const outX = laneRect.left + msToPx(clip.startMs + out0);
+    const edge = e.clientX - inX < 8 ? "left" : outX - e.clientX < 8 ? "right" : "move";
+    const startX = e.clientX;
+    const MIN = 50;
+    beginGesture();
+    document.body.style.cursor = edge === "move" ? "grabbing" : "ew-resize";
+    const onMove = (ev: PointerEvent) => {
+      const dms = pxToMs(ev.clientX - startX);
+      let ni = in0;
+      let no = out0;
+      if (edge === "move") {
+        ni = in0 + dms;
+        no = out0 + dms;
+      } else if (edge === "left") {
+        ni = in0 + dms;
+      } else {
+        no = out0 + dms;
+      }
+      ni = Math.max(0, Math.min(ni, clip.durationMs - MIN));
+      no = Math.max(ni + MIN, Math.min(no, clip.durationMs));
+      const map = (t: number) =>
+        out0 <= in0 ? t + (ni - in0) : ni + (t - in0) * ((no - ni) / (out0 - in0));
+      mutateInGesture((d) =>
+        retimeClipKeyframes(d, clip.id, activeVersionId, group.tag, map),
       );
     };
     const onUp = () => {
@@ -627,6 +680,30 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     />
   );
 
+  /** Baked-animation groups on a clip — one strip per preset tag, plus
+   *  one for untagged (hand-placed) keyframes. Version-override paths
+   *  shadow base, matching preview/render. */
+  const clipAnimGroups = (clip: Clip) => {
+    const ovKf = activeVersionId
+      ? doc?.versions.find((v) => v.id === activeVersionId)?.clipOverrides[clip.id]?.keyframes
+      : undefined;
+    const eff = { ...clip.keyframes, ...(ovKf ?? {}) };
+    const groups = new Map<string | undefined, { inMs: number; outMs: number }>();
+    for (const arr of Object.values(eff))
+      for (const k of arr) {
+        const g = groups.get(k.anim) ?? { inMs: Infinity, outMs: -Infinity };
+        g.inMs = Math.min(g.inMs, k.tMs);
+        g.outMs = Math.max(g.outMs, k.tMs);
+        groups.set(k.anim, g);
+      }
+    return [...groups.entries()].map(([tag, g]) => ({ tag, ...g }));
+  };
+  /** Stacked strip rows a clip needs: effects + animation groups. */
+  const clipStripRows = (clip: Clip) =>
+    clip.effects.length + clipAnimGroups(clip).length;
+  const trackFxRows = (track: Track) =>
+    Math.max(0, ...track.clips.map(clipStripRows));
+
   // --- render ---
 
   const rulerTicks: number[] = [];
@@ -760,7 +837,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 className={`flex items-center gap-1 border-b border-border/50 px-2 ${
                   track.locked ? "opacity-60" : ""
                 }`}
-                style={{ height: laneHeight(track) }}
+                style={{ height: laneHeight(trackFxRows(track)) }}
               >
                 {editingTrack === track.id ? (
                   <input
@@ -863,7 +940,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   moveLane?.trackId === track.id &&
                     (moveLane.valid ? "bg-primary/15" : "bg-destructive/15"),
                 )}
-                style={{ height: laneHeight(track), width: lanesW }}
+                style={{ height: laneHeight(trackFxRows(track)), width: lanesW }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   const lane = e.currentTarget as HTMLElement;
@@ -1019,10 +1096,30 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     below the clips. Every clip shows at least one empty
                     slot so there's always a place to drop/configure. */}
                 {track.clips.map((clip) => {
-                  const slots = Math.max(1, clip.effects.length);
-                  return Array.from({ length: slots }, (_, i) => {
-                    const fx = clip.effects[i];
+                  const anims = clipAnimGroups(clip);
+                  const rows = Math.max(1, clip.effects.length + anims.length);
+                  return Array.from({ length: rows }, (_, i) => {
                     const top = TRACK_H - 2 + i * FX_ROW_H;
+                    const fx = i < clip.effects.length ? clip.effects[i] : undefined;
+                    const anim = fx ? undefined : anims[i - clip.effects.length];
+                    if (anim) {
+                      return (
+                        <div
+                          key={`${clip.id}-anim-${anim.tag ?? "kf"}`}
+                          className={`absolute flex items-center rounded-sm bg-amber-400 px-1 text-[8px] font-medium leading-none text-black/80 ${track.locked ? "cursor-not-allowed" : "cursor-grab"}`}
+                          style={{
+                            left: msToPx(clip.startMs + anim.inMs),
+                            width: Math.max(6, msToPx(Math.max(anim.outMs - anim.inMs, 1))),
+                            top,
+                            height: FX_ROW_H - 2,
+                          }}
+                          title={`${anim.tag ?? "keyframes"} · ${(anim.inMs / 1000).toFixed(1)}–${(anim.outMs / 1000).toFixed(1)}s`}
+                          onPointerDown={(e) => onAnimBarPointerDown(e, track, clip, anim)}
+                        >
+                          <span className="truncate">{anim.tag ?? "keyframes"}</span>
+                        </div>
+                      );
+                    }
                     if (!fx) {
                       return (
                         <div

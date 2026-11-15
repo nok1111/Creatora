@@ -102,6 +102,7 @@ mod tests {
             t_ms,
             v,
             ease: "linear".into(),
+            anim: None,
         }
     }
 

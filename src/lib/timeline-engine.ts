@@ -25,6 +25,7 @@ import type {
   TextStyle,
   Transform,
   Transition,
+  Keyframe,
 } from "@/lib/project-types";
 import { DEFAULT_EXPORT_SETTINGS, DEFAULT_TEXT_STYLE } from "@/lib/project-types";
 
@@ -1168,6 +1169,10 @@ export function applyAnimationPreset(
     easing: (opts.easing as never) ?? "easeOut",
   });
   if (built.textFx !== undefined && !supportsTextFx(doc, clipId)) return doc;
+  // Tag baked keyframes with the preset id so the timeline can group and
+  // retime each start/end animation as its own strip.
+  for (const arr of Object.values(built.keyframes))
+    for (const k of arr) k.anim = presetId;
   if (opts.versionId) {
     const v = doc.versions.find((vv) => vv.id === opts.versionId);
     if (!v) return doc;
@@ -1185,6 +1190,41 @@ export function applyAnimationPreset(
   for (const [path, kfs] of Object.entries(built.keyframes)) kf[path] = kfs;
   c.clip.keyframes = kf;
   if (built.textFx !== undefined) c.clip.textFx = built.textFx;
+  return next;
+}
+
+/** Retime the keyframes of one animation group through `map` (clip-relative
+ *  ms → ms). `tag` selects the group: a preset id ("fadeIn") retimes only
+ *  keyframes it baked; `undefined` retimes hand-placed (untagged) ones.
+ *  Version-override paths write back to the override, the rest to base. */
+export function retimeClipKeyframes(
+  doc: ProjectDoc,
+  clipId: string,
+  versionId: string | null | undefined,
+  tag: string | undefined,
+  map: (tMs: number) => number,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  if (!hit || hit.track.locked) return next;
+  const retimeArr = (arr: Keyframe[]) =>
+    arr.map((k) => (k.anim === tag ? { ...k, tMs: Math.round(map(k.tMs)) } : k));
+  const ov = versionId
+    ? next.versions.find((v) => v.id === versionId)?.clipOverrides[clipId]
+    : undefined;
+  const ovKf = ov?.keyframes ?? {};
+  // Paths shadowed by the version override keep base untouched; the
+  // override carries the retimed copies instead.
+  hit.clip.keyframes = Object.fromEntries(
+    Object.entries(hit.clip.keyframes).map(([p, arr]) => [
+      p,
+      ovKf[p] ? arr : retimeArr(arr),
+    ]),
+  );
+  if (ov?.keyframes)
+    ov.keyframes = Object.fromEntries(
+      Object.entries(ovKf).map(([p, arr]) => [p, retimeArr(arr)]),
+    );
   return next;
 }
 

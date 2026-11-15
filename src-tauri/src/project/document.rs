@@ -432,6 +432,10 @@ pub struct Keyframe {
     /// "linear" (v1) | future easings.
     #[serde(default = "default_linear")]
     pub ease: String,
+    /// Preset id that baked this keyframe — groups start/end animations
+    /// in the timeline UI. Round-tripped so saves don't strip it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anim: Option<String>,
 }
 
 fn default_linear() -> String {
