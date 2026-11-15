@@ -755,7 +755,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           onClipPointerDown(e, track, clip, "left");
                         }}
                       />
-                      {track.kind === "audio" && clip.mediaRef && (
+                      {clip.mediaRef &&
+                        (track.kind === "audio" ||
+                          (track.kind === "video" &&
+                            !!assets.get(clip.mediaRef)?.audioCodec)) && (
                         <WaveformCanvas
                           srcPath={
                             doc.mediaRefs.find((m) => m.assetId === clip.mediaRef)?.path ?? ""

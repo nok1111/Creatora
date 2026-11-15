@@ -25,6 +25,8 @@ pub struct AssetSummary {
     pub height: Option<i64>,
     pub duration_ms: Option<i64>,
     pub codec: Option<String>,
+    /// Audio stream codec, when the container carries one.
+    pub audio_codec: Option<String>,
     pub thumbnail_path: Option<String>,
     pub status: String,
     /// Low-res mezzanine for preview (`proxies/<id>.mp4`), if generated.
@@ -131,7 +133,7 @@ fn existing_by_path(db: &Db, path: &Path) -> Result<Option<AssetSummary>, AppErr
     db.with(|c| {
         let p = path.to_string_lossy().to_string();
         let mut stmt = c.prepare(
-            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status, is_favorite, proxy_path
+            "SELECT id, kind, file_path, name, width, height, duration_ms, codec, thumbnail_path, status, is_favorite, proxy_path, audio_codec
              FROM media_assets WHERE file_path = ?1",
         )?;
         let mut rows = stmt.query_map([p], row_to_asset)?;
@@ -166,6 +168,7 @@ fn row_to_asset(r: &rusqlite::Row) -> rusqlite::Result<AssetSummary> {
         duplicate_of: None,
         is_favorite: r.get::<_, i64>(10)? != 0,
         proxy_path: r.get(11)?,
+        audio_codec: r.get(12)?,
     })
 }
 
@@ -239,6 +242,7 @@ pub fn import_one(thumbs_dir: &Path, db: &Db, path: &Path) -> Result<AssetSummar
         })
         .unwrap_or((None, None, None, None, None));
 
+    let audio_codec = info.as_ref().and_then(|i| i.audio_codec.clone());
     db.with(|c| {
         c.execute(
             "INSERT INTO media_assets
@@ -258,7 +262,7 @@ pub fn import_one(thumbs_dir: &Path, db: &Db, path: &Path) -> Result<AssetSummar
                 info.as_ref().and_then(|i| i.fps_num.map(|v| v as i64)),
                 info.as_ref().and_then(|i| i.fps_den.map(|v| v as i64)),
                 codec,
-                info.as_ref().and_then(|i| i.audio_codec.clone()),
+                audio_codec,
                 thumb.as_ref().map(|p| p.to_string_lossy().to_string()),
                 meta_json,
             ],
@@ -281,6 +285,7 @@ pub fn import_one(thumbs_dir: &Path, db: &Db, path: &Path) -> Result<AssetSummar
         duplicate_of,
         is_favorite: false,
         proxy_path: None,
+        audio_codec,
     })
 }
 
@@ -389,7 +394,7 @@ pub fn list_assets(
     db.with(|c| {
         let mut sql = String::from(
             "SELECT DISTINCT a.id, a.kind, a.file_path, a.name, a.width, a.height,
-                    a.duration_ms, a.codec, a.thumbnail_path, a.status, a.is_favorite, a.proxy_path
+                    a.duration_ms, a.codec, a.thumbnail_path, a.status, a.is_favorite, a.proxy_path, a.audio_codec
              FROM media_assets a WHERE 1=1",
         );
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -446,6 +451,7 @@ pub fn list_assets(
                     duplicate_of: None,
                     is_favorite: r.get::<_, i64>(10)? != 0,
                     proxy_path: r.get(11)?,
+                    audio_codec: r.get(12)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

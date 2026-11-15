@@ -18,6 +18,9 @@ export interface AssetSummary {
   height: number | null;
   durationMs: number | null;
   codec: string | null;
+  /** Audio stream codec — null when the asset has no audio (images,
+   *  silent video containers). Used to decide waveform rendering. */
+  audioCodec: string | null;
   thumbnailPath: string | null;
   proxyPath: string | null;
   status: "ok" | "missing" | "processing";
