@@ -92,6 +92,8 @@ export interface Effect {
       (whole clip). Render encodes it as ffmpeg `enable='between(t,…)'`. */
   inMs?: number;
   outMs?: number;
+  /** Path to an asset the effect needs (lut → .cube file). */
+  file?: string | null;
 }
 
 export interface TextStyle {

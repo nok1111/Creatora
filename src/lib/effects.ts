@@ -30,9 +30,32 @@ export interface EffectDef {
    *  gradient). Returns a CSS `background` value; Preview renders it in a
    *  sibling div over the same rect. */
   toOverlay?: (params: Record<string, number>) => string;
+  /** Effect is render-only (LUT import): preview can't express it cheaply,
+   *  so the strip shows but the preview is untouched. Documented, not a bug. */
+  noPreview?: boolean;
 }
 
 const p = (params: Record<string, number>, k: string, def = 0) => params[k] ?? def;
+
+/** W3C saturate() as a 4×5 feColorMatrix (row-major, offsets in 0..1). */
+const satMat = (s: number): number[] => [
+  0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0, 0,
+  0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0, 0,
+  0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0, 0,
+  0, 0, 0, 1, 0,
+];
+const mixerMat = (
+  rr: number, rg: number, rb: number,
+  gr: number, gg: number, gb: number,
+  br: number, bg: number, bb: number,
+): number[] => [rr, rg, rb, 0, 0, gr, gg, gb, 0, 0, br, bg, bb, 0, 0, 0, 0, 0, 1, 0];
+/** CSS contrast(c) as an affine matrix — out = c·in + (0.5−0.5c). */
+const contrastMat = (c: number): number[] => {
+  const k = 0.5 - 0.5 * c;
+  return [c, 0, 0, 0, k, 0, c, 0, 0, k, 0, 0, c, 0, k, 0, 0, 0, 1, 0];
+};
+const matSvg = (m: number[]) =>
+  `<feColorMatrix type="matrix" values="${m.map((v) => +v.toFixed(4)).join(" ")}"/>`;
 
 export const EFFECTS: EffectDef[] = [
   {
@@ -107,6 +130,118 @@ export const EFFECTS: EffectDef[] = [
         `<feBlend in="SourceGraphic" in2="fxGrain" mode="overlay"/>`,
       ].join("");
     },
+  },
+  {
+    type: "flashWhite",
+    label: "Flash (white)",
+    params: { peak: { def: 0.85, min: 0.05, max: 1, step: 0.01 } },
+    // out = in·(1−p) + 255·p — preview overlays flat white at alpha p.
+    toOverlay: (ps) => `rgba(255,255,255,${p(ps, "peak", 0.85).toFixed(3)})`,
+  },
+  {
+    type: "flashBlack",
+    label: "Flash (black)",
+    params: { peak: { def: 0.85, min: 0.05, max: 1, step: 0.01 } },
+    toOverlay: (ps) => `rgba(0,0,0,${p(ps, "peak", 0.85).toFixed(3)})`,
+  },
+  {
+    type: "letterbox",
+    label: "Cinematic bars",
+    params: { bars: { def: 0.115, min: 0.02, max: 0.3, step: 0.005 } },
+    toOverlay: (ps) => {
+      const b = (p(ps, "bars", 0.115) * 100).toFixed(1);
+      return `linear-gradient(0deg, #000 0%, #000 ${b}%, transparent ${b}%, transparent ${100 - Number(b)}%, #000 ${100 - Number(b)}%, #000 100%)`;
+    },
+  },
+  {
+    type: "vibrance",
+    label: "Vibrance",
+    params: { amount: { def: 0.5, min: 0, max: 1, step: 0.01 } },
+    // ffmpeg vibrance saturates only low-sat pixels (protects skin); CSS
+    // has no equivalent — preview shows a gentle global saturate as a hint.
+    toCss: (ps) => `saturate(${(1 + 0.5 * p(ps, "amount", 0.5)).toFixed(4)})`,
+  },
+  {
+    type: "colorBalance",
+    label: "Color balance",
+    // Warmth per tonal range: + = warm (red-yellow), − = cool (blue).
+    params: {
+      shadows: { def: 0, min: -1, max: 1, step: 0.05 },
+      midtones: { def: 0, min: -1, max: 1, step: 0.05 },
+      highlights: { def: 0, min: -1, max: 1, step: 0.05 },
+    },
+    // Luma-masked additive tints — same math as ffmpeg colorbalance
+    // (shift added only where the tonal mask applies).
+    toSvg: (ps) => {
+      const ranges: [string, string, number][] = [
+        ["S", "1 0.34 0 0", p(ps, "shadows")],
+        ["M", "0 1 0", p(ps, "midtones")],
+        ["H", "0 0 0.34 1", p(ps, "highlights")],
+      ];
+      const frags: string[] = [
+        `<feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.213 0.715 0.072 0 0" result="fxLuma"/>`,
+      ];
+      let prev = "SourceGraphic";
+      let i = 0;
+      for (const [name, table, w] of ranges) {
+        if (Math.abs(w) < 0.01) continue;
+        const color = w > 0 ? "rgb(255,90,0)" : "rgb(0,80,255)";
+        const op = Math.min(1, Math.abs(w) * 0.6).toFixed(3);
+        frags.push(
+          `<feComponentTransfer in="fxLuma" result="fxMask${name}"><feFuncA type="table" tableValues="${table}"/></feComponentTransfer>`,
+          `<feFlood flood-color="${color}" flood-opacity="${op}" result="fxTint${name}"/>`,
+          `<feComposite in="fxTint${name}" in2="fxMask${name}" operator="in" result="fxLayer${name}"/>`,
+          `<feComposite in="${prev}" in2="fxLayer${name}" operator="arithmetic" k2="1" k3="1" result="fxCB${i}"/>`,
+        );
+        prev = `fxCB${i++}`;
+      }
+      return frags.length > 1 ? frags.join("") : "";
+    },
+  },
+  {
+    type: "bleachBypass",
+    label: "Bleach bypass",
+    params: { amount: { def: 0.8, min: 0, max: 1, step: 0.01 } },
+    // Desaturate hard + lift contrast — the "Saving Private Ryan" grade.
+    // Preview mirrors the render chain exactly: sat matrix then affine
+    // contrast, as two feColorMatrix primitives.
+    toSvg: (ps) => {
+      const a = p(ps, "amount", 0.8);
+      return [matSvg(satMat(1 - 0.65 * a)), matSvg(contrastMat(1 + 0.8 * a))].join("");
+    },
+  },
+  {
+    type: "goldenHour",
+    label: "Golden hour",
+    params: { amount: { def: 0.7, min: 0, max: 1, step: 0.01 } },
+    toSvg: (ps) => {
+      const a = p(ps, "amount", 0.7);
+      return [
+        matSvg(mixerMat(1 + 0.14 * a, 0.03 * a, 0, 0.02 * a, 1 + 0.04 * a, 0, 0, 0, 1 - 0.22 * a)),
+        matSvg(satMat(1 + 0.1 * a)),
+      ].join("");
+    },
+  },
+  {
+    type: "dayForNight",
+    label: "Day for night",
+    params: { amount: { def: 0.7, min: 0, max: 1, step: 0.01 } },
+    toSvg: (ps) => {
+      const a = p(ps, "amount", 0.7);
+      const dim = 1 - 0.18 * a;
+      return [
+        matSvg(mixerMat(0.5 * dim, 0.08 * a, 0.12 * a, 0.06 * a, 0.62 * dim, 0.1 * a, 0.1 * a, 0.14 * a, 0.9 * dim)),
+        matSvg(satMat(1 - 0.45 * a)),
+      ].join("");
+    },
+  },
+  {
+    type: "lut",
+    label: "Import LUT",
+    params: {},
+    // Render-only: .cube 3D LUTs can't be expressed as CSS/SVG filters.
+    // The file path lives on Effect.file; the inspector exposes a picker.
+    noPreview: true,
   },
 ];
 
@@ -193,6 +328,14 @@ export const EFFECT_DROP_PARAMS: Record<string, Record<string, number>> = {
   sharpen: { amount: 1.5 },
   vignette: { amount: 0.6 },
   grain: { amount: 0.45 },
+  flashWhite: { peak: 0.85 },
+  flashBlack: { peak: 0.85 },
+  letterbox: { bars: 0.115 },
+  vibrance: { amount: 0.5 },
+  colorBalance: { shadows: -0.2, midtones: 0.3, highlights: 0.2 },
+  bleachBypass: { amount: 0.8 },
+  goldenHour: { amount: 0.7 },
+  dayForNight: { amount: 0.7 },
 };
 
 /**

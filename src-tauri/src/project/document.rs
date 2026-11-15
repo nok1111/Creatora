@@ -339,6 +339,9 @@ pub struct Effect {
     /// Clip-relative activation window end (ms); None = to clip end.
     #[serde(rename = "outMs", default, skip_serializing_if = "Option::is_none")]
     pub out_ms: Option<f64>,
+    /// Path to an asset the effect needs (lut → .cube file).
+    #[serde(rename = "file", default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
 }
 
 fn default_true() -> bool {

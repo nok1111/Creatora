@@ -125,7 +125,10 @@ describe("fx catalog audit", () => {
         boxShadowFor([fx]) ||
         overlayFor([fx]) ||
         "";
-      expect(out.length, `'${def.type}' produces no preview at drop params`).toBeGreaterThan(0);
+      if (!def.noPreview) {
+        expect(out.length, `'${def.type}' produces no preview at drop params`).toBeGreaterThan(0);
+      }
+      if (def.noPreview) continue;
       const neutral =
         /brightness\(1(\.0*)?\)|contrast\(1(\.0*)?\)|saturate\(1(\.0*)?\)|blur\(0(\.0*)?px\)|grayscale\(0(\.0*)?\)|sepia\(0(\.0*)?\)|invert\(0(\.0*)?\)|hue-rotate\(0(\.0*)?deg\)/;
       expect(neutral.test(out), `'${def.type}' preview is neutral: ${out}`).toBe(false);

@@ -24,6 +24,7 @@ import {
 } from "@/lib/timeline-engine";
 import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
 import { api } from "@/lib/ipc";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { AudioTools } from "@/modules/editor/AudioTools";
 import { GraphicsInspector, GraphicsSection } from "@/modules/editor/GraphicsInspector";
 import type { Clip } from "@/lib/project-types";
@@ -499,6 +500,31 @@ export function Inspector() {
                   <Trash2 className="size-3" />
                 </button>
               </div>
+              {fx.type === "lut" && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    className="flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-left text-[10px] hover:bg-muted"
+                    onClick={async () => {
+                      const file = await openDialog({
+                        filters: [{ name: "3D LUT", extensions: ["cube"] }],
+                        multiple: false,
+                      });
+                      if (file)
+                        mutate((d) => updateEffect(d, clipId, fx.id, { file }));
+                    }}
+                  >
+                    {fx.file ? fx.file.split(/[\\/]/).pop() : "Choose .cube…"}
+                  </button>
+                  {fx.file && (
+                    <button
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => mutate((d) => updateEffect(d, clipId, fx.id, { file: null }))}
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  )}
+                </div>
+              )}
               {def &&
                 Object.entries(def.params).map(([pk, spec]) => (
                   <div key={pk} className="flex items-center gap-1.5">

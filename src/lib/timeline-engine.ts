@@ -639,7 +639,7 @@ export function updateEffect(
   doc: ProjectDoc,
   clipId: string,
   effectId: string,
-  patch: Partial<Pick<Effect, "enabled" | "inMs" | "outMs">> & { params?: Record<string, number> },
+  patch: Partial<Pick<Effect, "enabled" | "inMs" | "outMs" | "file">> & { params?: Record<string, number> },
 ): ProjectDoc {
   const next = cloneDoc(doc);
   const hit = findClip(next, clipId);
@@ -654,6 +654,7 @@ export function updateEffect(
   if (fx.inMs !== undefined && fx.outMs !== undefined && fx.outMs <= fx.inMs)
     fx.outMs = Math.min(hit.clip.durationMs, fx.inMs + 50);
   if (patch.params) Object.assign(fx.params, patch.params);
+  if (patch.file !== undefined) fx.file = patch.file;
   return next;
 }
 

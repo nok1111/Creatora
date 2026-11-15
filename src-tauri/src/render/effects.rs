@@ -17,6 +17,16 @@
 //! | sharpen     | amount  | unsharp 5:5:a                   | feConvolveMatrix   |
 //! | vignette    | amount  | vignette angle=PI/2-a*PI/3      | inset box-shadow   |
 //! | grain       | amount  | noise alls=40a, temporal        | SVG feTurbulence   |
+//! | flashWhite  | peak    | lutrgb lift to white            | rgba overlay       |
+//! | flashBlack  | peak    | lutrgb scale to black           | rgba overlay       |
+//! | letterbox   | bars    | drawbox top+bottom              | gradient overlay   |
+//! | vibrance    | amount  | vibrance intensity=1.6a         | CSS saturate (≈)   |
+//! | colorBalance| shadows/| colorbalance warm axis ×0.4     | masked SVG tints   |
+//! |             | mids/hi |                                 |                    |
+//! | bleachBypass| amount  | sat matrix + lutrgb contrast    | 2× feColorMatrix   |
+//! | goldenHour  | amount  | warm mixer + sat                | 2× feColorMatrix   |
+//! | dayForNight | amount  | cool/dim mixer + desat          | 2× feColorMatrix   |
+//! | lut         | (file)  | lut3d file=…                    | render-only        |
 //!
 //! Unknown kinds are ignored (forward-compat), never fail the render.
 
@@ -123,6 +133,83 @@ pub fn effects_chain(effects: &[Effect]) -> String {
                 }
                 vec![format!("noise=alls={}:allf=t+u", (a * 40.0).round() as i32)]
             }
+            "flashWhite" => {
+                // out = in·(1−p) + 255·p — flat white lift inside the window.
+                let q = param(e, "peak", 0.85).clamp(0.0, 1.0);
+                let (s, k) = (1.0 - q, 255.0 * q);
+                vec![format!(
+                    "lutrgb=r='clip(val*{s}+{k},0,255)':g='clip(val*{s}+{k},0,255)':b='clip(val*{s}+{k},0,255)'"
+                )]
+            }
+            "flashBlack" => {
+                let q = param(e, "peak", 0.85).clamp(0.0, 1.0);
+                let s = 1.0 - q;
+                vec![format!(
+                    "lutrgb=r='clip(val*{s},0,255)':g='clip(val*{s},0,255)':b='clip(val*{s},0,255)'"
+                )]
+            }
+            "letterbox" => {
+                let b = param(e, "bars", 0.115).clamp(0.0, 0.3);
+                vec![
+                    format!("drawbox=x=0:y=0:w=iw:h=ih*{b}:c=black:t=fill"),
+                    format!("drawbox=x=0:y=ih-ih*{b}:w=iw:h=ih*{b}:c=black:t=fill"),
+                ]
+            }
+            "vibrance" => {
+                let a = param(e, "amount", 0.5).clamp(0.0, 1.0);
+                vec![format!("vibrance=intensity={}", a * 1.6)]
+            }
+            "colorBalance" => {
+                // Warmth per tonal range: +w → +r −b, −w → −r +b.
+                let w = |k: &str| param(e, k, 0.0).clamp(-1.0, 1.0) * 0.4;
+                let (s, m, h) = (w("shadows"), w("midtones"), w("highlights"));
+                if s == 0.0 && m == 0.0 && h == 0.0 {
+                    continue;
+                }
+                vec![format!(
+                    "colorbalance=rs={s}:bs={}:rm={m}:bm={}:rh={h}:bh={}",
+                    -s, -m, -h
+                )]
+            }
+            "bleachBypass" => {
+                let a = param(e, "amount", 0.8).clamp(0.0, 1.0);
+                let c = 1.0 + 0.8 * a;
+                let k = 255.0 * (0.5 - 0.5 * c);
+                vec![
+                    saturation_matrix(1.0 - 0.65 * a),
+                    format!("lutrgb=r='clip(val*{c}+{k},0,255)':g='clip(val*{c}+{k},0,255)':b='clip(val*{c}+{k},0,255)'"),
+                ]
+            }
+            "goldenHour" => {
+                let a = param(e, "amount", 0.7).clamp(0.0, 1.0);
+                let (rr, rg) = (1.0 + 0.14 * a, 0.03 * a);
+                let (gr, gg) = (0.02 * a, 1.0 + 0.04 * a);
+                let bb = 1.0 - 0.22 * a;
+                vec![
+                    format!("colorchannelmixer=rr={rr}:rg={rg}:rb=0:gr={gr}:gg={gg}:gb=0:br=0:bg=0:bb={bb}"),
+                    saturation_matrix(1.0 + 0.1 * a),
+                ]
+            }
+            "dayForNight" => {
+                let a = param(e, "amount", 0.7).clamp(0.0, 1.0);
+                let dim = 1.0 - 0.18 * a;
+                let (rr, rg2, rb) = (0.5 * dim, 0.08 * a, 0.12 * a);
+                let (gr, gg2, gb) = (0.06 * a, 0.62 * dim, 0.1 * a);
+                let (br, bg, bb) = (0.1 * a, 0.14 * a, 0.9 * dim);
+                vec![
+                    format!("colorchannelmixer=rr={rr}:rg={rg2}:rb={rb}:gr={gr}:gg={gg2}:gb={gb}:br={br}:bg={bg}:bb={bb}"),
+                    saturation_matrix(1.0 - 0.45 * a),
+                ]
+            }
+            "lut" => {
+                let f = e.file.as_deref().unwrap_or("").trim();
+                if f.is_empty() {
+                    continue;
+                }
+                // ffmpeg filter-arg escaping: '/ in paths breaks parsing.
+                let esc = f.replace('\\', "/").replace('\'', "\\'");
+                vec![format!("lut3d=file='{esc}'")]
+            }
             _ => continue,
         };
         parts.extend(frags.into_iter().map(|f| with_enable(e, f)));
@@ -143,6 +230,7 @@ mod tests {
             enabled: true,
             in_ms: None,
             out_ms: None,
+            file: None,
             params: params
                 .iter()
                 .map(|(k, v)| (k.to_string(), *v))
