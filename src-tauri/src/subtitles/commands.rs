@@ -40,11 +40,12 @@ pub fn whisper_path() -> Option<PathBuf> {
 }
 
 /// Models dir — provisioned; downloads land here too.
-pub fn models_dir(app: &AppHandle) -> PathBuf {
-    app.path()
+pub fn models_dir(app: &AppHandle) -> CmdResult<PathBuf> {
+    Ok(app
+        .path()
         .app_data_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("models")
+        .map_err(|e| AppError::Io(e.to_string()))?
+        .join("models"))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -83,7 +84,7 @@ fn dev_models_root() -> Option<PathBuf> {
 
 #[tauri::command]
 pub fn list_models(app: AppHandle) -> CmdResult<Vec<ModelInfo>> {
-    let dir = models_dir(&app);
+    let dir = models_dir(&app)?;
     // also scan provisioned tools/models in dev
     let mut roots = vec![dir];
     if let Some(r) = dev_models_root() {
@@ -117,15 +118,15 @@ pub fn list_models(app: AppHandle) -> CmdResult<Vec<ModelInfo>> {
         .collect())
 }
 
-fn find_model(app: &AppHandle, name: &str) -> Option<PathBuf> {
-    let mut roots = vec![models_dir(app)];
+fn find_model(app: &AppHandle, name: &str) -> CmdResult<Option<PathBuf>> {
+    let mut roots = vec![models_dir(app)?];
     if let Some(r) = dev_models_root() {
         roots.push(r);
     }
-    roots
+    Ok(roots
         .into_iter()
         .map(|r| r.join(name))
-        .find(|p| p.is_file())
+        .find(|p| p.is_file()))
 }
 
 /// User-initiated model download — streams to `<name>.part` then renames
@@ -145,7 +146,7 @@ pub fn download_model(
         .find(|(n, _, _)| *n == name)
         .ok_or_else(|| AppError::InvalidInput(format!("unknown model: {name}")))?;
     let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{name}");
-    let dest_dir = models_dir(&app);
+    let dest_dir = models_dir(&app)?;
     let total = entry.1;
     let job_id = jobs.spawn(app, "subtitles.download", move |ctx: &JobCtx| {
         std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
@@ -335,7 +336,7 @@ pub fn transcribe_media(
     model: String,
     language: Option<String>,
 ) -> CmdResult<String> {
-    let model_path = find_model(&app, &model)
+    let model_path = find_model(&app, &model)?
         .ok_or_else(|| AppError::NotFound(format!("model not downloaded: {model}")))?;
     let whisper =
         whisper_path().ok_or_else(|| AppError::NotFound("whisper-cli not provisioned".into()))?;
