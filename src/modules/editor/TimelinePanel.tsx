@@ -68,7 +68,7 @@ const CLIP_TONES: Record<TrackKind, { bg: string; border: string }> = {
   video: { bg: "bg-sky-500/20", border: "border-sky-400/50" },
   audio: { bg: "bg-red-400/20", border: "border-red-400/50" },
   image: { bg: "bg-emerald-400/15", border: "border-emerald-400/50" },
-  text: { bg: "bg-zinc-400/10", border: "border-zinc-300/30" },
+  text: { bg: "bg-zinc-800/50", border: "border-zinc-500/50" },
   graphics: { bg: "bg-violet-400/15", border: "border-violet-400/50" },
 };
 
