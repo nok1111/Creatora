@@ -26,6 +26,7 @@ import type {
   Transform,
   Transition,
   Keyframe,
+  TextFx,
 } from "@/lib/project-types";
 import { DEFAULT_EXPORT_SETTINGS, DEFAULT_TEXT_STYLE } from "@/lib/project-types";
 
@@ -1194,6 +1195,41 @@ export function applyAnimationPreset(
   for (const [path, kfs] of Object.entries(built.keyframes)) kf[path] = kfs;
   c.clip.keyframes = kf;
   if (built.textFx !== undefined) c.clip.textFx = built.textFx;
+  return next;
+}
+
+/** Patch a clip's procedural text animation (typewriter/wipe/blur).
+ *  The strip drag writes `durationMs` (wipe/blur window) or `rate`
+ *  (typewriter chars/s). Version-override aware, like applyAnimationPreset. */
+export function updateTextFx(
+  doc: ProjectDoc,
+  clipId: string,
+  versionId: string | null | undefined,
+  patch: Partial<Pick<TextFx, "rate" | "durationMs" | "direction">>,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  if (!hit || hit.track.locked) return next;
+  const apply = (fx: TextFx | null | undefined): TextFx | null => {
+    if (!fx) return fx ?? null;
+    const out = { ...fx, ...patch };
+    if (out.durationMs != null) out.durationMs = Math.max(0, Math.round(out.durationMs));
+    if (out.rate != null) out.rate = Math.max(0.1, out.rate);
+    return out;
+  };
+  if (versionId) {
+    const v = next.versions.find((vv) => vv.id === versionId);
+    if (!v) return next;
+    const ov = v.clipOverrides[clipId];
+    if (ov?.textFx) ov.textFx = apply(ov.textFx);
+    else if (hit.clip.textFx) {
+      // Shadow the base value into the override so other versions keep theirs.
+      const ovv = (v.clipOverrides[clipId] ??= {});
+      ovv.textFx = apply(hit.clip.textFx);
+    }
+    return next;
+  }
+  hit.clip.textFx = apply(hit.clip.textFx);
   return next;
 }
 

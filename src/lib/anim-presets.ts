@@ -333,7 +333,9 @@ export const ANIM_PRESETS: AnimPreset[] = [
     category: "emphasis",
     paths: ["transform.scaleX", "transform.scaleY"],
     build: (c, _cv, o) => {
-      const s = c.transform.scaleX * (1 + 0.08 * o.intensity);
+      // intensity is px-scaled (default 160) — normalize to a scale bump:
+      // 160 → 8% grow. Raw 0.08*160 would balloon the clip ~14×.
+      const s = c.transform.scaleX * (1 + 0.08 * (o.intensity / 160));
       return {
         keyframes: {
           "transform.scaleX": [
@@ -341,8 +343,8 @@ export const ANIM_PRESETS: AnimPreset[] = [
             ...bakeKfs(o.delayMs + o.durationMs / 2, o.durationMs / 2, s, c.transform.scaleX, "easeIn", 4).slice(1),
           ],
           "transform.scaleY": [
-            ...bakeKfs(o.delayMs, o.durationMs / 2, c.transform.scaleY, c.transform.scaleY * (1 + 0.08 * o.intensity), "easeOut", 4),
-            ...bakeKfs(o.delayMs + o.durationMs / 2, o.durationMs / 2, c.transform.scaleY * (1 + 0.08 * o.intensity), c.transform.scaleY, "easeIn", 4).slice(1),
+            ...bakeKfs(o.delayMs, o.durationMs / 2, c.transform.scaleY, c.transform.scaleY * (1 + 0.08 * (o.intensity / 160)), "easeOut", 4),
+            ...bakeKfs(o.delayMs + o.durationMs / 2, o.durationMs / 2, c.transform.scaleY * (1 + 0.08 * (o.intensity / 160)), c.transform.scaleY, "easeIn", 4).slice(1),
           ],
         },
       };
@@ -357,7 +359,9 @@ export const ANIM_PRESETS: AnimPreset[] = [
       const kfs: Keyframe[] = [{ tMs: o.delayMs, v: c.transform.x, ease: "linear" }];
       const steps = 8;
       for (let i = 1; i <= steps; i++) {
-        const amp = o.intensity * (1 - i / (steps + 1));
+        // 15% of the px intensity — a punchy ~20px shake at the default,
+        // not a 160px screen-wide fling.
+        const amp = o.intensity * 0.15 * (1 - i / (steps + 1));
         kfs.push({
           tMs: Math.round(o.delayMs + (i / steps) * o.durationMs),
           v: c.transform.x + (i % 2 ? amp : -amp),
@@ -382,7 +386,7 @@ export const ANIM_PRESETS: AnimPreset[] = [
         const u = i / n;
         kfs.push({
           tMs: Math.round(u * c.durationMs),
-          v: c.transform.y + Math.sin(u * cycles * Math.PI * 2) * o.intensity,
+          v: c.transform.y + Math.sin(u * cycles * Math.PI * 2) * o.intensity * 0.12,
           ease: "linear",
         });
       }

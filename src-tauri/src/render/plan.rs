@@ -1243,6 +1243,29 @@ mod tests {
     use super::*;
     use crate::project::document::*;
 
+    /// Every merge tile in the Effects catalog must map to a real xfade —
+    /// anything falling through to "fade" would look like plain crossfade.
+    #[test]
+    fn catalog_merge_kinds_map_to_real_xfades() {
+        const CATALOG: &[&str] = &[
+            "crossfade", "dipToBlack", "dipToWhite", "fadegrays", "dissolve",
+            "pixelize", "hblur", "zoomin", "radial", "circleopen", "circleclose",
+            "circlecrop", "wipeleft", "wiperight", "wipeup", "wipedown", "wipetl",
+            "diagtr", "slideleft", "slideright", "slideup", "slidedown",
+            "smoothleft", "smoothright", "coverleft", "coverup", "revealleft",
+            "revealright", "revealup", "squeezeh", "vertopen", "horzclose",
+            "hlslice", "vuslice", "vdslice",
+        ];
+        for kind in CATALOG {
+            let name = xfade_name(kind);
+            let distinct = match *kind {
+                "crossfade" => name == "fade",
+                _ => name != "fade",
+            };
+            assert!(distinct, "'{kind}' degrades to plain fade");
+        }
+    }
+
     fn doc_with_clip(
         start: i64,
         dur: i64,

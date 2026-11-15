@@ -10,7 +10,7 @@
 //! |-------------|---------|---------------------------------|--------------------|
 //! | brightness  | amount  | colorchannelmixer rr=gg=bb=1+a  | CSS brightness(1+a)|
 //! | exposure    | stops   | colorchannelmixer rr=gg=bb=2^s  | CSS brightness(2^s)|
-//! | contrast    | amount  | curves master linear pivot .5   | CSS contrast(1+a)  |
+//! | contrast    | amount  | lutrgb affine pivot .5          | CSS contrast(1+a)  |
 //! | saturation  | amount  | colorchannelmixer W3C matrix    | CSS saturate(1+a)  |
 //! | temperature | amount  | colorchannelmixer diag matrix   | SVG feColorMatrix  |
 //! | blur        | radius  | gblur sigma=radius              | CSS blur(radius)   |
@@ -74,12 +74,13 @@ pub fn effects_chain(effects: &[Effect]) -> String {
                 format!("colorchannelmixer=rr={f}:gg={f}:bb={f}")
             }
             "contrast" => {
-                // CSS contrast(c): out = (in-0.5)*c+0.5 per channel → affine
-                // ramp via 2-point master curve. Clamped like CSS output.
+                // CSS contrast(c) is an exact per-channel affine map:
+                // out = clip(in*c + 255*(0.5-0.5c), 0, 255). A two-point
+                // curves line collapses to identity for c≤2 — lutrgb is
+                // the direct equivalent (parity with CSS contrast(1+a)).
                 let c = (1.0 + param(e, "amount", 0.0)).clamp(0.0, 8.0);
-                let lo = (0.5 - 0.5 * c).max(0.0);
-                let hi = (0.5 + 0.5 * c).min(1.0);
-                format!("curves=m='0/{lo} 1/{hi}'")
+                let k = 255.0 * (0.5 - 0.5 * c);
+                format!("lutrgb=r='clip(val*{c}+{k},0,255)':g='clip(val*{c}+{k},0,255)':b='clip(val*{c}+{k},0,255)'")
             }
             "saturation" => {
                 let s = (1.0 + param(e, "amount", 0.0)).clamp(0.0, 8.0);
@@ -199,10 +200,15 @@ mod tests {
     }
 
     #[test]
-    fn contrast_maps_to_linear_curve() {
+    fn contrast_maps_to_affine_lut() {
+        // CSS contrast(2): out = val*2 - 127.5 — must NOT be identity.
         let c = effects_chain(&[fx("contrast", &[("amount", 1.0)])]);
-        // c=2 → 0/-0.5→0, 1/1.5→1
-        assert!(c.contains("curves=m='0/0 1/1'"), "{c}");
+        assert!(c.contains("lutrgb"), "{c}");
+        assert!(c.contains("val*2"), "{c}");
+        assert!(c.contains("-127.5"), "{c}");
+        // amount=0.25 → c=1.25, k=-31.875 — still a real ramp, not '0/0 1/1'.
+        let s = effects_chain(&[fx("contrast", &[("amount", 0.25)])]);
+        assert!(s.contains("val*1.25"), "{s}");
     }
 
     #[test]

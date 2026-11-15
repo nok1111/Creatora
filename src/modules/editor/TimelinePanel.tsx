@@ -51,12 +51,13 @@ import {
   transitionsFor,
   trimClip,
   updateEffect,
+  updateTextFx,
   retimeClipKeyframes,
 } from "@/lib/timeline-engine";
 import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
 import { getDragPayload, isEffectPayload, type EffectCategory } from "@/lib/drag-payload";
-import { effectDef } from "@/lib/effects";
+import { effectDef, EFFECT_DROP_PARAMS } from "@/lib/effects";
 import { ANIM_PRESETS } from "@/lib/anim-presets";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,7 @@ import {
   AnchoredMenuSeparator,
 } from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
-import type { Clip, Effect, Track, TrackKind, ProjectDoc, Transition } from "@/lib/project-types";
+import type { Clip, Effect, Track, TrackKind, ProjectDoc, Transition, TextFx } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
 /**
@@ -420,6 +421,55 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     window.addEventListener("pointerup", onUp);
   };
 
+  /** TextFx strips are anchored (in → clip head, out → clip tail): only
+      the free edge resizes. For typewriter the span maps back to `rate`
+      (chars/s); for wipe/blur it maps to `durationMs`. */
+  const onTextFxBarPointerDown = (
+    e: React.PointerEvent,
+    track: Track,
+    clip: Clip,
+    fx: TextFx,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (track.locked) return;
+    const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
+    const laneRect = lane.getBoundingClientRect();
+    const { inMs, outMs } = textFxSpan(clip, fx);
+    const inX = laneRect.left + msToPx(clip.startMs + inMs);
+    const outX = laneRect.left + msToPx(clip.startMs + outMs);
+    const nearLeft = e.clientX - inX < 8;
+    const nearRight = outX - e.clientX < 8;
+    // Only the free edge is grabbable; anything else just selects.
+    if (fx.out ? !nearLeft : !nearRight) {
+      select([clip.id]);
+      return;
+    }
+    const d0 = outMs - inMs;
+    const nChars = [...(clip.text ?? "")].length || 1;
+    const startX = e.clientX;
+    beginGesture();
+    document.body.style.cursor = "ew-resize";
+    const onMove = (ev: PointerEvent) => {
+      const dms = pxToMs(ev.clientX - startX);
+      // out: left edge grows the window leftward; in: right edge grows it.
+      const nd = Math.max(50, Math.min(clip.durationMs, fx.out ? d0 - dms : d0 + dms));
+      mutateInGesture((d) =>
+        fx.kind === "typewriter"
+          ? updateTextFx(d, clip.id, activeVersionId, { rate: (nChars * 1000) / nd })
+          : updateTextFx(d, clip.id, activeVersionId, { durationMs: nd }),
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      endGesture();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   /** Drag a transition strip: edges stretch the overlap, body slides the
    *  junction — all resolve to setTransitionDuration (clip B realigns). */
   const onTransitionBarPointerDown = (
@@ -565,11 +615,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         toast.error(t("editor.fxNeedsTextTrack"));
         return;
       }
-      // Loops bake over the whole clip; in/out presets cap at ~500ms.
-      const fullSpan = preset.category === "loop" || preset.category === "emphasis";
-      const dur = fullSpan
-        ? target.durationMs
-        : Math.min(500, Math.max(50, target.durationMs / 2));
+      // Loops bake over the whole clip; in/out cap at ~500ms and emphasis
+      // (pulse/shake) is a quick ~900ms hit — a 15s pulse reads as a slow
+      // zoom, not a beat.
+      const dur =
+        preset.category === "loop"
+          ? target.durationMs
+          : preset.category === "emphasis"
+            ? Math.min(900, Math.max(50, target.durationMs))
+            : Math.min(500, Math.max(50, target.durationMs / 2));
       mutate((d) =>
         applyAnimationPreset(d, target.id, itemId, {
           durationMs: dur,
@@ -613,18 +667,19 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     if (category === "overlay") {
       const def = effectDef(itemId);
       if (!def) return;
-      // Drop defaults are intentionally *visible* — a neutral param would
-      // apply silently and read as "the drag didn't work".
-      const VISIBLE: Record<string, number> = {
-        amount: 0.25, stops: 0.5, radius: 8,
-      };
+      // Drop defaults are signature-strength (EFFECT_DROP_PARAMS) — a
+      // neutral param applies silently, and a uniform 0.25 makes sepia
+      // indistinguishable from temperature.
       mutate((d) =>
         addEffect(d, target.id, {
           id: crypto.randomUUID(),
           type: def.type,
           enabled: true,
           params: Object.fromEntries(
-            Object.entries(def.params).map(([k, s]) => [k, VISIBLE[k] ?? s.def]),
+            Object.entries(def.params).map(([k, s]) => [
+              k,
+              EFFECT_DROP_PARAMS[def.type]?.[k] ?? s.def,
+            ]),
           ),
         }),
       );
@@ -764,9 +819,31 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       }
     return [...groups.entries()].map(([tag, g]) => ({ tag, ...g }));
   };
-  /** Stacked strip rows a clip needs: effects + animation groups. */
+  /** Effective textFx — version override wins; an explicit null in the
+      override means "removed for this version". */
+  const clipTextFx = (clip: Clip): TextFx | null => {
+    const ovFx = activeVersionId
+      ? doc?.versions.find((v) => v.id === activeVersionId)?.clipOverrides[clip.id]?.textFx
+      : undefined;
+    return ovFx !== undefined ? ovFx : (clip.textFx ?? null);
+  };
+  /** Clip-relative span a textFx occupies: the wipe/blur window, or the
+      typewriter span derived from chars/rate. `out` variants anchor at
+      the clip tail, `in` variants at the head. */
+  const textFxSpan = (clip: Clip, fx: TextFx) => {
+    let dur = fx.durationMs;
+    if (fx.kind === "typewriter") {
+      const n = [...(clip.text ?? "")].length || 1;
+      dur = (n / Math.max(0.1, fx.rate)) * 1000;
+    }
+    dur = Math.max(50, Math.min(clip.durationMs, dur));
+    return fx.out
+      ? { inMs: clip.durationMs - dur, outMs: clip.durationMs }
+      : { inMs: 0, outMs: dur };
+  };
+  /** Stacked strip rows a clip needs: effects + animation groups + textFx. */
   const clipStripRows = (clip: Clip) =>
-    clip.effects.length + clipAnimGroups(clip).length;
+    clip.effects.length + clipAnimGroups(clip).length + (clipTextFx(clip) ? 1 : 0);
   const trackFxRows = (track: Track) =>
     Math.max(0, ...track.clips.map(clipStripRows)) +
     (track.transitions.length ? 1 : 0);
@@ -1164,11 +1241,37 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     slot so there's always a place to drop/configure. */}
                 {track.clips.map((clip) => {
                   const anims = clipAnimGroups(clip);
-                  const rows = Math.max(1, clip.effects.length + anims.length);
+                  const tfx = clipTextFx(clip);
+                  const rows = Math.max(
+                    1,
+                    clip.effects.length + anims.length + (tfx ? 1 : 0),
+                  );
                   return Array.from({ length: rows }, (_, i) => {
                     const top = TRACK_H - 2 + i * FX_ROW_H;
                     const fx = i < clip.effects.length ? clip.effects[i] : undefined;
-                    const anim = fx ? undefined : anims[i - clip.effects.length];
+                    const afterFx = i - clip.effects.length;
+                    const anim = fx ? undefined : anims[afterFx];
+                    const showTfx = !fx && !anim && tfx && afterFx === anims.length;
+                    if (showTfx && tfx) {
+                      const span = textFxSpan(clip, tfx);
+                      const label = `${tfx.kind}${tfx.out ? " out" : ""}`;
+                      return (
+                        <div
+                          key={`${clip.id}-textfx`}
+                          className={`absolute flex items-center rounded-sm bg-emerald-400 px-1 text-[8px] font-medium leading-none text-black/80 ${track.locked ? "cursor-not-allowed" : "cursor-ew-resize"}`}
+                          style={{
+                            left: msToPx(clip.startMs + span.inMs),
+                            width: Math.max(6, msToPx(span.outMs - span.inMs)),
+                            top,
+                            height: FX_ROW_H - 2,
+                          }}
+                          title={`${label} · ${((span.outMs - span.inMs) / 1000).toFixed(2)}s`}
+                          onPointerDown={(e) => onTextFxBarPointerDown(e, track, clip, tfx)}
+                        >
+                          <span className="truncate">{label}</span>
+                        </div>
+                      );
+                    }
                     if (anim) {
                       // Display clamps the strip to the clip; the handler
                       // keeps the raw span so a drag remaps real data.

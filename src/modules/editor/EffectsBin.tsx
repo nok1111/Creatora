@@ -99,7 +99,10 @@ const OVERLAY_ICONS: Record<string, LucideIcon> = {
 
 const tr = (id: string, label: string, icon: LucideIcon): FxItem => ({ id, label, icon });
 
-const CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: FxItem[] }[] = [
+/** Exported so the fx-catalog audit test iterates the same tiles the UI
+    renders — a tile that maps to nothing is a test failure, not a silent
+    no-op. */
+export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: FxItem[] }[] = [
   {
     id: "start",
     labelKey: "editor.fxCatStart",
@@ -198,7 +201,7 @@ export function EffectsBin() {
   const { t } = useTranslation();
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      {CATALOG.map((cat) => (
+      {FX_CATALOG.map((cat) => (
         <div key={cat.id} className="border-b border-border/60">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             <cat.icon className="size-3" />

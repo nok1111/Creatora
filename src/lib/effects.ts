@@ -205,6 +205,26 @@ export function effectDef(type: string): EffectDef | undefined {
   return EFFECTS.find((d) => d.type === type) ?? AUDIO_EFFECTS.find((d) => d.type === type);
 }
 
+/** Params applied when an overlay effect is dropped on the timeline —
+ *  signature-strength so each effect lands showing its own look (a
+ *  uniform 0.25 makes sepia indistinguishable from temperature). The
+ *  inspector dials it back from here. */
+export const EFFECT_DROP_PARAMS: Record<string, Record<string, number>> = {
+  brightness: { amount: 0.25 },
+  exposure: { stops: 0.7 },
+  contrast: { amount: 0.35 },
+  saturation: { amount: 0.4 },
+  temperature: { amount: 0.45 },
+  blur: { radius: 8 },
+  grayscale: { amount: 1 },
+  sepia: { amount: 0.85 },
+  invert: { amount: 1 },
+  hueRotate: { deg: 120 },
+  sharpen: { amount: 1.5 },
+  vignette: { amount: 0.6 },
+  grain: { amount: 0.45 },
+};
+
 /**
  * Combined CSS `filter:` string for an enabled stack, preserving order.
  * Matrix effects are emitted separately via `svgFilterFor`.
