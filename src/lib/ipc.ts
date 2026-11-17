@@ -258,6 +258,8 @@ export const api = {
   oauthClientStatus: () =>
     cmd<Record<string, boolean>>("oauth_client_status"),
   revealPath: (path: string) => cmd<void>("reveal_path", { path }),
+  /** Opens an http(s) URL (e.g. a published post) in the default browser. */
+  openExternalUrl: (url: string) => cmd<void>("open_external_url", { url }),
   regenerateThumbnail: (assetId: string) =>
     cmd<string | null>("regenerate_thumbnail", { assetId }),
 

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PLATFORM_LABEL, SOCIAL_PLATFORMS } from "@/lib/social-types";
 import { PlatformIcon } from "./PlatformIcon";
-import { fmtDbTime } from "./format";
+import { fmtDbTime, openExternal } from "./format";
 import { awaitJob } from "@/services/jobs";
 import { reportError } from "@/lib/errors";
 import {
@@ -156,14 +156,14 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
                   {r.status === "published" && r.platformPostId && (
                     <span className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
                       {r.platformUrl ? (
-                        <a
-                          href={r.platformUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => void openExternal(r.platformUrl!)}
+                          title={`${t("social.d_view")} — ${r.platformUrl}`}
                           className="flex items-center gap-1 hover:underline"
                         >
                           {r.platformPostId} <ExternalLink className="size-3" />
-                        </a>
+                        </button>
                       ) : (
                         r.platformPostId
                       )}

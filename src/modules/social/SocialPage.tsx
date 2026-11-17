@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { reportError } from "@/lib/errors";
 import { ComposerDialog } from "./ComposerDialog";
 import { PlatformIcon } from "./PlatformIcon";
+import { openExternal } from "./format";
 import { CalendarView } from "./CalendarView";
 import { AccountsPanel } from "./AccountsPanel";
 import { PublicationHistory } from "./PublicationHistory";
@@ -480,6 +481,20 @@ function PostCard({
             align="end"
             className="w-40 rounded-md border border-border bg-popover p-1 shadow-xl"
           >
+            {post.targets
+              .filter((x) => x.platformUrl)
+              .map((x) => (
+                <AnchoredMenuItem
+                  key={x.id}
+                  onClick={() => {
+                    setMenu(false);
+                    void openExternal(x.platformUrl!);
+                  }}
+                >
+                  <ExternalLink className="size-3.5" />{" "}
+                  {t("social.openOn", { platform: PLATFORM_LABEL[x.platform] })}
+                </AnchoredMenuItem>
+              ))}
             <AnchoredMenuItem
               onClick={() => {
                 setMenu(false);
@@ -505,6 +520,7 @@ function PostCard({
 }
 
 function TargetChip({ target }: { target: SocialPostTarget }) {
+  const { t } = useTranslation();
   return (
     <span
       className={cn(
@@ -516,14 +532,17 @@ function TargetChip({ target }: { target: SocialPostTarget }) {
       <PlatformIcon platform={target.platform} className="size-3" />
       {PLATFORM_LABEL[target.platform]}
       {target.platformUrl && (
-        <a
-          href={target.platformUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
+        <button
+          type="button"
+          title={t("social.d_view")}
+          aria-label={t("social.d_view")}
+          onClick={(e) => {
+            e.stopPropagation();
+            void openExternal(target.platformUrl!);
+          }}
         >
           <ExternalLink className="size-2.5" />
-        </a>
+        </button>
       )}
     </span>
   );

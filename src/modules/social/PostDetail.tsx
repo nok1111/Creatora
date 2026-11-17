@@ -33,7 +33,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { ValidationPanel } from "./ValidationPanel";
 import { PlatformIcon } from "./PlatformIcon";
-import { fmtDbTime } from "./format";
+import { fmtDbTime, openExternal } from "./format";
 import { reportError } from "@/lib/errors";
 
 /** Post detail: per-target export/publish pipeline + attempts + validation. */
@@ -265,14 +265,14 @@ function TargetRow({
         </span>
         <span className="flex-1" />
         {t.platformUrl && (
-          <a
-            href={t.platformUrl}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={() => void openExternal(t.platformUrl!)}
+            title={t.platformUrl}
             className="flex items-center gap-0.5 text-[10px] text-primary hover:underline"
           >
             {tr("social.d_view")} <ExternalLink className="size-2.5" />
-          </a>
+          </button>
         )}
       </div>
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">

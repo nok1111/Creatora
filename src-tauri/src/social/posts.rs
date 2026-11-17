@@ -979,6 +979,24 @@ pub fn social_post_previews(
     })
 }
 
+fn is_openable_url(u: &str) -> bool {
+    (u.starts_with("https://") || u.starts_with("http://"))
+        && !u.chars().any(|c| c.is_control() || c.is_whitespace())
+}
+
+/// Open a published post in the default browser. Only plain http(s) URLs
+/// are accepted — never file paths or custom schemes.
+#[tauri::command]
+pub fn open_external_url(url: String) -> CmdResult<()> {
+    let u = url.trim();
+    if !is_openable_url(u) {
+        return Err(AppError::InvalidInput(
+            "only http(s) URLs can be opened".into(),
+        ));
+    }
+    webbrowser::open(u).map_err(|e| AppError::Internal(format!("open browser: {e}")))
+}
+
 /// Reveal a file in Explorer — used by "open location" everywhere.
 #[tauri::command]
 pub fn reveal_path(path: String) -> CmdResult<()> {
@@ -1036,6 +1054,23 @@ mod tests {
             thumbnail_asset_id: None,
             notes: None,
             targets,
+        }
+    }
+
+    #[test]
+    fn only_plain_http_urls_are_openable() {
+        assert!(is_openable_url("https://youtu.be/abc"));
+        assert!(is_openable_url("http://example.com/x?y=1"));
+        for bad in [
+            "file:///C:/Windows/System32/calc.exe",
+            "javascript:alert(1)",
+            r"C:\Windows\notepad.exe",
+            "ftp://x/y",
+            "https://x/y z",
+            "https://x/\nnext",
+            "",
+        ] {
+            assert!(!is_openable_url(bad), "{bad}");
         }
     }
 
