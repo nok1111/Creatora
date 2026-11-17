@@ -371,6 +371,9 @@ pub struct TextStyle {
     /// Absolute .ttf/.otf path; None → platform default (Windows: arial.ttf).
     #[serde(default)]
     pub font_file: Option<String>,
+    /// System family name used when font_file is None (preset styles).
+    #[serde(default)]
+    pub font_name: Option<String>,
     #[serde(default = "default_font_size")]
     pub font_size_px: f64,
     /// "#RRGGBB" or "#RRGGBBAA".
@@ -425,6 +428,7 @@ impl Default for TextStyle {
     fn default() -> Self {
         TextStyle {
             font_file: None,
+            font_name: None,
             font_size_px: 48.0,
             color: "#FFFFFF".into(),
             outline_color: None,

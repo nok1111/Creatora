@@ -42,6 +42,22 @@ import {
   updateCue,
 } from "@/lib/timeline-engine";
 import { SUBTITLE_PRESETS } from "@/lib/subtitle-presets";
+import { fontFamilyFor } from "@/lib/fonts";
+
+/** System families offered in the font picker (no file needed). */
+const BUILTIN_FONTS = [
+  "Arial",
+  "Arial Black",
+  "Impact",
+  "Bahnschrift",
+  "Segoe UI",
+  "Verdana",
+  "Trebuchet MS",
+  "Georgia",
+  "Courier New",
+  "Comic Sans MS",
+  "Times New Roman",
+];
 import type { AssetSummary } from "@/lib/media-types";
 import type { SubtitleCue } from "@/lib/project-types";
 import { Button } from "@/components/ui/button";
@@ -465,6 +481,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                     className="text-center text-[8px] leading-tight"
                     style={{
                       color: p.style.text.color,
+                      fontFamily: fontFamilyFor(p.style.text.fontFile) ?? p.style.text.fontName ?? undefined,
                       fontWeight: 600,
                       textShadow:
                         p.style.text.outlineWidth > 0 && p.style.text.outlineColor
@@ -579,18 +596,32 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               })}
             </div>
           )}
-          {style && (doc.brandKit?.fonts?.length ?? 0) > 0 && (
+          {style && (
             <select
               className="mt-1 h-6 w-full rounded border border-border bg-transparent px-1 text-[10px]"
-              value={style.text.fontFile ?? ""}
-              onChange={(e) =>
-                setStyle({ text: { ...style.text, fontFile: e.target.value || null } })
-              }
+              value={style.text.fontFile ? `file:${style.text.fontFile}` : style.text.fontName ? `name:${style.text.fontName}` : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                const t2 = { ...style.text };
+                if (v.startsWith("file:")) { t2.fontFile = v.slice(5); t2.fontName = null; }
+                else if (v.startsWith("name:")) { t2.fontFile = null; t2.fontName = v.slice(5); }
+                else { t2.fontFile = null; t2.fontName = null; }
+                setStyle({ text: t2 });
+              }}
             >
               <option value="">{t("gfxI.fontDefault")}</option>
-              {doc.brandKit!.fonts.map((f) => (
-                <option key={f.path} value={f.path}>{f.name}</option>
-              ))}
+              <optgroup label={t("subs.fontBuiltin")}>
+                {BUILTIN_FONTS.map((f) => (
+                  <option key={f} value={`name:${f}`}>{f}</option>
+                ))}
+              </optgroup>
+              {(doc.brandKit?.fonts?.length ?? 0) > 0 && (
+                <optgroup label={t("subs.fontBrand")}>
+                  {doc.brandKit!.fonts.map((f) => (
+                    <option key={f.path} value={`file:${f.path}`}>{f.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           )}
           {/* Saved styles — live in the project; per-cue via lane menu. */}

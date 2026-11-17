@@ -671,7 +671,7 @@ export function Preview({
               <span
                 style={{
                   fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
-                  fontFamily: fontFamilyFor(st.fontFile),
+                  fontFamily: fontFamilyFor(st.fontFile) ?? st.fontName ?? undefined,
                   color: st.color,
                   WebkitTextStroke:
                     st.outlineWidth > 0 && st.outlineColor
@@ -838,7 +838,7 @@ export function Preview({
               <span
                 style={{
                   fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
-                  fontFamily: fontFamilyFor(st.fontFile),
+                  fontFamily: fontFamilyFor(st.fontFile) ?? st.fontName ?? undefined,
                   color: st.color,
                   WebkitTextStroke:
                     st.outlineWidth > 0 && st.outlineColor

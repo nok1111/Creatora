@@ -109,6 +109,9 @@ export interface Effect {
 export interface TextStyle {
   /** Absolute font path; null → platform default. */
   fontFile?: string | null;
+  /** System font family name (e.g. "Impact", "Georgia") — used when
+   *  fontFile is null; lets presets name fonts without shipping files. */
+  fontName?: string | null;
   fontSizePx: number;
   /** "#RRGGBB" or "#RRGGBBAA". */
   color: string;
@@ -225,6 +228,7 @@ export interface SubtitleStyle {
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
   fontFile: null,
+  fontName: null,
   fontSizePx: 48,
   color: "#FFFFFF",
   outlineColor: null,

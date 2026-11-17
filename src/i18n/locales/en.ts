@@ -855,6 +855,8 @@ export const en = {
     deleteStyle: "Delete saved style",
     applyStyleTip: "Apply as the master style",
     cueStyleDefault: "Default style",
+    fontBuiltin: "Built-in",
+    fontBrand: "Brand kit",
   },
   exports: {
     title: "Export Center",

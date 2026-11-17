@@ -17,8 +17,9 @@ js(c, """(async()=>{const{useProject}=window.__qa;
 await useProject.getState().openFromPath('C:/Users/nokturno/Documents/Creatora/Projects/QA flow 1794793478466.creatora');
 const d=useProject.getState().doc;
 const words=['This','is','a','test','line','of','text'].map((w,i)=>({word:w+(i<6?' ':''),startMs:1000+i*428,endMs:1000+(i+1)*428}));
-const r1=window.__qa.engine.addCue(d,{startMs:1000,endMs:4000,text:'This is a test line of text',words});
-const d1={...r1.doc,subtitleStyle:{text:{color:'#FFFFFF',fontSizePx:48,fontFile:null,outlineColor:'#000000',outlineWidth:0,backgroundColor:null,backgroundPadPx:0,alignH:'center',alignV:'bottom',shadowColor:null,shadowX:0,shadowY:0,lineSpacingPx:0},highlightColor:'#FFFF00',mode:'none',marginVPx:40,marginHPx:30},subtitleStyles:[]};
+const d0={...d,subtitles:[]};
+const r1=window.__qa.engine.addCue(d0,{startMs:1000,endMs:4000,text:'This is a test line of text',words});
+const d1={...r1.doc,subtitleStyle:{text:{color:'#FFFFFF',fontSizePx:48,fontFile:null,fontName:null,outlineColor:'#000000',outlineWidth:0,backgroundColor:null,backgroundPadPx:0,alignH:'center',alignV:'bottom',shadowColor:null,shadowX:0,shadowY:0,lineSpacingPx:0},highlightColor:'#FFFF00',mode:'none',marginVPx:40,marginHPx:30},subtitleStyles:[]};
 useProject.getState().setDoc(d1);})()""")
 time.sleep(0.6)
 js(c, """(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Subtitles');b.click();})()""", await_promise=False)

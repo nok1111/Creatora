@@ -68,6 +68,7 @@ fn ass_style_line(name: &str, ss: &SubtitleStyle) -> String {
         .and_then(|p| p.rsplit(['/', '\\']).next())
         .and_then(|n| n.rsplit_once('.'))
         .map(|(n, _)| n)
+        .or(st.font_name.as_deref())
         .unwrap_or("Arial");
     let outline = ass_color(st.outline_color.as_deref().unwrap_or("#000000"));
     let back = st
@@ -154,21 +155,16 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
                 out.push_str(&format!("Dialogue: 0,{start},{end},{sname},,0,0,0,,{t}\n"));
             }
             "impact" if !cue.words.is_empty() => {
-                // One dialogue — every word hidden until its moment, then
-                // fades+slams down to 100% (same layout as plain cues).
-                let mut t = String::new();
+                // Word-by-word: one Dialogue per word that slams down from
+                // 160% over ~250ms as it appears.
                 for w in &cue.words {
-                    let t0 = (w.start_ms - cue.start_ms).max(0);
-                    t.push_str(&format!(
-                        "{{\\alpha&HFF&\\t({},{},\\alpha&H00&\\fscx150\\fscy150)\\t({},{},\\fscx100\\fscy100)}}{}",
-                        (t0 - 50).max(0),
-                        t0,
-                        t0,
-                        t0 + 250,
-                        esc_ass(&w.word)
+                    out.push_str(&format!(
+                        "Dialogue: 0,{},{},{sname},,0,0,0,,{{\\fscx160\\fscy160\\t(0,250,\\fscx100\\fscy100)}}{}\n",
+                        ass_time(w.start_ms),
+                        ass_time(w.end_ms),
+                        esc_ass(w.word.trim())
                     ));
                 }
-                out.push_str(&format!("Dialogue: 0,{start},{end},{sname},,0,0,0,,{t}\n"));
             }
             "pop" if !cue.words.is_empty() => {
                 // One Dialogue per word — only the active word is visible.
@@ -317,15 +313,16 @@ mod tests {
     }
 
     #[test]
-    fn ass_impact_hides_future_words() {
+    fn ass_impact_emits_per_word_slam() {
         let d = doc_with_cues();
         let st = SubtitleStyle {
             mode: "impact".into(),
             ..Default::default()
         };
         let a = to_ass(&d, &d.subtitles, &st);
-        assert!(a.contains("\\alpha&HFF&"));
-        assert!(a.contains("\\fscx150\\fscy150"));
+        assert!(a.matches("Dialogue:").count() == 2);
+        assert!(a.contains("\\fscx160\\fscy160"));
+        assert!(a.contains("\\t(0,250,\\fscx100\\fscy100)"));
     }
 
     #[test]

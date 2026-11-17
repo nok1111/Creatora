@@ -858,6 +858,8 @@ export const es: typeof en = {
     deleteStyle: "Eliminar estilo guardado",
     applyStyleTip: "Aplicar como estilo maestro",
     cueStyleDefault: "Estilo por defecto",
+    fontBuiltin: "Del sistema",
+    fontBrand: "Kit de marca",
   },
   exports: {
     title: "Centro de exportación",
