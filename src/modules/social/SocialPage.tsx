@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
@@ -10,6 +12,7 @@ import {
   FileVideo,
   History,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
@@ -27,9 +30,22 @@ import {
   type SocialPostTarget,
 } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
+import {
+  AnchoredMenu,
+  AnchoredMenuItem,
+} from "@/components/ui/anchored-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SuggestionBanner } from "@/components/SuggestionBanner";
 import { useProject } from "@/stores/project";
 import { cn } from "@/lib/utils";
+import { reportError } from "@/lib/errors";
 import { ComposerDialog } from "./ComposerDialog";
 import { CalendarView } from "./CalendarView";
 import { AccountsPanel } from "./AccountsPanel";
@@ -71,10 +87,39 @@ export function SocialPage() {
   );
   const [composing, setComposing] = useState<null | { id?: string }>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<SocialPost | null>(null);
+  const qc = useQueryClient();
 
   useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  // Live search: debounce keystrokes instead of requiring Enter.
+  const firstSearch = useRef(true);
+  useEffect(() => {
+    if (firstSearch.current) {
+      firstSearch.current = false;
+      return;
+    }
+    const id = setTimeout(() => void refreshPosts(), 300);
+    return () => clearTimeout(id);
+  }, [search, refreshPosts]);
+
+  // Card thumbnails: the post's own thumbnail, else the first exported file.
+  const { data: thumbs } = useQuery({
+    queryKey: ["social-thumbs"],
+    queryFn: async () => {
+      const m = new Map<string, string>();
+      for (const a of await api.listAssets())
+        if (a.thumbnailPath) m.set(a.id, a.thumbnailPath);
+      return m;
+    },
+  });
+  const thumbOf = (p: SocialPost) => {
+    const id =
+      p.thumbnailAssetId ?? p.targets.find((x) => x.exportAssetId)?.exportAssetId;
+    return (id && thumbs?.get(id)) || null;
+  };
 
   // Reminder events: local scheduler pings when a non-auto target is due.
   useEffect(() => {
@@ -111,8 +156,9 @@ export function SocialPage() {
     () =>
       onJobFinished(() => {
         void refreshPosts();
+        void qc.invalidateQueries({ queryKey: ["social-thumbs"] });
       }),
-    [refreshPosts],
+    [refreshPosts, qc],
   );
 
   const counts = useMemo(() => {
@@ -185,6 +231,7 @@ export function SocialPage() {
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void refreshPosts()}
               placeholder={t("common.search")}
+              aria-label={t("common.search")}
               className="h-7 w-52 rounded border border-input bg-background px-2 text-xs"
             />
             <select
@@ -196,7 +243,7 @@ export function SocialPage() {
               className="h-7 rounded border border-input bg-background px-2 text-xs"
             >
               <option value="">{t("social.allStatuses")}</option>
-              {["draft", "ready", "scheduled", "publishing", "published", "failed"].map(
+              {["draft", "ready", "scheduled", "publishing", "published", "failed", "cancelled"].map(
                 (s) => (
                   <option key={s} value={s}>
                     {t(`social.st_${s}`)} {counts[s] ? `(${counts[s]})` : ""}
@@ -231,17 +278,14 @@ export function SocialPage() {
                   <PostCard
                     key={p.id}
                     post={p}
+                    thumb={thumbOf(p)}
                     onOpen={() => setDetailId(p.id)}
                     onEdit={() => setComposing({ id: p.id })}
                     onDuplicate={async () => {
                       await api.duplicateSocialPost(p.id);
                       void refreshPosts();
                     }}
-                    onDelete={async () => {
-                      await api.deleteSocialPost(p.id);
-                      toast.success(t("social.postDeleted"));
-                      void refreshPosts();
-                    }}
+                    onDelete={() => setDeleting(p)}
                   />
                 ))}
               </div>
@@ -273,6 +317,38 @@ export function SocialPage() {
       {detailId && (
         <PostDetail postId={detailId} onClose={() => setDetailId(null)} />
       )}
+
+      <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogTitle>
+            {t("social.deleteTitle", {
+              title: deleting?.title || t("social.untitled"),
+            })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>{t("social.deleteDesc")}</AlertDialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <AlertDialogCancel onClick={() => setDeleting(null)}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={async () => {
+                const id = deleting!.id;
+                setDeleting(null);
+                try {
+                  await api.deleteSocialPost(id);
+                  toast.success(t("social.postDeleted"));
+                } catch (e) {
+                  reportError(e);
+                }
+                void refreshPosts();
+              }}
+            >
+              {t("social.delete")}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -291,24 +367,48 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 
 function PostCard({
   post,
+  thumb,
   onOpen,
   onEdit,
   onDuplicate,
   onDelete,
 }: {
   post: SocialPost;
+  thumb: string | null;
   onOpen: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [menu, setMenu] = useState(false);
   return (
     <div
-      className="cursor-pointer rounded-lg border border-border bg-card p-4 hover:border-primary/50"
+      role="button"
+      tabIndex={0}
+      className="cursor-pointer rounded-lg border border-border bg-card p-4 outline-none hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary"
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="flex items-start gap-3">
+        <div className="flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+          {thumb ? (
+            <img
+              src={convertFileSrc(thumb)}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+            />
+          ) : (
+            <FileVideo className="size-5 text-muted-foreground" />
+          )}
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
@@ -346,12 +446,44 @@ function PostCard({
           <Button size="sm" variant="ghost" onClick={onEdit} title={t("social.edit")} aria-label={t("social.edit")}>
             <Pencil className="size-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={onDuplicate} title={t("social.duplicate")} aria-label={t("social.duplicate")}>
-            <Copy className="size-3.5" />
+          <Button
+            ref={moreRef}
+            size="sm"
+            variant="ghost"
+            title={t("social.more")}
+            aria-label={t("social.more")}
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            onClick={() => setMenu((v) => !v)}
+          >
+            <MoreHorizontal className="size-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={onDelete} title={t("social.delete")} aria-label={t("social.delete")}>
-            <Trash2 className="size-3.5" />
-          </Button>
+          <AnchoredMenu
+            open={menu}
+            onClose={() => setMenu(false)}
+            anchor={moreRef}
+            side="bottom"
+            align="end"
+            className="w-40 rounded-md border border-border bg-popover p-1 shadow-xl"
+          >
+            <AnchoredMenuItem
+              onClick={() => {
+                setMenu(false);
+                onDuplicate();
+              }}
+            >
+              <Copy className="size-3.5" /> {t("social.duplicate")}
+            </AnchoredMenuItem>
+            <AnchoredMenuItem
+              destructive
+              onClick={() => {
+                setMenu(false);
+                onDelete();
+              }}
+            >
+              <Trash2 className="size-3.5" /> {t("social.delete")}
+            </AnchoredMenuItem>
+          </AnchoredMenu>
         </div>
       </div>
     </div>

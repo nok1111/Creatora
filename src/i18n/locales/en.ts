@@ -436,6 +436,38 @@ export const en = {
     edit: "Edit",
     duplicate: "Duplicate",
     delete: "Delete",
+    more: "More actions",
+    deleteTitle: "Delete “{{title}}”?",
+    deleteDesc:
+      "The post, its platform targets and their publication history will be removed. Published content stays on the platforms.",
+    acct_publish: "publish",
+    acct_exportOnly: "export only",
+    acct_appReview: "app review",
+    acct_none: "no account connected",
+    acct_expired: "expired",
+    acct_error: "error",
+    acct_expires: "expires {{date}}",
+    acct_reconnect: "Reconnect",
+    acct_disconnect: "Disconnect (deletes stored credentials)",
+    acct_disconnectBtn: "Disconnect",
+    acct_disconnectTitle: "Disconnect {{name}}?",
+    acct_disconnectDesc:
+      "Stored credentials are deleted from the OS vault. Scheduled posts using this account lose their account link.",
+    acct_disconnected: "Account disconnected",
+    acct_devCreds: "Developer app credentials",
+    acct_configured: "(configured)",
+    acct_clientIdPh: "Client ID / App ID",
+    acct_secretPh: "Client secret (stored in OS vault)",
+    acct_saveCreds: "Save credentials",
+    acct_credsHelp:
+      "Create a free developer app in the platform's console, whitelist the loopback redirect URI shown on connect, and paste the credentials here. The app never ships its own.",
+    acct_connect: "Connect {{platform}}",
+    acct_needClient:
+      "Configure a {{platform}} developer-app client id first (below). Create one in the {{platform}} developer console — the app ships no credentials.",
+    acct_browserOpened:
+      "Browser opened for {{platform}}. Redirect URI to whitelist: {{uri}}",
+    acct_clientIdRequired: "Client id required",
+    acct_clientSaved: "{{platform}} client saved (secret → OS vault)",
   },
   cal: {
     today: "Today",

@@ -439,6 +439,38 @@ export const es: typeof en = {
     edit: "Editar",
     duplicate: "Duplicar",
     delete: "Eliminar",
+    more: "Más acciones",
+    deleteTitle: "¿Eliminar «{{title}}»?",
+    deleteDesc:
+      "Se eliminarán el post, sus destinos por plataforma y su historial de publicación. Lo ya publicado permanece en las plataformas.",
+    acct_publish: "publicar",
+    acct_exportOnly: "solo exportar",
+    acct_appReview: "revisión de app",
+    acct_none: "sin cuenta conectada",
+    acct_expired: "expirada",
+    acct_error: "error",
+    acct_expires: "expira {{date}}",
+    acct_reconnect: "Reconectar",
+    acct_disconnect: "Desconectar (borra las credenciales guardadas)",
+    acct_disconnectBtn: "Desconectar",
+    acct_disconnectTitle: "¿Desconectar {{name}}?",
+    acct_disconnectDesc:
+      "Las credenciales se borran del almacén del sistema. Los posts programados con esta cuenta pierden su vínculo.",
+    acct_disconnected: "Cuenta desconectada",
+    acct_devCreds: "Credenciales de la app de desarrollador",
+    acct_configured: "(configurado)",
+    acct_clientIdPh: "Client ID / App ID",
+    acct_secretPh: "Client secret (se guarda en el almacén del sistema)",
+    acct_saveCreds: "Guardar credenciales",
+    acct_credsHelp:
+      "Crea una app de desarrollador gratuita en la consola de la plataforma, autoriza el URI de redirección loopback que se muestra al conectar y pega aquí las credenciales. La app nunca incluye las suyas.",
+    acct_connect: "Conectar {{platform}}",
+    acct_needClient:
+      "Configura primero el client id de la app de desarrollador de {{platform}} (abajo). Créala en la consola de {{platform}}: la app no incluye credenciales.",
+    acct_browserOpened:
+      "Navegador abierto para {{platform}}. URI de redirección a autorizar: {{uri}}",
+    acct_clientIdRequired: "Falta el client id",
+    acct_clientSaved: "Cliente de {{platform}} guardado (secret → almacén del sistema)",
   },
   cal: {
     today: "Hoy",

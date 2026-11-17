@@ -1,15 +1,35 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, KeyRound, Loader2, Plug, Unplug } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  Plug,
+  RefreshCw,
+  Unplug,
+} from "lucide-react";
 import { api } from "@/lib/ipc";
 import { useSocial } from "@/stores/social";
 import {
   PLATFORM_LABEL,
   SOCIAL_PLATFORMS,
+  type SocialAccount,
   type SocialPlatform,
 } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { reportError } from "@/lib/errors";
+
+const accountName = (a: SocialAccount) => a.displayName ?? a.platformUserId;
 
 /**
  * Connected Accounts — honest capability display + OAuth client config.
@@ -17,20 +37,19 @@ import { reportError } from "@/lib/errors";
  * into the app. client_id → settings; client_secret → OS vault.
  */
 export function AccountsPanel() {
+  const { t, i18n } = useTranslation();
   const { accounts, capabilities, oauthClients, refreshAccounts } = useSocial();
   const [cfg, setCfg] = useState<Record<string, { id: string; secret: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState<SocialAccount | null>(null);
 
   const connect = async (p: SocialPlatform) => {
-    const c = cfg[p];
+    const platform = PLATFORM_LABEL[p];
     if (!oauthClients[p]) {
-      toast.error(
-        `Configure a ${PLATFORM_LABEL[p]} developer-app client id first (below). ` +
-          `Create one in the ${PLATFORM_LABEL[p]} developer console — the app ships no credentials.`,
-      );
+      toast.error(t("social.acct_needClient", { platform }));
       return;
     }
-    const clientId = c?.id ?? "";
+    const clientId = cfg[p]?.id ?? "";
     setBusy(p);
     try {
       // clientId arg is required but real value lives in settings —
@@ -39,7 +58,7 @@ export function AccountsPanel() {
       const saved = settings[`oauth_client_id.${p}`] ?? clientId;
       const start = await api.socialOauthBegin(p, saved);
       toast.message(
-        `Browser opened for ${PLATFORM_LABEL[p]}. Redirect URI to whitelist: ${start.redirectUri}`,
+        t("social.acct_browserOpened", { platform, uri: start.redirectUri }),
       );
     } catch (e) {
       reportError(e);
@@ -51,20 +70,39 @@ export function AccountsPanel() {
   const saveClient = async (p: SocialPlatform) => {
     const c = cfg[p];
     if (!c?.id?.trim()) {
-      toast.error("client id required");
+      toast.error(t("social.acct_clientIdRequired"));
       return;
     }
-    await api.saveOauthClient(p, c.id.trim(), c.secret?.trim() || undefined);
-    toast.success(`${PLATFORM_LABEL[p]} client saved (secret → OS vault)`);
-    void refreshAccounts();
+    try {
+      await api.saveOauthClient(p, c.id.trim(), c.secret?.trim() || undefined);
+      toast.success(t("social.acct_clientSaved", { platform: PLATFORM_LABEL[p] }));
+      void refreshAccounts();
+    } catch (e) {
+      reportError(e);
+    }
+  };
+
+  const disconnect = async () => {
+    const a = disconnecting;
+    if (!a) return;
+    setDisconnecting(null);
+    try {
+      await api.disconnectSocialAccount(a.id);
+      toast.success(t("social.acct_disconnected"));
+      void refreshAccounts();
+    } catch (e) {
+      reportError(e);
+    }
   };
 
   return (
-    <div className="grid flex-1 gap-4 overflow-y-auto p-5 md:grid-cols-2">
+    <div className="grid flex-1 content-start gap-4 overflow-y-auto p-5 md:grid-cols-2">
       {SOCIAL_PLATFORMS.map((p) => {
         const cap = capabilities.find((c) => c.platform === p);
+        // Revoked rows are kept only for audit history; expired/error ones
+        // stay visible so the user can reconnect them.
         const accts = accounts.filter(
-          (a) => a.platform === p && a.status === "active",
+          (a) => a.platform === p && a.status !== "revoked",
         );
         const c = cfg[p] ?? { id: "", secret: "" };
         return (
@@ -77,16 +115,16 @@ export function AccountsPanel() {
               <div className="flex gap-1">
                 {cap?.publish ? (
                   <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">
-                    publish
+                    {t("social.acct_publish")}
                   </span>
                 ) : (
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
-                    export only
+                    {t("social.acct_exportOnly")}
                   </span>
                 )}
                 {cap?.requiresAppReview && (
                   <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] text-warning">
-                    app review
+                    {t("social.acct_appReview")}
                   </span>
                 )}
               </div>
@@ -100,32 +138,61 @@ export function AccountsPanel() {
 
             {/* connected accounts */}
             <div className="space-y-1">
-              {accts.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center gap-2 rounded border border-border px-2 py-1.5 text-xs"
-                >
-                  <CheckCircle2 className="size-3.5 text-success" />
-                  <span className="flex-1 truncate">
-                    {a.displayName ?? a.platformUserId}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    title="Disconnect (deletes stored credentials)"
-                    onClick={async () => {
-                      await api.disconnectSocialAccount(a.id);
-                      toast.success("Account disconnected");
-                      void refreshAccounts();
-                    }}
+              {accts.map((a) => {
+                const healthy = a.status === "active";
+                return (
+                  <div
+                    key={a.id}
+                    className="flex items-center gap-2 rounded border border-border px-2 py-1.5 text-xs"
                   >
-                    <Unplug className="size-3" />
-                  </Button>
-                </div>
-              ))}
+                    {healthy ? (
+                      <CheckCircle2 className="size-3.5 shrink-0 text-success" />
+                    ) : (
+                      <AlertTriangle className="size-3.5 shrink-0 text-warning" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">{accountName(a)}</p>
+                      {!healthy && (
+                        <p className="text-[10px] text-warning">
+                          {t(`social.acct_${a.status}`, { defaultValue: a.status })}
+                        </p>
+                      )}
+                      {healthy && a.tokenExpiresAt && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {t("social.acct_expires", {
+                            date: new Date(a.tokenExpiresAt).toLocaleDateString(
+                              i18n.language,
+                            ),
+                          })}
+                        </p>
+                      )}
+                    </div>
+                    {!healthy && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy === p || !cap?.oauth}
+                        onClick={() => void connect(p)}
+                      >
+                        <RefreshCw className="mr-1 size-3" />
+                        {t("social.acct_reconnect")}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title={t("social.acct_disconnect")}
+                      aria-label={t("social.acct_disconnect")}
+                      onClick={() => setDisconnecting(a)}
+                    >
+                      <Unplug className="size-3" />
+                    </Button>
+                  </div>
+                );
+              })}
               {accts.length === 0 && (
                 <p className="text-[10px] italic text-muted-foreground">
-                  no account connected
+                  {t("social.acct_none")}
                 </p>
               )}
             </div>
@@ -133,9 +200,9 @@ export function AccountsPanel() {
             {/* oauth client config */}
             <details className="text-xs">
               <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground">
-                <KeyRound className="size-3" /> Developer app credentials{" "}
+                <KeyRound className="size-3" /> {t("social.acct_devCreds")}{" "}
                 {oauthClients[p] && (
-                  <span className="text-success">(configured)</span>
+                  <span className="text-success">{t("social.acct_configured")}</span>
                 )}
               </summary>
               <div className="mt-2 space-y-1.5">
@@ -144,7 +211,7 @@ export function AccountsPanel() {
                   onChange={(e) =>
                     setCfg({ ...cfg, [p]: { ...c, id: e.target.value } })
                   }
-                  placeholder="Client ID / App ID"
+                  placeholder={t("social.acct_clientIdPh")}
                   className="h-7 w-full rounded border border-input bg-background px-2"
                 />
                 <input
@@ -153,16 +220,14 @@ export function AccountsPanel() {
                     setCfg({ ...cfg, [p]: { ...c, secret: e.target.value } })
                   }
                   type="password"
-                  placeholder="Client secret (stored in OS vault)"
+                  placeholder={t("social.acct_secretPh")}
                   className="h-7 w-full rounded border border-input bg-background px-2"
                 />
                 <Button size="sm" variant="secondary" onClick={() => void saveClient(p)}>
-                  Save credentials
+                  {t("social.acct_saveCreds")}
                 </Button>
                 <p className="text-[9px] leading-snug text-muted-foreground">
-                  Create a free developer app in the platform's console,
-                  whitelist the loopback redirect URI shown on connect, and
-                  paste the credentials here. The app never ships its own.
+                  {t("social.acct_credsHelp")}
                 </p>
               </div>
             </details>
@@ -178,11 +243,35 @@ export function AccountsPanel() {
               ) : (
                 <Plug className="mr-1 size-3.5" />
               )}
-              Connect {PLATFORM_LABEL[p]}
+              {t("social.acct_connect", { platform: PLATFORM_LABEL[p] })}
             </Button>
           </div>
         );
       })}
+
+      <AlertDialog
+        open={!!disconnecting}
+        onOpenChange={(v) => !v && setDisconnecting(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogTitle>
+            {t("social.acct_disconnectTitle", {
+              name: disconnecting ? accountName(disconnecting) : "",
+            })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("social.acct_disconnectDesc")}
+          </AlertDialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <AlertDialogCancel onClick={() => setDisconnecting(null)}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void disconnect()}>
+              {t("social.acct_disconnectBtn")}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
