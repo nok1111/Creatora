@@ -643,6 +643,7 @@ export const en = {
     showFolder: "Show folder",
     errNoAudio: "This video has no audio track, so there is nothing to transcribe.",
     errTranscribe: "The transcription failed. Check the spoken language or try another model.",
+    errSourceGone: "This video is no longer in your library, so clips can’t be created from it. Import it again and re-run the analysis.",
     preview: "Preview",
   },
   cal: {

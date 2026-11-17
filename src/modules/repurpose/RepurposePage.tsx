@@ -139,6 +139,7 @@ export function RepurposePage() {
   const { data: assets } = useQuery({
     queryKey: ["repurpose-assets"],
     queryFn: () => api.listAssets({ kind: "video" }),
+    staleTime: 0,
   });
   const { data: models, refetch: refetchModels } = useQuery({
     queryKey: ["repurpose-models"],
@@ -270,6 +271,17 @@ export function RepurposePage() {
 
   const generate = async () => {
     if (!asset || !result || !canCreate) return;
+    // The source may have been removed from the library (or its file moved)
+    // since the analysis ran — projects can't reference a vanished asset.
+    const fresh = await api.listAssets({ kind: "video" });
+    const live = fresh.find((a) => a.id === asset.id);
+    if (!live || live.status === "missing") {
+      toast.error(t("rp.errSourceGone"));
+      void qc.invalidateQueries({ queryKey: ["repurpose-assets"] });
+      setAssetId("");
+      reset();
+      return;
+    }
     const ids = TARGET_PRESET_IDS.filter((id) => targets.includes(id));
     const master = presetById(ids[0]!)!;
     const style = SUBTITLE_PRESETS.find((s) => s.id === styleId)!.style;
@@ -342,7 +354,12 @@ export function RepurposePage() {
         } catch (e) {
           // Never leave a half-built project behind.
           if (createdId) await api.deleteProject(createdId, true).catch(() => undefined);
-          out.push({ title, ok: false, error: e instanceof Error ? e.message : String(e) });
+          const msg = e instanceof Error ? e.message : String(e);
+          out.push({
+            title,
+            ok: false,
+            error: /FOREIGN KEY/i.test(msg) ? t("rp.errSourceGone") : msg,
+          });
         }
       }
     } finally {

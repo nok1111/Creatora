@@ -646,6 +646,7 @@ export const es: typeof en = {
     showFolder: "Mostrar carpeta",
     errNoAudio: "Este video no tiene pista de audio, así que no hay nada que transcribir.",
     errTranscribe: "La transcripción falló. Revisa el idioma hablado o prueba otro modelo.",
+    errSourceGone: "Este video ya no está en tu biblioteca, así que no se pueden crear clips. Impórtalo de nuevo y repite el análisis.",
     preview: "Vista previa",
   },
   cal: {

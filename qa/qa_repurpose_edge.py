@@ -87,6 +87,7 @@ ff("-f", "lavfi", "-i", "testsrc2=size=720x1280:rate=25", "-i", loop, "-shortest
 
 c = connect(reload=True)
 js(c, "window.__TAURI_INTERNALS__.invoke('set_setting', {key:'app.language', value:'en'})")
+assets_before = {a["id"] for a in inv(c, "list_assets", {})}
 posts_before = {p["id"] for p in inv(c, "list_social_posts", {})}
 projects_before = {p["id"] for p in inv(c, "list_projects", {"includeArchived": True})}
 assets = []
@@ -224,6 +225,13 @@ finally:
             inv(c, "delete_asset", {"id": aid})
     except Exception as e:
         print("cleanup:", e)
+    try:
+        c = connect()
+        for a in inv(c, "list_assets", {}):
+            if a["id"] not in assets_before:
+                inv(c, "delete_asset", {"id": a["id"]})
+    except Exception as e:
+        print("cleanup assets:", e)
     shutil.rmtree(tmp, ignore_errors=True)
 
 print("\nFAILS:", fails or "none")
