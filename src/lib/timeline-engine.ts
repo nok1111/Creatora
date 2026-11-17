@@ -23,6 +23,7 @@ import type {
   DuckingRule,
   SubtitleCue,
   SubtitleStyle,
+  NamedSubtitleStyle,
   TextStyle,
   Transform,
   Transition,
@@ -1102,6 +1103,64 @@ export function scaleCueTimes(doc: ProjectDoc, factor: number): ProjectDoc {
     c.endMs = Math.max(c.startMs + 1, Math.round(c.endMs * factor));
     for (const w of c.words) { w.startMs = Math.round(w.startMs * factor); w.endMs = Math.round(w.endMs * factor); }
   }
+  return next;
+}
+
+/** Effective style for a cue: named style via cue.styleId, else the doc
+    default (already version-resolved by callers when needed). */
+export function cueStyle(doc: ProjectDoc, cue: SubtitleCue, base?: SubtitleStyle): SubtitleStyle {
+  const named = cue.styleId
+    ? doc.subtitleStyles?.find((s) => s.id === cue.styleId)?.style
+    : undefined;
+  return named ?? base ?? doc.subtitleStyle;
+}
+
+export function setCueStyle(doc: ProjectDoc, cueId: string, styleId: string | null): ProjectDoc {
+  return updateCue(doc, cueId, { styleId });
+}
+
+/** Save a named style into the project registry (travel with the file). */
+export function saveSubtitleStyle(
+  doc: ProjectDoc,
+  name: string,
+  style: SubtitleStyle,
+): { doc: ProjectDoc; styleId: string } {
+  const next = cloneDoc(doc);
+  const s: NamedSubtitleStyle = {
+    id: uid(),
+    name: name.trim() || "Style",
+    style: JSON.parse(JSON.stringify(style)) as SubtitleStyle,
+  };
+  next.subtitleStyles = [...(next.subtitleStyles ?? []), s];
+  return { doc: next, styleId: s.id };
+}
+
+/** Return the id of an identical saved style, or register it — used to
+    materialize presets into the registry for per-cue styling. */
+export function ensureSubtitleStyle(
+  doc: ProjectDoc,
+  name: string,
+  style: SubtitleStyle,
+): { doc: ProjectDoc; styleId: string } {
+  const hit = (doc.subtitleStyles ?? []).find(
+    (s) => s.name === name && JSON.stringify(s.style) === JSON.stringify(style),
+  );
+  if (hit) return { doc, styleId: hit.id };
+  return saveSubtitleStyle(doc, name, style);
+}
+
+/** Delete a saved style and clear every cue referencing it. */
+export function removeSubtitleStyle(doc: ProjectDoc, styleId: string): ProjectDoc {
+  const next = cloneDoc(doc);
+  next.subtitleStyles = (next.subtitleStyles ?? []).filter((s) => s.id !== styleId);
+  for (const c of next.subtitles) if (c.styleId === styleId) c.styleId = null;
+  return next;
+}
+
+/** Assign a named style to every cue at once. */
+export function applyStyleToAllCues(doc: ProjectDoc, styleId: string | null): ProjectDoc {
+  const next = cloneDoc(doc);
+  for (const c of next.subtitles) c.styleId = styleId;
   return next;
 }
 

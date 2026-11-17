@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Blend,
   Captions,
+  Check,
   Copy,
   CopyPlus,
   Eye,
@@ -44,9 +45,11 @@ import {
   removeCue,
   removeEffect,
   duplicateCue,
+  ensureSubtitleStyle,
   removeTrack,
   removeTransition,
   resizeCue,
+  setCueStyle,
   setTransitionDuration,
   renameTrack,
   setTrackFlag,
@@ -69,6 +72,7 @@ import { getDragPayload, isEffectPayload, type EffectCategory } from "@/lib/drag
 import { effectDef, EFFECT_DROP_PARAMS } from "@/lib/effects";
 import { fxEntry, fxTransition } from "@/lib/fx/manifest";
 import { ANIM_PRESETS } from "@/lib/anim-presets";
+import { SUBTITLE_PRESETS } from "@/lib/subtitle-presets";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -1308,6 +1312,13 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 const editing = editCueId === cue.id;
                 const active = activeCueId === cue.id;
                 const w = Math.max(10, msToPx(cue.endMs - cue.startMs));
+                // Per-cue styled blocks take their text color as accent.
+                const accent = cue.styleId
+                  ? doc.subtitleStyles?.find((s) => s.id === cue.styleId)?.style.text.color
+                  : undefined;
+                const accentStyle = accent
+                  ? { borderColor: accent, backgroundColor: `${accent}33` }
+                  : undefined;
                 return (
                   <div
                     key={cue.id}
@@ -1323,7 +1334,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                             ? "border-amber-400/60 bg-emerald-500/25 text-emerald-100/90 hover:bg-emerald-500/35"
                             : "border-emerald-500/50 bg-emerald-500/25 text-emerald-100/90 hover:bg-emerald-500/35",
                     )}
-                    style={{ left: msToPx(cue.startMs), width: w }}
+                    style={{ left: msToPx(cue.startMs), width: w, ...accentStyle }}
                     onPointerDown={(e) => onCuePointerDown(e, cue, "move")}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -1823,6 +1834,52 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 >
                   <CopyPlus className="size-3.5" /> {t("subs.duplicateCue")}
                 </AnchoredMenuItem>
+                <AnchoredMenuSeparator />
+                {/* Per-cue style: default, saved styles, presets materialized. */}
+                <AnchoredMenuItem
+                  onClick={() => {
+                    mutate((d) => setCueStyle(d, cue.id, null));
+                    setCueCtx(null);
+                  }}
+                >
+                  <span className="size-2.5 rounded-full border border-border" />
+                  {t("subs.cueStyleDefault")}
+                  {!cue.styleId && <Check className="ml-auto size-3" />}
+                </AnchoredMenuItem>
+                {(doc.subtitleStyles ?? []).map((s) => (
+                  <AnchoredMenuItem
+                    key={s.id}
+                    onClick={() => {
+                      mutate((d) => setCueStyle(d, cue.id, s.id));
+                      setCueCtx(null);
+                    }}
+                  >
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ background: s.style.text.color }}
+                    />
+                    {s.name}
+                    {cue.styleId === s.id && <Check className="ml-auto size-3" />}
+                  </AnchoredMenuItem>
+                ))}
+                {SUBTITLE_PRESETS.map((p) => (
+                  <AnchoredMenuItem
+                    key={p.id}
+                    onClick={() => {
+                      mutate((d) => {
+                        const r = ensureSubtitleStyle(d, p.label, p.style);
+                        return setCueStyle(r.doc, cue.id, r.styleId);
+                      });
+                      setCueCtx(null);
+                    }}
+                  >
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ background: p.style.text.color }}
+                    />
+                    {p.label}
+                  </AnchoredMenuItem>
+                ))}
                 <AnchoredMenuSeparator />
                 <AnchoredMenuItem
                   destructive

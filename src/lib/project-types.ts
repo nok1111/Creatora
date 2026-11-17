@@ -10,6 +10,8 @@ export interface ProjectDoc {
   subtitles: SubtitleCue[];
   /** Master subtitle presentation — versions may override. */
   subtitleStyle: SubtitleStyle;
+  /** Saved named styles for per-cue styling (cue.styleId). v2+. */
+  subtitleStyles?: NamedSubtitleStyle[];
   brandKitId: string | null;
   /** Embedded snapshot — self-contained (ADR-027). */
   brandKit?: BrandKit | null;
@@ -236,6 +238,14 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
   shadowY: 0,
   lineSpacingPx: 0,
 };
+
+/** Named, user-saved subtitle style — lives in doc.subtitleStyles so it
+    travels with the project; cue.styleId points at these ids. */
+export interface NamedSubtitleStyle {
+  id: string;
+  name: string;
+  style: SubtitleStyle;
+}
 
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   text: { ...DEFAULT_TEXT_STYLE, alignV: "bottom", outlineColor: "#000000", outlineWidth: 2 },

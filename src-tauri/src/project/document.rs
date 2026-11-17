@@ -26,6 +26,9 @@ pub struct ProjectDoc {
     /// Master subtitle presentation; versions override via their own.
     #[serde(default)]
     pub subtitle_style: SubtitleStyle,
+    /// Saved named styles for per-cue styling (cue.style_id). v2+.
+    #[serde(default)]
+    pub subtitle_styles: Vec<NamedSubtitleStyle>,
     #[serde(default)]
     pub brand_kit_id: Option<String>,
     /// Embedded snapshot — self-contained even if the kit is deleted
@@ -697,6 +700,15 @@ pub struct SubtitleCue {
     pub words: Vec<WordTiming>,
 }
 
+/// Named, user-saved subtitle style — cue.style_id references these.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedSubtitleStyle {
+    pub id: String,
+    pub name: String,
+    pub style: SubtitleStyle,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WordTiming {
@@ -734,6 +746,7 @@ impl ProjectDoc {
             versions: Vec::new(),
             subtitles: Vec::new(),
             subtitle_style: SubtitleStyle::default(),
+            subtitle_styles: Vec::new(),
             brand_kit_id: None,
             brand_kit: None,
             export_profiles: Vec::new(),

@@ -33,6 +33,8 @@ import {
   fixOverlaps,
   mergeCueWithNext,
   removeCue,
+  removeSubtitleStyle,
+  saveSubtitleStyle,
   scaleCueTimes,
   setVersionSubtitleStyle,
   shiftAllCues,
@@ -481,11 +483,13 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           </div>
           <div className="mt-1 text-[10px]">
             <label className="mb-1 block text-muted-foreground">{t("subs.animation")}</label>
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-5 gap-1">
               {([
-                ["none", "Static", "Plain cue text"],
-                ["karaoke", "Karaoke", "Word-by-word highlight"],
-                ["pop", "Pop", "Word pops in"],
+                ["none", "Static", "Plain text"],
+                ["karaoke", "Karaoke", "Word fill"],
+                ["pop", "Pop", "One word"],
+                ["jump", "Jumpy", "Word bounce"],
+                ["impact", "Impact", "Slam in"],
               ] as const).map(([mode, label, hint]) => (
                 <button
                   key={mode}
@@ -500,6 +504,81 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                   <div className="text-[9px] font-medium">{label}</div>
                   <div className="text-[7px] opacity-70">{hint}</div>
                 </button>
+              ))}
+            </div>
+          </div>
+          {style && (
+            <div className="mt-1 flex items-center gap-1.5">
+              {(
+                [
+                  ["color", t("subs.colorText")],
+                  ["outlineColor", t("subs.colorOutline")],
+                  ["highlightColor", t("subs.colorHi")],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="flex flex-1 items-center gap-1 text-[9px] text-muted-foreground">
+                  <input
+                    type="color"
+                    className="h-5 w-7 cursor-pointer rounded border border-border bg-transparent p-0"
+                    value={((key === "highlightColor" ? style.highlightColor : style.text[key]) ?? "#FFFFFF").slice(0, 7)}
+                    onChange={(e) =>
+                      key === "highlightColor"
+                        ? setStyle({ highlightColor: e.target.value })
+                        : setStyle({ text: { ...style.text, [key]: e.target.value } })
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+          {style && (doc.brandKit?.fonts?.length ?? 0) > 0 && (
+            <select
+              className="mt-1 h-6 w-full rounded border border-border bg-transparent px-1 text-[10px]"
+              value={style.text.fontFile ?? ""}
+              onChange={(e) =>
+                setStyle({ text: { ...style.text, fontFile: e.target.value || null } })
+              }
+            >
+              <option value="">{t("gfxI.fontDefault")}</option>
+              {doc.brandKit!.fonts.map((f) => (
+                <option key={f.path} value={f.path}>{f.name}</option>
+              ))}
+            </select>
+          )}
+          {/* Saved styles — live in the project; per-cue via lane menu. */}
+          <div className="mt-1.5 flex items-center gap-1">
+            <button
+              className="flex h-6 items-center gap-0.5 rounded border border-border px-1.5 text-[9px] text-muted-foreground hover:bg-accent"
+              title={t("subs.saveStyle")}
+              onClick={() => {
+                const name = window.prompt(t("subs.saveStylePrompt"), "");
+                if (name == null || !style) return;
+                mutate((d) => saveSubtitleStyle(d, name, style).doc);
+                toast.success(t("subs.styleSaved", { name }));
+              }}
+            >
+              <Plus className="size-3" /> {t("subs.saveStyle")}
+            </button>
+            <div className="flex flex-1 gap-1 overflow-x-auto">
+              {(doc.subtitleStyles ?? []).map((s) => (
+                <span key={s.id} className="group flex shrink-0 items-center rounded border border-border">
+                  <button
+                    className="px-1.5 py-0.5 text-[9px] hover:bg-accent"
+                    style={{ color: s.style.text.color }}
+                    title={t("subs.applyStyleTip")}
+                    onClick={() => setStyle(s.style)}
+                  >
+                    {s.name}
+                  </button>
+                  <button
+                    className="px-0.5 text-muted-foreground/50 hover:text-destructive"
+                    title={t("subs.deleteStyle")}
+                    onClick={() => mutate((d) => removeSubtitleStyle(d, s.id))}
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
             </div>
           </div>

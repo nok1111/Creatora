@@ -8,6 +8,7 @@ import { useEditor } from "@/stores/editor";
 import {
   activeClipsAt,
   clipRect,
+  cueStyle,
   findClip,
   setVersionClipOverride,
   timelineDuration,
@@ -761,7 +762,8 @@ export function Preview({
             (c) => playheadMs >= c.startMs && playheadMs < c.endMs,
           );
           if (!cue) return null;
-          const ss = viewDoc.subtitleStyle;
+          // Per-cue named style overrides the (version-resolved) default.
+          const ss = cueStyle(viewDoc, cue, viewDoc.subtitleStyle);
           const st = ss.text;
           const justify =
             st.alignH === "left" ? "flex-start" : st.alignH === "right" ? "flex-end" : "center";
@@ -773,13 +775,53 @@ export function Preview({
             const spoken = playheadMs >= w.endMs;
             const active = playheadMs >= w.startMs && playheadMs < w.endMs;
             const color = active ? ss.highlightColor : st.color;
-            if (ss.mode === "pop") return active ? <span key={i} style={{ color }}>{w.word.trim()}</span> : null;
+            if (ss.mode === "pop")
+              return active ? (
+                <span key={i} style={{ color }}>{w.word.trim()}</span>
+              ) : null;
+            if (ss.mode === "jump") {
+              // All words visible; the spoken word bounces up + highlights.
+              return (
+                <span
+                  key={i}
+                  style={{
+                    color,
+                    display: "inline-block",
+                    transform: active ? "scale(1.3) translateY(-4%)" : "scale(1)",
+                    transformOrigin: "bottom center",
+                    transition: "transform 120ms cubic-bezier(.2,1.6,.4,1), color 80ms",
+                    opacity: spoken || active ? 1 : 0.55,
+                  }}
+                >
+                  {w.word}
+                </span>
+              );
+            }
+            if (ss.mode === "impact") {
+              // Words accumulate — each slams in at its moment, oversized.
+              if (!spoken && !active) return <span key={i} style={{ visibility: "hidden" }}>{w.word}</span>;
+              return (
+                <span
+                  key={i}
+                  style={{
+                    color: active ? ss.highlightColor : st.color,
+                    display: "inline-block",
+                    transform: active ? "scale(1.25)" : "scale(1)",
+                    transformOrigin: "bottom center",
+                    transition: "transform 140ms cubic-bezier(.2,1.5,.3,1), color 80ms",
+                  }}
+                >
+                  {w.word}
+                </span>
+              );
+            }
             return (
               <span key={i} style={{ color, opacity: spoken || active ? 1 : 0.55 }}>
                 {w.word}
               </span>
             );
           };
+          const cueAge = playheadMs - cue.startMs;
           return (
             <div
               className="pointer-events-none absolute flex"
@@ -802,6 +844,13 @@ export function Preview({
                     ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`
                     : undefined,
                   whiteSpace: "pre-wrap",
+                  // Impact slams the whole cue in over the first ~280ms;
+                  // per-word impact layering happens inside wordSpan.
+                  transform:
+                    ss.mode === "impact" && cueAge < 280
+                      ? `scale(${1.45 - 0.45 * (cueAge / 280)})`
+                      : undefined,
+                  transformOrigin: "bottom center",
                 }}
               >
                 {ss.mode !== "none" && cue.words.length > 0

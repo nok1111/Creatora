@@ -86,6 +86,36 @@ export const SUBTITLE_PRESETS: SubtitlePreset[] = [
     },
   },
   {
+    id: "jumpy",
+    label: "Jumpy",
+    style: {
+      text: base(48, "#FFFFFF", {
+        outlineColor: "#000000",
+        outlineWidth: 4,
+        alignV: "middle",
+      }),
+      highlightColor: "#FF3D81",
+      mode: "jump",
+      marginVPx: 40,
+      marginHPx: 32,
+    },
+  },
+  {
+    id: "impact",
+    label: "Impact",
+    style: {
+      text: base(56, "#FFE234", {
+        outlineColor: "#000000",
+        outlineWidth: 5,
+        alignV: "middle",
+      }),
+      highlightColor: "#FFFFFF",
+      mode: "impact",
+      marginVPx: 36,
+      marginHPx: 28,
+    },
+  },
+  {
     id: "creator-highlight",
     label: "Creator Highlight",
     style: {
