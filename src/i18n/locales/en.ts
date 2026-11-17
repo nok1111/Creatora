@@ -605,6 +605,7 @@ export const en = {
     foundHint:
       "Ranked for this video only — a starting point, not a prediction of performance. Review, trim and keep the ones you like.",
     cached: "Transcript reused from a previous run",
+    noSpeech: "No speech was detected — this audio looks like music or non-verbal sound, and clips are found from spoken moments.",
     noResults:
       "No complete, well-paced moments were found in this length range. Try another length or check the spoken language.",
     clipN: "Clip {{n}}",

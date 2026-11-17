@@ -55,6 +55,34 @@ fn ends_sentence(text: &str) -> bool {
     t.ends_with(['.', '!', '?', '…', '。', '！', '？'])
 }
 
+/// True when the whole cue is non-verbal markup whisper emits for
+/// non-speech audio: `[Music]`, `(laughter)`, `(applause)`, `[BLANK_AUDIO]`,
+/// `*sighs*`. One or more such tokens still count as non-speech; a cue that
+/// mixes a token with real words (e.g. `(laughs) that's funny`) is speech.
+pub fn is_non_speech_cue(text: &str) -> bool {
+    let mut rest = text.trim();
+    if rest.is_empty() {
+        return true;
+    }
+    while let Some(first) = rest.chars().next() {
+        let close = match first {
+            '[' => ']',
+            '(' => ')',
+            '*' => '*',
+            _ => return false,
+        };
+        let Some(end) = rest[1..].find(close).map(|i| i + 1) else {
+            return false;
+        };
+        let inner = rest[1..end].trim();
+        if inner.is_empty() || inner.len() > 60 || inner.contains(first) {
+            return false;
+        }
+        rest = rest[end + 1..].trim_start();
+    }
+    true
+}
+
 fn word_count(c: &SubtitleCue) -> usize {
     if c.words.is_empty() {
         c.text.split_whitespace().count()
@@ -420,6 +448,21 @@ mod tests {
     }
 
     #[test]
+    fn non_speech_markup_is_detected() {
+        for t in [
+            "[Music]", "(music)", "(laughter)", "[ Applause ]", "[BLANK_AUDIO]",
+            "*sighs*", "[Music] [Applause]", "(crowd cheering) (music)", "  ",
+        ] {
+            assert!(is_non_speech_cue(t), "{t}");
+        }
+        for t in [
+            "hello world.", "(laughs) that's funny", "so [Music] then we",
+            "what's up", "[unclosed", "a (side note) here",
+        ] {
+            assert!(!is_non_speech_cue(t), "{t}");
+        }
+    }
+
     fn empty_or_too_short_input_yields_nothing() {
         assert!(pick_candidates(&[], None, P).is_empty());
         let short = speech(2, 0.0, "Only ten seconds of talk in total here.");

@@ -801,7 +801,12 @@ export function RepurposePage() {
       {result && (
         <section className="space-y-3">
           {rows.length === 0 ? (
-            <EmptyState icon={Scissors} title={t("rp.found", { count: 0 })} body={t("rp.noResults")} compact />
+            <EmptyState
+              icon={Scissors}
+              title={t("rp.found", { count: 0 })}
+              body={t(result.noSpeech ? "rp.noSpeech" : "rp.noResults")}
+              compact
+            />
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">

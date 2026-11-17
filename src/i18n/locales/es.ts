@@ -608,6 +608,7 @@ export const es: typeof en = {
     foundHint:
       "Ordenados solo para este video — un punto de partida, no una predicción de rendimiento. Revisa, recorta y quédate con los que te gusten.",
     cached: "Transcripción reutilizada de una ejecución anterior",
+    noSpeech: "No se detectó voz — el audio parece música o sonido sin palabras, y los clips se buscan en momentos hablados.",
     noResults:
       "No se encontraron momentos completos y con buen ritmo en este rango. Prueba otra duración o revisa el idioma hablado.",
     clipN: "Clip {{n}}",

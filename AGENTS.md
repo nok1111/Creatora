@@ -136,6 +136,10 @@ Ignored Rust tests cover the E2E chain (`filter_verify`, `filter_thumbs`,
   uses; captions are `sliceCues` re-timed to the clip (word timings follow).
 - `transcribe_to_cues` (subtitles/commands.rs) is the single whisper wrapper
   shared with `transcribe_media`.
+- Cues that are only non-verbal markup (`[Music]`, `(laughter)`) are filtered
+  before ranking (`is_non_speech_cue` in candidates.rs, twin in repurpose.ts,
+  also skipped by `sliceCues`); a video with no speech reports `noSpeech` in
+  the result instead of misleading "check the language" copy.
 - Export: `export_for_target` writes `<out>/<post-slug>-<id6>/<platform>[_<version>].mp4`
   (per-post folder, version name in the file name) so batch exports never
   overwrite each other; "Export all" in the done panel runs targets one by one.

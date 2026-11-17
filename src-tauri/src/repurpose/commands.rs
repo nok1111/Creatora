@@ -1,7 +1,7 @@
 //! `repurpose_analyze` — one job: transcript (cached) → audio energy →
 //! clip candidates.
 
-use super::candidates::{pick_candidates, Candidate, Energy, Params};
+use super::candidates::{is_non_speech_cue, pick_candidates, Candidate, Energy, Params};
 use crate::error::{AppError, CmdResult};
 use crate::jobs::{JobCtx, JobManager};
 use crate::project::document::SubtitleCue;
@@ -32,6 +32,9 @@ struct AnalyzeResult {
     candidates: Vec<Candidate>,
     /// Transcript came from the on-disk cache (no whisper run).
     cached: bool,
+    /// Every cue is non-verbal markup ([Music], (laughter), …) — there is no
+    /// spoken content to clip.
+    no_speech: bool,
     has_energy: bool,
     /// Source frame rate (capped at 60) so generated projects keep it.
     fps_num: u32,
@@ -186,20 +189,34 @@ pub fn repurpose_analyze(
                 .unwrap_or_else(|| cues.last().map(|c| c.end_ms).unwrap_or(0));
 
             ctx.progress(0.95, Some("Ranking clips"));
-            let candidates = pick_candidates(
-                &cues,
-                energy.as_ref().map(|(v, b)| Energy {
-                    bucket_ms: *b,
-                    values: v,
-                }),
-                p,
-            );
+            // Non-verbal cues ([Music], (laughter), …) can't anchor a clip:
+            // without the filter a video whose audio is mostly music ranks
+            // windows made of "[Music]" text — or nothing at all.
+            let speech: Vec<SubtitleCue> = cues
+                .iter()
+                .filter(|c| !is_non_speech_cue(&c.text))
+                .cloned()
+                .collect();
+            let no_speech = speech.is_empty();
+            let candidates = if no_speech {
+                Vec::new()
+            } else {
+                pick_candidates(
+                    &speech,
+                    energy.as_ref().map(|(v, b)| Energy {
+                        bucket_ms: *b,
+                        values: v,
+                    }),
+                    p,
+                )
+            };
             ctx.progress(1.0, None);
             serde_json::to_value(AnalyzeResult {
                 duration_ms,
                 cues,
                 candidates,
                 cached,
+                no_speech,
                 has_energy: energy.is_some(),
                 fps_num,
                 fps_den,

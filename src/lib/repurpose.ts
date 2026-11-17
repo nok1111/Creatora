@@ -31,6 +31,8 @@ export interface AnalyzeResult {
   cues: SubtitleCue[];
   candidates: Candidate[];
   cached: boolean;
+  /** Every transcript cue is non-verbal markup — no spoken content to clip. */
+  noSpeech: boolean;
   hasEnergy: boolean;
   /** Source frame rate (capped at 60) — new projects keep it. */
   fpsNum: number;
@@ -88,6 +90,23 @@ export function clampRange(
   return { startMs: s, endMs: e };
 }
 
+/** Mirrors `is_non_speech_cue` in candidates.rs — a cue that is only
+ * non-verbal markup like `[Music]`, `(laughter)` or `*sighs*` is not speech. */
+export function isNonSpeechCue(text: string): boolean {
+  let rest = text.trim();
+  if (!rest) return true;
+  while (rest.length) {
+    const close = rest[0] === "[" ? "]" : rest[0] === "(" ? ")" : rest[0] === "*" ? "*" : "";
+    if (!close) return false;
+    const end = rest.indexOf(close, 1);
+    if (end < 0) return false;
+    const inner = rest.slice(1, end).trim();
+    if (!inner || inner.length > 60 || inner.includes(rest[0])) return false;
+    rest = rest.slice(end + 1).trimStart();
+  }
+  return true;
+}
+
 /**
  * Cues overlapping [startMs, endMs], re-timed so the clip starts at 0 and
  * clipped to the window. Word timings follow; empty results are dropped.
@@ -105,7 +124,7 @@ export function sliceCues(cues: SubtitleCue[], startMs: number, endMs: number): 
         endMs: Math.min(dur, w.endMs - startMs),
       }));
     const text = c.words.length && words.length ? words.map((w) => w.word).join("").trim() : c.text.trim();
-    if (!text) continue;
+    if (!text || isNonSpeechCue(text)) continue;
     out.push({
       ...c,
       id: `cue-${out.length + 1}`,

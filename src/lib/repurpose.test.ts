@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClipDoc,
   captionFromText,
+  isNonSpeechCue,
   clampRange,
   DEFAULT_TARGET_IDS,
   platformOfPreset,
@@ -67,8 +68,31 @@ describe("sliceCues", () => {
     expect(out[0]!.words.map((x) => x.startMs)).toEqual([0, 400]);
   });
 
+  it("skips non-speech markup cues so [Music] never becomes a caption", () => {
+    const out = sliceCues(
+      [cue("a", 0, 10_000, "[Music]"), cue("b", 10_000, 20_000, "real words here.")],
+      0,
+      20_000,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.text).toBe("real words here.");
+  });
+
   it("drops cues that only touch the boundary", () => {
     expect(sliceCues([cue("t", 0, 5000, "edge.")], 5000, 10000)).toEqual([]);
+  });
+});
+
+describe("isNonSpeechCue", () => {
+  it("flags whole-cue non-verbal markup", () => {
+    for (const t of ["[Music]", "(laughter)", "[BLANK_AUDIO]", "*sighs*", "[Music] (applause)", "  "]) {
+      expect(isNonSpeechCue(t), t).toBe(true);
+    }
+  });
+  it("keeps real speech and mixed cues", () => {
+    for (const t of ["hello world.", "(laughs) that's funny", "so [Music] then we", "a (side note) here"]) {
+      expect(isNonSpeechCue(t), t).toBe(false);
+    }
   });
 });
 
