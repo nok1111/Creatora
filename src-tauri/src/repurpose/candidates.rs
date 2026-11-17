@@ -428,6 +428,20 @@ mod tests {
     }
 
     #[test]
+    fn a_multi_hour_transcript_ranks_quickly() {
+        // 3.3 h of back-to-back sentences — 90-s max windows over 2 400 cues.
+        let cues = speech(2_400, 0.0, "Alright here we go with the first point today.");
+        let t = std::time::Instant::now();
+        let out = pick_candidates(
+            &cues,
+            None,
+            Params { min_ms: 60_000, ideal_ms: 75_000, max_ms: 90_000, count: 10 },
+        );
+        assert_eq!(out.len(), 10);
+        assert!(t.elapsed().as_millis() < 3_000, "took {:?}", t.elapsed());
+    }
+
+    #[test]
     fn titles_are_trimmed_to_a_word_boundary() {
         let long = "word ".repeat(30);
         let t = first_sentence(&long);

@@ -285,6 +285,84 @@ pub fn mark_publish_failed(
 
 // ---- export integration -----------------------------------------------
 
+/// Lowercase ASCII slug: runs of anything else collapse to `-`.
+fn slugify(s: &str, max: usize) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let out: String = out.chars().take(max).collect();
+    out.trim_matches('-').to_string()
+}
+
+/// Per-post export folder: readable title slug + short id (titles repeat).
+fn post_folder(title: &str, post_id: &str) -> String {
+    let id: String = post_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(6)
+        .collect();
+    let slug = slugify(title, 40);
+    match (slug.is_empty(), id.is_empty()) {
+        (true, true) => "post".into(),
+        (true, false) => format!("post-{id}"),
+        (false, true) => slug,
+        (false, false) => format!("{slug}-{id}"),
+    }
+}
+
+/// File stem: the platform, plus the format version when there is one.
+fn export_stem(platform: &str, version_name: Option<&str>) -> String {
+    match version_name
+        .map(|n| slugify(n, 40))
+        .filter(|s| !s.is_empty())
+    {
+        Some(v) => format!("{platform}_{v}"),
+        None => platform.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod export_name_tests {
+    use super::*;
+
+    #[test]
+    fn slugs_are_safe_and_stable() {
+        assert_eq!(
+            slugify("Why does nobody talk about THIS?!", 40),
+            "why-does-nobody-talk-about-this"
+        );
+        assert_eq!(slugify("../../etc/passwd", 40), "etc-passwd");
+        assert_eq!(slugify("Ñandú — ¡éxito!", 40), "and-xito");
+        assert_eq!(slugify("a".repeat(100).as_str(), 40).len(), 40);
+        assert_eq!(slugify("", 40), "");
+    }
+
+    #[test]
+    fn folders_and_stems_never_collide() {
+        assert_eq!(post_folder("Clip one", "ab12cd34-ef"), "clip-one-ab12cd");
+        assert_ne!(
+            post_folder("Same", "aaaaaa11"),
+            post_folder("Same", "bbbbbb22")
+        );
+        assert_eq!(post_folder("???", "ab12cd34"), "post-ab12cd");
+        assert_eq!(post_folder("", ""), "post");
+        assert_eq!(export_stem("youtube", None), "youtube");
+        assert_eq!(
+            export_stem("youtube", Some("Shorts · Vertical 9:16")),
+            "youtube_shorts-vertical-9-16"
+        );
+        assert_ne!(
+            export_stem("youtube", None),
+            export_stem("youtube", Some("Shorts"))
+        );
+    }
+}
+
 /// Export the post's project for ONE target (its version_id) into
 /// `<exports>/<post-title>/<platform>.<container>`, then import the file
 /// into the Library and link it to the target — one job, end to end.
@@ -310,9 +388,20 @@ pub fn export_for_target(
         )
         .map_err(|_| AppError::NotFound("project file".into()))
     })?;
-    let slug = r.platform.clone();
-    let out_path = PathBuf::from(&out_dir).join(format!("{slug}.mp4"));
     let version_id = r.version_id.clone();
+    let version_name = version_id.as_deref().and_then(|vid| {
+        crate::project::store::open(std::path::Path::new(&project_path))
+            .ok()
+            .and_then(|d| d.version(vid).map(|v| v.name.clone()))
+    });
+    // `<out_dir>/<post>-<id>/<platform>[_<version>].mp4` — two posts (or two
+    // formats of one post on the same platform) can never overwrite each other.
+    let post_dir = PathBuf::from(&out_dir).join(post_folder(&r.post.title, &r.post.id));
+    std::fs::create_dir_all(&post_dir)?;
+    let out_path = post_dir.join(format!(
+        "{}.mp4",
+        export_stem(&r.platform, version_name.as_deref())
+    ));
     let tid = target_id.clone();
     let db2 = (*db).clone();
     let thumbs = app

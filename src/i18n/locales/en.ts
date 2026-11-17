@@ -636,6 +636,13 @@ export const en = {
     openSocial: "Open Social",
     again: "Analyze another video",
     back: "Back to clips",
+    exportAll: "Export all",
+    exporting: "Exporting {{n}} of {{total}}",
+    exportedN: "{{n}} files exported",
+    exportFailedN: "{{n}} exports failed",
+    showFolder: "Show folder",
+    errNoAudio: "This video has no audio track, so there is nothing to transcribe.",
+    errTranscribe: "The transcription failed. Check the spoken language or try another model.",
     preview: "Preview",
   },
   cal: {

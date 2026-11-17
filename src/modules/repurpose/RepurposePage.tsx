@@ -22,7 +22,6 @@ import { reportError } from "@/lib/errors";
 import type { AssetSummary } from "@/lib/media-types";
 import { presetById } from "@/lib/format-presets";
 import { SUBTITLE_PRESETS } from "@/lib/subtitle-presets";
-import { PLATFORM_LABEL } from "@/lib/social-types";
 import {
   LENGTH_PRESETS,
   DEFAULT_TARGET_IDS,
@@ -51,6 +50,8 @@ interface Made {
   projectPath?: string;
   postId?: string;
   error?: string;
+  /** Batch export outcome for this clip. */
+  exported?: { ok: number; failed: number; file?: string };
 }
 
 const COUNTS = [3, 5, 8, 10];
@@ -161,6 +162,7 @@ export function RepurposePage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [made, setMade] = useState<Made[] | null>(null);
   const [genStep, setGenStep] = useState<{ n: number; total: number; step: string } | null>(null);
+  const [exp, setExp] = useState<{ n: number; total: number } | null>(null);
 
   const asset: AssetSummary | undefined = useMemo(
     () => assets?.find((a) => a.id === assetId),
@@ -237,10 +239,16 @@ export function RepurposePage() {
         setResult(fin.result);
         setRows(fin.result.candidates.map((c) => ({ ...c, selected: true })));
       } else if (fin.status === "failed") {
-        toast.error(t("common.error"), { description: fin.error });
+        toast.error(t("common.error"), {
+          description: /whisper|transcri/i.test(fin.error ?? "") ? t("rp.errTranscribe") : fin.error,
+        });
       }
     } catch (e) {
-      reportError(e);
+      if (String(e instanceof Error ? e.message : e).includes("no_audio")) {
+        toast.error(t("rp.errNoAudio"));
+      } else {
+        reportError(e);
+      }
     } finally {
       setBusy(null);
       setProgress(null);
@@ -272,15 +280,17 @@ export function RepurposePage() {
         const r = selected[i]!;
         const title = r.title.trim() || t("rp.clipN", { n: i + 1 });
         const step = (s: string) => setGenStep({ n: i + 1, total: selected.length, step: s });
+        let createdId: string | null = null;
         try {
           step(t("rp.gen_project"));
           const proj = await api.createProject({
             name: `${asset.name.replace(/\.[^.]+$/, "")} — ${title}`.slice(0, 80),
             width: master.canvas.width,
             height: master.canvas.height,
-            fpsNum: 30,
-            fpsDen: 1,
+            fpsNum: result.fpsNum || 30,
+            fpsDen: result.fpsDen || 1,
           });
+          createdId = proj.doc.meta.id;
           let motion: MotionSample[] | undefined;
           if (follow) {
             step(t("rp.gen_motion"));
@@ -330,6 +340,8 @@ export function RepurposePage() {
           );
           out.push({ title, ok: true, projectPath: proj.filePath, postId: post.id });
         } catch (e) {
+          // Never leave a half-built project behind.
+          if (createdId) await api.deleteProject(createdId, true).catch(() => undefined);
           out.push({ title, ok: false, error: e instanceof Error ? e.message : String(e) });
         }
       }
@@ -339,6 +351,44 @@ export function RepurposePage() {
       setMade(out);
       void qc.invalidateQueries({ queryKey: ["social-thumbs"] });
     }
+  };
+
+  /** Export every target of every created clip, one at a time (FFmpeg is
+   *  CPU-bound); each post lands in its own subfolder of the chosen folder. */
+  const exportAll = async () => {
+    if (!made) return;
+    const dir = await openDialog({ directory: true, title: t("rp.exportAll") });
+    if (!dir || Array.isArray(dir)) return;
+    const jobs: { i: number; targetId: string }[] = [];
+    for (const [i, m] of made.entries()) {
+      if (!m.ok || !m.postId) continue;
+      const post = await api.getSocialPost(m.postId);
+      for (const tg of post.targets) jobs.push({ i, targetId: tg.id });
+    }
+    const next = made.map((m) => ({ ...m, exported: { ok: 0, failed: 0 } as NonNullable<Made["exported"]> }));
+    setExp({ n: 0, total: jobs.length });
+    for (const [k, j] of jobs.entries()) {
+      setExp({ n: k + 1, total: jobs.length });
+      try {
+        const id = await api.exportForTarget(j.targetId, dir);
+        const fin = await awaitJob<{ filePath?: string }>(id);
+        const e = next[j.i]!.exported!;
+        if (fin.status === "done") {
+          e.ok++;
+          e.file ??= fin.result?.filePath;
+        } else {
+          e.failed++;
+        }
+      } catch {
+        next[j.i]!.exported!.failed++;
+      }
+      setMade([...next]);
+    }
+    setExp(null);
+    const ok = next.reduce((n, m) => n + (m.exported?.ok ?? 0), 0);
+    const bad = next.reduce((n, m) => n + (m.exported?.failed ?? 0), 0);
+    if (ok) toast.success(t("rp.exportedN", { n: ok }), { description: dir });
+    if (bad) toast.error(t("rp.exportFailedN", { n: bad }));
   };
 
   const reset = () => {
@@ -373,6 +423,20 @@ export function RepurposePage() {
                 <p className="truncate font-medium">{m.title}</p>
                 {m.error && <p className="truncate text-xs text-destructive">{m.error}</p>}
               </div>
+              {m.exported && m.exported.ok > 0 && (
+                <button
+                  className="shrink-0 rounded border border-success/40 px-1.5 py-0.5 text-[10px] text-success hover:bg-success/10"
+                  title={m.exported.file}
+                  onClick={() => m.exported?.file && void api.revealPath(m.exported.file)}
+                >
+                  {t("rp.exportedN", { n: m.exported.ok })} · {t("rp.showFolder")}
+                </button>
+              )}
+              {m.exported && m.exported.failed > 0 && (
+                <span className="shrink-0 text-[10px] text-destructive">
+                  {t("rp.exportFailedN", { n: m.exported.failed })}
+                </span>
+              )}
               {m.ok && m.projectPath && (
                 <Button size="sm" variant="secondary" onClick={() => void openPath(m.projectPath!)}>
                   {t("rp.openEditor")}
@@ -381,8 +445,14 @@ export function RepurposePage() {
             </div>
           ))}
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => nav("/social")}>{t("rp.openSocial")}</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button disabled={exp !== null || ok.length === 0} onClick={() => void exportAll()}>
+            {exp ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Download className="mr-1.5 size-4" />}
+            {exp ? t("rp.exporting", { n: exp.n, total: exp.total }) : t("rp.exportAll")}
+          </Button>
+          <Button variant="secondary" onClick={() => nav("/social")}>
+            {t("rp.openSocial")}
+          </Button>
           <Button variant="ghost" onClick={() => setMade(null)}>
             {t("rp.back")}
           </Button>
@@ -644,11 +714,7 @@ export function RepurposePage() {
                         )}
                       >
                         {platform && <PlatformIcon platform={platform} colored={on} />}
-                        {p.label.replace(/^\w+ · /, "")}
-                        <span className="text-[10px] opacity-60">
-                          {p.canvas.width}×{p.canvas.height}
-                        </span>
-                        <span className="sr-only">{platform ? PLATFORM_LABEL[platform] : ""}</span>
+                        {p.label}
                       </button>
                     );
                   })}

@@ -6,9 +6,12 @@ use crate::error::{AppError, CmdResult};
 use crate::jobs::{JobCtx, JobManager};
 use crate::project::{document::*, store};
 use serde::{Deserialize, Serialize};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
 /// Locate whisper-cli: bundled tools/bin next to the exe, repo tools/bin in
@@ -326,6 +329,17 @@ fn prepare_audio(src: &Path, out_wav: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// "whisper_print_progress_callback: progress =  42%" → 42.
+fn parse_progress(line: &str) -> Option<u32> {
+    line.split("progress =")
+        .nth(1)?
+        .trim()
+        .trim_end_matches('%')
+        .trim()
+        .parse()
+        .ok()
+}
+
 /// Run whisper over `media_path` and return cues with real word timings.
 /// `span` maps the work onto `ctx` progress (lo..hi) so callers can embed it
 /// in a longer job. Cancellation kills nothing mid-run (whisper-cli runs to
@@ -365,12 +379,46 @@ pub(crate) fn transcribe_to_cues(
             cmd.args(["-l", lang]);
         }
     }
-    let status = cmd.status().map_err(|e| e.to_string())?;
-    let _ = std::fs::remove_file(&tmp);
-    if ctx.is_cancelled() {
-        let _ = std::fs::remove_file(&out_json);
-        return Err("cancelled".into());
+    // `-pp` makes whisper report "progress = NN%" on stderr; stdout (the
+    // live transcript) is discarded so a full pipe can never stall it.
+    cmd.arg("-pp").stdout(Stdio::null()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let pct = Arc::new(AtomicU32::new(0));
+    let reader = child.stderr.take().map(|se| {
+        let pct = pct.clone();
+        std::thread::spawn(move || {
+            for line in BufReader::new(se).lines().map_while(Result::ok) {
+                if let Some(n) = parse_progress(&line) {
+                    pct.store(n, Ordering::Relaxed);
+                }
+            }
+        })
+    });
+    let status = loop {
+        if ctx.is_cancelled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = std::fs::remove_file(&tmp);
+            let _ = std::fs::remove_file(&out_json);
+            return Err("cancelled".into());
+        }
+        match child.try_wait() {
+            Ok(Some(st)) => break st,
+            Ok(None) => {
+                let p = pct.load(Ordering::Relaxed).min(100) as f32 / 100.0;
+                ctx.progress(at(0.1 + 0.85 * p), Some("Transcribing"));
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(e.to_string());
+            }
+        }
+    };
+    if let Some(h) = reader {
+        let _ = h.join();
     }
+    let _ = std::fs::remove_file(&tmp);
     if !status.success() {
         return Err("whisper transcription failed".into());
     }
@@ -442,4 +490,23 @@ pub fn export_subtitles(
     };
     std::fs::write(&out_path, content)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::parse_progress;
+
+    #[test]
+    fn whisper_progress_lines_parse() {
+        assert_eq!(
+            parse_progress("whisper_print_progress_callback: progress =  42%"),
+            Some(42)
+        );
+        assert_eq!(parse_progress("progress = 100%"), Some(100));
+        assert_eq!(
+            parse_progress("whisper_init_state: kv self size = 3MB"),
+            None
+        );
+        assert_eq!(parse_progress(""), None);
+    }
 }

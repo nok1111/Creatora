@@ -639,6 +639,13 @@ export const es: typeof en = {
     openSocial: "Abrir Redes",
     again: "Analizar otro video",
     back: "Volver a los clips",
+    exportAll: "Exportar todo",
+    exporting: "Exportando {{n}} de {{total}}",
+    exportedN: "{{n}} archivos exportados",
+    exportFailedN: "{{n}} exportaciones fallaron",
+    showFolder: "Mostrar carpeta",
+    errNoAudio: "Este video no tiene pista de audio, así que no hay nada que transcribir.",
+    errTranscribe: "La transcripción falló. Revisa el idioma hablado o prueba otro modelo.",
     preview: "Vista previa",
   },
   cal: {

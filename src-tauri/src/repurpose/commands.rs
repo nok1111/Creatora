@@ -33,6 +33,26 @@ struct AnalyzeResult {
     /// Transcript came from the on-disk cache (no whisper run).
     cached: bool,
     has_energy: bool,
+    /// Source frame rate (capped at 60) so generated projects keep it.
+    fps_num: u32,
+    fps_den: u32,
+}
+
+/// Source fps as a clean fraction, capped at 60 (30/1 when unknown).
+pub(crate) fn clean_fps(num: Option<u32>, den: Option<u32>) -> (u32, u32) {
+    match (num, den) {
+        (Some(n), Some(d)) if n > 0 && d > 0 => {
+            let f = n as f64 / d as f64;
+            if f > 60.5 {
+                (60, 1)
+            } else if (f - f.round()).abs() < 0.02 {
+                (f.round() as u32, 1)
+            } else {
+                (n, d)
+            }
+        }
+        _ => (30, 1),
+    }
 }
 
 fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -103,6 +123,12 @@ pub fn repurpose_analyze(
     if !Path::new(&opts.path).is_file() {
         return Err(AppError::NotFound(format!("source {}", opts.path)));
     }
+    // Fail fast with a clear reason instead of a mid-job ffmpeg error.
+    let info = crate::media::probe::probe(Path::new(&opts.path))?;
+    if !info.has_audio {
+        return Err(AppError::InvalidInput("no_audio".into()));
+    }
+    let (fps_num, fps_den) = clean_fps(info.fps_num, info.fps_den);
     let model_path = crate::subtitles::commands::find_model(&app, &opts.model)?
         .ok_or_else(|| AppError::NotFound(format!("model not downloaded: {}", opts.model)))?;
     let whisper = crate::subtitles::commands::whisper_path()
@@ -175,9 +201,26 @@ pub fn repurpose_analyze(
                 candidates,
                 cached,
                 has_energy: energy.is_some(),
+                fps_num,
+                fps_den,
             })
             .map_err(|e| e.to_string())
         },
     );
     Ok(job_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_fps;
+
+    #[test]
+    fn fps_is_cleaned_and_capped() {
+        assert_eq!(clean_fps(Some(30), Some(1)), (30, 1));
+        assert_eq!(clean_fps(Some(30000), Some(1001)), (30000, 1001)); // 29.97 stays exact
+        assert_eq!(clean_fps(Some(120), Some(1)), (60, 1));
+        assert_eq!(clean_fps(Some(25), Some(1)), (25, 1));
+        assert_eq!(clean_fps(None, Some(1)), (30, 1));
+        assert_eq!(clean_fps(Some(0), Some(1)), (30, 1));
+    }
 }

@@ -32,6 +32,9 @@ export interface AnalyzeResult {
   candidates: Candidate[];
   cached: boolean;
   hasEnergy: boolean;
+  /** Source frame rate (capped at 60) — new projects keep it. */
+  fpsNum: number;
+  fpsDen: number;
 }
 
 export interface LengthPreset {

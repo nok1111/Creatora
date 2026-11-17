@@ -136,7 +136,12 @@ Ignored Rust tests cover the E2E chain (`filter_verify`, `filter_thumbs`,
   uses; captions are `sliceCues` re-timed to the clip (word timings follow).
 - `transcribe_to_cues` (subtitles/commands.rs) is the single whisper wrapper
   shared with `transcribe_media`.
-- Not done yet: batch export of the generated clips (the social export writes
-  `<platform>.mp4` into one folder, so it needs per-post subfolders first).
-- Live QA: `qa/qa_repurpose.py` (builds a 2 min source with real speech, runs
+- Export: `export_for_target` writes `<out>/<post-slug>-<id6>/<platform>[_<version>].mp4`
+  (per-post folder, version name in the file name) so batch exports never
+  overwrite each other; "Export all" in the done panel runs targets one by one.
+- `transcribe_to_cues` runs whisper with `-pp` (real % progress) and is killable
+  (cancel kills whisper-cli within ~0.3 s). Source fps is preserved (cap 60).
+- Videos without an audio track fail fast with `no_audio` (translated toast).
+- Live QA: `qa/qa_repurpose.py` + `qa/qa_repurpose_edge.py` (no-audio, portrait/25 fps,
+  progress, cancel, real export checked with ffprobe). The first builds a 2 min source with real speech, runs
   the wizard with real input, inspects projects/posts, cleans up).

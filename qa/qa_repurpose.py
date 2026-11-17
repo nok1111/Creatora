@@ -11,6 +11,7 @@ from qa_common import connect, js
 
 OUT = "qa/out"
 FFMPEG = "tools/bin/ffmpeg.exe"
+FFPROBE = "tools/bin/ffprobe.exe"
 SPEECH = "tools/test-media/speech_en.wav"
 fails = []
 
@@ -153,6 +154,22 @@ try:
         plats = sorted(t["platform"] + ("*" if t["versionId"] else "") for t in p["targets"])
         check("post draft targets TikTok + Instagram + YouTube", sorted({t["platform"] for t in p["targets"]}) == ["instagram", "tiktok", "youtube"], str(plats))
         check("post linked to the new project and captioned", p["projectId"] in {x["id"] for x in new_projects} and len(p["caption"]) > 0 and p["status"] == "draft", p["status"])
+
+    # ---- export every target of the first post: distinct files, real specs ----
+    if new_posts:
+        outdir = os.path.join(tmp, "exports")
+        os.makedirs(outdir)
+        for tg in new_posts[0]["targets"]:
+            job = inv(c, "export_for_target", {"targetId": tg["id"], "outDir": outdir})
+            wait_for(c, f"window.__TAURI_INTERNALS__.invoke('list_jobs', {{kindPrefix: null, limit: 50}}).then(r => ['done','failed'].includes((r.find(x => x.id === {json.dumps(job)}) || {{}}).status))", 240)
+        folders = os.listdir(outdir)
+        files = sorted(os.listdir(os.path.join(outdir, folders[0]))) if len(folders) == 1 else []
+        check("3 targets -> 3 distinct files in one post folder", len(files) == 3, str(files))
+        check("master + versioned names", "tiktok.mp4" in files and any(f.startswith("instagram_") for f in files) and any(f.startswith("youtube_") for f in files), str(files))
+        for f in files:
+            info = json.loads(subprocess.run([FFPROBE, "-v", "error", "-show_streams", "-of", "json", os.path.join(outdir, folders[0], f)], capture_output=True, text=True).stdout)
+            v = next(x for x in info["streams"] if x["codec_type"] == "video")
+            check(f"{f}: 1080x1920 h264", (v["width"], v["height"], v["codec_name"]) == (1080, 1920, "h264"), f'{v["width"]}x{v["height"]}')
 
 finally:
     try:
