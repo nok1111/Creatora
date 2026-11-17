@@ -532,6 +532,53 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               ))}
             </div>
           )}
+          {style && (
+            <div className="mt-1 flex items-center gap-1.5">
+              {(
+                [
+                  ["backgroundColor", t("subs.bg"), "#000000B0"],
+                  ["shadowColor", t("subs.shadow"), "#000000C0"],
+                ] as const
+              ).map(([key, label, def]) => {
+                const on = style.text[key] != null;
+                return (
+                  <label key={key} className="flex flex-1 items-center gap-1 text-[9px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="size-3"
+                      checked={on}
+                      onChange={(e) =>
+                        setStyle({
+                          text: {
+                            ...style.text,
+                            [key]: e.target.checked ? def : null,
+                            ...(key === "shadowColor" && e.target.checked && !style.text.shadowX && !style.text.shadowY
+                              ? { shadowX: 2, shadowY: 2 }
+                              : {}),
+                          },
+                        })
+                      }
+                    />
+                    <input
+                      type="color"
+                      className="h-5 w-7 cursor-pointer rounded border border-border bg-transparent p-0 disabled:opacity-40"
+                      disabled={!on}
+                      value={(style.text[key] ?? def).slice(0, 7)}
+                      onChange={(e) =>
+                        setStyle({
+                          text: {
+                            ...style.text,
+                            [key]: (style.text[key] ?? "").length === 9 ? `${e.target.value}${style.text[key]!.slice(7)}` : e.target.value,
+                          },
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </div>
+          )}
           {style && (doc.brandKit?.fonts?.length ?? 0) > 0 && (
             <select
               className="mt-1 h-6 w-full rounded border border-border bg-transparent px-1 text-[10px]"
@@ -591,6 +638,14 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             <input type="number" value={style?.marginVPx ?? 48}
               onChange={(e) => setStyle({ marginVPx: +e.target.value })}
               className="col-span-2 h-6 rounded border border-border bg-transparent px-1" />
+            <label>{t("subs.outlineW")}</label>
+            <input type="number" value={style?.text.outlineWidth ?? 0}
+              onChange={(e) => style && setStyle({ text: { ...style.text, outlineWidth: +e.target.value } })}
+              className="col-span-2 h-6 rounded border border-border bg-transparent px-1" />
+            <label>{t("subs.bgPad")}</label>
+            <input type="number" value={style?.text.backgroundPadPx ?? 0} disabled={!style?.text.backgroundColor}
+              onChange={(e) => style && setStyle({ text: { ...style.text, backgroundPadPx: +e.target.value } })}
+              className="col-span-2 h-6 rounded border border-border bg-transparent px-1 disabled:opacity-40" />
           </div>
         </div>
 
