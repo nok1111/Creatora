@@ -784,6 +784,7 @@ export function Preview({
               return (
                 <span
                   key={i}
+                  data-subword
                   style={{
                     color,
                     display: "inline-block",
@@ -799,10 +800,11 @@ export function Preview({
             }
             if (ss.mode === "impact") {
               // Words accumulate — each slams in at its moment, oversized.
-              if (!spoken && !active) return <span key={i} style={{ visibility: "hidden" }}>{w.word}</span>;
+              if (!spoken && !active) return <span key={i} data-subword style={{ visibility: "hidden" }}>{w.word}</span>;
               return (
                 <span
                   key={i}
+                  data-subword
                   style={{
                     color: active ? ss.highlightColor : st.color,
                     display: "inline-block",
@@ -816,7 +818,7 @@ export function Preview({
               );
             }
             return (
-              <span key={i} style={{ color, opacity: spoken || active ? 1 : 0.55 }}>
+              <span key={i} data-subword style={{ color, opacity: spoken || active ? 1 : 0.55 }}>
                 {w.word}
               </span>
             );
@@ -824,6 +826,7 @@ export function Preview({
           const cueAge = playheadMs - cue.startMs;
           return (
             <div
+              data-subtitle
               className="pointer-events-none absolute flex"
               style={{
                 justifyContent: justify,

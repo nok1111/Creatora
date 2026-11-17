@@ -152,10 +152,17 @@ js(c, """(() => {
   });
 })()""", False)
 time.sleep(0.6)
+sc_top = js(c, """(() => {
+  const lane = document.querySelector('[data-sublane]');
+  let sc = lane.parentElement;
+  while (sc && sc.scrollWidth <= sc.clientWidth) sc = sc.parentElement;
+  return sc ? sc.getBoundingClientRect().y : 0;
+})()""", False)
 scroll_v(500)
 lane = c.rect("[data-sublane]")
-check("lane stays pinned on vertical scroll", lane and lane["y"] < 700 and lane["y"] > 0,
-      lane["y"] if lane else None)
+expected = sc_top + 24
+check("lane stays pinned on vertical scroll", lane and abs(lane["y"] - expected) < 6,
+      f"y={lane['y'] if lane else None} expected~{expected:.0f}")
 scroll_v(0)
 
 # --- cue past the end is reachable: lane width covers it ---

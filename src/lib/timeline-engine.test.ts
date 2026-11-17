@@ -7,12 +7,17 @@ import {
   addTransition,
   setTransitionDuration,
   clipRect,
+  cueStyle,
   diagnoseCues,
+  ensureSubtitleStyle,
   findReplaceCues,
   fixOverlaps,
   mergeCueWithNext,
   moveCue,
+  removeSubtitleStyle,
   resizeCue,
+  saveSubtitleStyle,
+  setCueStyle,
   setVersionSubtitleStyle,
   shiftAllCues,
   splitCue,
@@ -666,6 +671,42 @@ describe("subtitle cues (ADR-025)", () => {
     const merged = applyVersion(styled, styled.versions[0].id)!;
     expect(merged.subtitleStyle.mode).toBe("karaoke");
     expect(styled.subtitleStyle.mode).toBe("none"); // master untouched
+  });
+
+  it("saved styles: save → assign → resolve → remove cleans references", () => {
+    const d = withCues();
+    const custom = { ...d.subtitleStyle, mode: "jump", text: { ...d.subtitleStyle.text, color: "#FF00FF" } };
+    const { doc: d1, styleId } = saveSubtitleStyle(d, "Neon Jump", custom);
+    expect(d1.subtitleStyles).toHaveLength(1);
+    expect(d1.subtitleStyles![0].name).toBe("Neon Jump");
+    const d2 = setCueStyle(d1, d1.subtitles[0].id, styleId);
+    const cue = d2.subtitles[0];
+    expect(cue.styleId).toBe(styleId);
+    const eff = cueStyle(d2, cue, d2.subtitleStyle);
+    expect(eff.mode).toBe("jump");
+    expect(eff.text.color).toBe("#FF00FF");
+    // Removing the style clears cue references → falls back to master.
+    const d3 = removeSubtitleStyle(d2, styleId);
+    expect(d3.subtitleStyles).toHaveLength(0);
+    expect(d3.subtitles[0].styleId).toBeNull();
+    expect(cueStyle(d3, d3.subtitles[0], d3.subtitleStyle).mode).toBe(d.subtitleStyle.mode);
+  });
+
+  it("cueStyle falls back to master on a dangling styleId", () => {
+    const d = withCues();
+    const d2 = setCueStyle(d, d.subtitles[0].id, "ghost-style");
+    expect(cueStyle(d2, d2.subtitles[0], d2.subtitleStyle)).toBe(d2.subtitleStyle);
+  });
+
+  it("ensureSubtitleStyle dedupes identical entries", () => {
+    const d = withCues();
+    const custom = { ...d.subtitleStyle, mode: "impact" };
+    const a = ensureSubtitleStyle(d, "Impact", custom);
+    const b = ensureSubtitleStyle(a.doc, "Impact", custom);
+    expect(b.styleId).toBe(a.styleId);
+    expect(b.doc.subtitleStyles).toHaveLength(1);
+    const c = ensureSubtitleStyle(b.doc, "Impact", { ...custom, marginVPx: 99 });
+    expect(c.doc.subtitleStyles).toHaveLength(2);
   });
 });
 
