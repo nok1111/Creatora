@@ -10,6 +10,8 @@ import {
   cueStyle,
   diagnoseCues,
   ensureSubtitleStyle,
+  autoTimeAllCues,
+  autoTimeWords,
   findReplaceCues,
   fixOverlaps,
   mergeCueWithNext,
@@ -656,6 +658,30 @@ describe("subtitle cues (ADR-025)", () => {
     // End can never go before start.
     const d3 = resizeCue(d2, "a", { endMs: 100 });
     expect(d3.subtitles.find((c) => c.id === "a")!.endMs).toBe(1501);
+  });
+
+  it("autoTimeWords distributes the cue duration across its words", () => {
+    const d = withCues();
+    const stripped = { ...d, subtitles: d.subtitles.map((c) => ({ ...c, words: [] })) };
+    const d2 = autoTimeWords(stripped, "a");
+    const a = d2.subtitles.find((c) => c.id === "a")!;
+    expect(a.words.length).toBe(2); // "Hello world"
+    expect(a.words[0].startMs).toBe(a.startMs);
+    expect(a.words[a.words.length - 1].endMs).toBe(a.endMs);
+    // Proportional: longer word gets more time; ordered & inside the cue.
+    for (const w of a.words) {
+      expect(w.endMs).toBeGreaterThan(w.startMs);
+      expect(w.startMs).toBeGreaterThanOrEqual(a.startMs);
+      expect(w.endMs).toBeLessThanOrEqual(a.endMs);
+    }
+  });
+
+  it("autoTimeAllCues only fills cues without words", () => {
+    const d = autoTimeAllCues(withCues());
+    const a = d.subtitles.find((c) => c.id === "a")!;
+    const b = d.subtitles.find((c) => c.id === "b")!;
+    expect(b.words.length).toBe(2); // "Second cue" auto-timed
+    expect(a.words).toEqual(withCues().subtitles[0].words); // untouched
   });
 
   it("findReplaceCues replaces all occurrences", () => {

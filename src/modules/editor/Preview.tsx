@@ -865,9 +865,30 @@ export function Preview({
                   transformOrigin: "bottom center",
                 }}
               >
-                {ss.mode !== "none" && cue.words.length > 0
-                  ? cue.words.map(wordSpan)
-                  : cue.text}
+                {ss.mode === "letters"
+                  ? (() => {
+                      // Letter-by-letter typewriter: char timings derive
+                      // from the cue itself — no transcription needed.
+                      const chars = [...cue.text];
+                      const step = (cue.endMs - cue.startMs) / Math.max(1, chars.length);
+                      return chars.map((ch, i) =>
+                        playheadMs >= cue.startMs + i * step ? (
+                          <span
+                            key={i}
+                            data-subword
+                            style={{
+                              display: "inline-block",
+                              animation: "sub-letter 140ms cubic-bezier(.2,1.4,.3,1) both",
+                            }}
+                          >
+                            {ch === " " ? "\u00A0" : ch}
+                          </span>
+                        ) : null,
+                      );
+                    })()
+                  : ss.mode !== "none" && cue.words.length > 0
+                    ? cue.words.map(wordSpan)
+                    : cue.text}
               </span>
             </div>
           );

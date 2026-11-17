@@ -177,6 +177,29 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
                     ));
                 }
             }
+            "letters" => {
+                // Letter-by-letter typewriter — char timings derived from
+                // the cue itself (no word timings needed). \2a&HFF& makes
+                // the pre-fill secondary alpha transparent so each letter
+                // appears at its \k boundary in the primary colour.
+                let chars: Vec<char> = cue.text.chars().collect();
+                if chars.is_empty() {
+                    out.push_str(&format!(
+                        "Dialogue: 0,{start},{end},{sname},,0,0,0,,{}\n",
+                        esc_ass(&cue.text)
+                    ));
+                } else {
+                    let dur_cs =
+                        (((cue.end_ms - cue.start_ms) / chars.len() as i64) / 10).max(1);
+                    let mut t = String::from("{\\2a&HFF&}");
+                    for ch in &chars {
+                        t.push_str(&format!("{{\\k{dur_cs}}}{}", esc_ass(&ch.to_string())));
+                    }
+                    out.push_str(&format!(
+                        "Dialogue: 0,{start},{end},{sname},,0,0,0,,{t}\n"
+                    ));
+                }
+            }
             "impact" => {
                 // No word timing — slam the whole cue in.
                 out.push_str(&format!(
@@ -336,6 +359,22 @@ mod tests {
         let a = to_ass(&d, &d.subtitles, &st);
         assert!(a.contains("\\fscx145\\fscy145"));
         assert!(a.contains("Hello, !"));
+    }
+
+    #[test]
+    fn ass_letters_emits_per_char_k_tags() {
+        let d = doc_with_cues();
+        let st = SubtitleStyle {
+            mode: "letters".into(),
+            ..Default::default()
+        };
+        let a = to_ass(&d, &d.subtitles, &st);
+        // Transparent secondary + one \k per character of the cue text.
+        assert!(a.contains("{\\2a&HFF&}"));
+        assert!(a.contains("{\\k"));
+        let n = a.matches("{\\k").count();
+        let chars: usize = d.subtitles.iter().map(|c| c.text.chars().count()).sum();
+        assert_eq!(n, chars);
     }
 
     #[test]

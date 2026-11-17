@@ -27,6 +27,7 @@ import { useEditor } from "@/stores/editor";
 import {
   activeCueAt,
   addCue,
+  autoTimeAllCues,
   diagnoseCues,
   duplicateCue,
   findReplaceCues,
@@ -446,6 +447,13 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               <ListChecks className="mr-1 size-3" />Check
             </Button>
           </div>
+          <div className="mt-1">
+            <Button variant="ghost" size="sm" className="h-6 w-full text-[10px]"
+              title={t("subs.autoTimeTip")}
+              onClick={() => mutate((d) => autoTimeAllCues(d))}>
+              <Wand2 className="mr-1 size-3" />{t("subs.autoTime")}
+            </Button>
+          </div>
           {issues && (
             <div className="mt-1 max-h-16 space-y-0.5 overflow-y-auto">
               {issues.length === 0 && <p className="text-[9px] text-emerald-400">{t("subs.noTimingIssues")}</p>}
@@ -500,17 +508,24 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           </div>
           <div className="mt-1 text-[10px]">
             <label className="mb-1 block text-muted-foreground">{t("subs.animation")}</label>
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-6 gap-1">
               {([
                 ["none", "Static", "Plain text"],
                 ["karaoke", "Karaoke", "Word fill"],
                 ["pop", "Pop", "One word"],
                 ["jump", "Jumpy", "Word bounce"],
                 ["impact", "Impact", "Slam in"],
+                ["letters", "Letters", "Char by char"],
               ] as const).map(([mode, label, hint]) => (
                 <button
                   key={mode}
-                  onClick={() => setStyle({ mode })}
+                  onClick={() => {
+                    // Word modes need timings — auto-time wordless cues so
+                    // manually-typed captions work without transcription.
+                    if (["karaoke", "pop", "jump", "impact"].includes(mode))
+                      mutate((d) => autoTimeAllCues(d));
+                    setStyle({ mode });
+                  }}
                   title={hint}
                   className={`rounded-md border px-1 py-1.5 text-center transition-colors ${
                     (style?.mode ?? "none") === mode

@@ -282,7 +282,7 @@ export const SUBTITLE_PRESETS: SubtitlePreset[] = [
         backgroundPadPx: 10,
       }),
       highlightColor: "#7CFC00",
-      mode: "none",
+      mode: "letters",
       marginVPx: 48,
       marginHPx: 48,
     },

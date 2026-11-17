@@ -1084,6 +1084,40 @@ export function mergeCueWithNext(doc: ProjectDoc, cueId: string): { doc: Project
   return { doc: next, mergedId: merged.id };
 }
 
+/** Distribute the cue's duration across its words, weighted by word length
+    — gives word timings to manually-typed cues that were never transcribed
+    so karaoke/pop/jump/impact work without audio. */
+export function autoTimeWords(doc: ProjectDoc, cueId: string): ProjectDoc {
+  const cue = doc.subtitles.find((x) => x.id === cueId);
+  if (!cue) return doc;
+  const parts = cue.text.split(/\s+/).filter((p) => p.length > 0);
+  if (parts.length === 0) return doc;
+  const total = Math.max(parts.length * 80, cue.endMs - cue.startMs);
+  const weights = parts.map((p) => Math.max(1, p.length));
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  let t = cue.startMs;
+  const words = parts.map((p, i) => {
+    const dur = Math.max(80, Math.round((total * weights[i]) / wSum));
+    const w = {
+      word: p + (i < parts.length - 1 ? " " : ""),
+      startMs: Math.round(t),
+      endMs: Math.round(Math.min(cue.endMs, t + dur)),
+    };
+    t += dur;
+    return w;
+  });
+  words[words.length - 1].endMs = cue.endMs;
+  return updateCue(doc, cueId, { words });
+}
+
+/** Auto-time every cue that has text but no word timings yet. */
+export function autoTimeAllCues(doc: ProjectDoc): ProjectDoc {
+  let next = doc;
+  for (const c of doc.subtitles)
+    if (c.words.length === 0 && c.text.trim()) next = autoTimeWords(next, c.id);
+  return next;
+}
+
 /** Shift every cue (and word times) by deltaMs — negative shifts clamp at 0. */
 export function shiftAllCues(doc: ProjectDoc, deltaMs: number): ProjectDoc {
   const next = cloneDoc(doc);

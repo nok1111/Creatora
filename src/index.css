@@ -156,3 +156,4 @@
 
 /* Impact subtitle: each word mounts oversized and slams down. */
 @keyframes sub-impact{0%{transform:scale(1.8);opacity:0}60%{transform:scale(.94);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes sub-letter{0%{transform:scale(1.35);opacity:0}100%{transform:scale(1);opacity:1}}

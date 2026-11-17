@@ -18,6 +18,7 @@ import {
   Scissors,
   Sparkles,
   Trash2,
+  Wand2,
   Volume2,
   VolumeX,
   ZoomIn,
@@ -33,6 +34,7 @@ import {
   addTrack,
   addTransition,
   applyAnimationPreset,
+  autoTimeWords,
   diagnoseCues,
   duplicateClips,
   extractClips,
@@ -1833,6 +1835,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   }}
                 >
                   <CopyPlus className="size-3.5" /> {t("subs.duplicateCue")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  disabled={!cue.text.trim()}
+                  onClick={() => {
+                    mutate((d) => autoTimeWords(d, cue.id));
+                    setCueCtx(null);
+                  }}
+                >
+                  <Wand2 className="size-3.5" /> {t("subs.autoTimeOne")}
                 </AnchoredMenuItem>
                 <AnchoredMenuSeparator />
                 {/* Per-cue style: default, saved styles, presets materialized. */}
