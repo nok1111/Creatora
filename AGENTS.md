@@ -120,3 +120,23 @@ Ignored Rust tests cover the E2E chain (`filter_verify`, `filter_thumbs`,
 - Launching the dev binary for QA: Vite on :1420, then
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222 src-tauri/target/debug/creatora.exe`
   (Rust changes need the exe closed first — Windows locks it).
+
+## Repurpose (`src/modules/repurpose/`, `src/lib/repurpose.ts`, `src-tauri/src/repurpose/`)
+
+- Flow: pick a Library video → `repurpose_analyze` job (whisper transcript,
+  cached in `<appdata>/repurpose/<sha>.json` by path+size+mtime+model+lang →
+  audio energy from `audio::waveform` → `candidates::pick_candidates`) →
+  review/trim cards → generate: per clip `create_project` + optional
+  `analyze_subject` + `buildClipDoc` + `save_project` + `saveSocialPost` draft.
+- `candidates.rs` is deterministic and explainable (pace, silence, energy,
+  hook, length fit; windows are sentence-aligned and never cross a >3 s gap).
+  Do not describe scores as virality prediction in UI/copy.
+- `buildClipDoc`: first selected preset = master canvas, the rest are format
+  versions built with the same `addVersion`/`setVersionClipOverride` the editor
+  uses; captions are `sliceCues` re-timed to the clip (word timings follow).
+- `transcribe_to_cues` (subtitles/commands.rs) is the single whisper wrapper
+  shared with `transcribe_media`.
+- Not done yet: batch export of the generated clips (the social export writes
+  `<platform>.mp4` into one folder, so it needs per-post subfolders first).
+- Live QA: `qa/qa_repurpose.py` (builds a 2 min source with real speech, runs
+  the wizard with real input, inspects projects/posts, cleans up).

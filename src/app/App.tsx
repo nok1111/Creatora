@@ -24,6 +24,9 @@ const SocialPage = lazy(() =>
 const CreatePage = lazy(() =>
   import("@/modules/create/CreatePage").then((m) => ({ default: m.CreatePage })),
 );
+const RepurposePage = lazy(() =>
+  import("@/modules/repurpose/RepurposePage").then((m) => ({ default: m.RepurposePage })),
+);
 const DesignPreview = lazy(() =>
   import("@/modules/preview/DesignPreview").then((m) => ({ default: m.DesignPreview })),
 );
@@ -58,6 +61,8 @@ function pageFor(key: string) {
       return <LibraryPage />;
     case "editor":
       return <CreatePage />;
+    case "repurpose":
+      return <RepurposePage />;
     case "social":
       return <SocialPage />;
     case "exports":

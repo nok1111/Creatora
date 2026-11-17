@@ -198,6 +198,17 @@ export const api = {
   importBrandKit: (path: string) =>
     cmd<import("./project-types").BrandKit>("import_brand_kit", { path }),
 
+  // ---------- repurpose ----------
+  repurposeAnalyze: (o: {
+    path: string;
+    model: string;
+    language?: string | null;
+    minMs: number;
+    idealMs: number;
+    maxMs: number;
+    count: number;
+  }) => cmd<string>("repurpose_analyze", { opts: o }),
+
   // ---------- social studio (ADR-028) ----------
   listSocialPosts: (opts?: { status?: string; platform?: string; query?: string }) =>
     cmd<import("./social-types").SocialPost[]>("list_social_posts", opts ?? {}),
