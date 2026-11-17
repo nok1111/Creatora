@@ -406,9 +406,12 @@ export function updateClip(
   return next;
 }
 
-/** Frame-snapped candidate start times: playhead + every clip edge. */
-export function snapPoints(doc: ProjectDoc, playheadMs: number): number[] {
-  const pts = new Set<number>([snapToFrame(playheadMs, doc)]);
+/** Frame-snapped candidate start times: playhead + every clip edge.
+    Pass includePlayhead=false while playing — a moving playhead must not
+    become a moving magnet for drags. */
+export function snapPoints(doc: ProjectDoc, playheadMs: number, includePlayhead = true): number[] {
+  const pts = new Set<number>();
+  if (includePlayhead) pts.add(snapToFrame(playheadMs, doc));
   for (const t of doc.timeline.tracks)
     for (const c of t.clips) {
       pts.add(c.startMs);
@@ -986,6 +989,41 @@ export function updateCue(doc: ProjectDoc, cueId: string, patch: Partial<Subtitl
   if (!c) return next;
   Object.assign(c, patch);
   if (c.endMs <= c.startMs) c.endMs = c.startMs + 1;
+  next.subtitles.sort((a, b) => a.startMs - b.startMs);
+  return next;
+}
+
+/** Move a cue, keeping its duration — word timings shift along (ADR-025). */
+export function moveCue(doc: ProjectDoc, cueId: string, startMs: number): ProjectDoc {
+  const cur = doc.subtitles.find((x) => x.id === cueId);
+  if (!cur) return doc;
+  const delta = Math.max(0, startMs) - cur.startMs;
+  const next = cloneDoc(doc);
+  const c = next.subtitles.find((x) => x.id === cueId)!;
+  c.startMs += delta;
+  c.endMs += delta;
+  for (const w of c.words) { w.startMs += delta; w.endMs += delta; }
+  next.subtitles.sort((a, b) => a.startMs - b.startMs);
+  return next;
+}
+
+/** Resize a cue edge — word timings clamp into the new [startMs, endMs]. */
+export function resizeCue(
+  doc: ProjectDoc,
+  cueId: string,
+  patch: { startMs?: number; endMs?: number },
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const c = next.subtitles.find((x) => x.id === cueId);
+  if (!c) return next;
+  if (patch.startMs != null) c.startMs = Math.min(Math.max(0, patch.startMs), c.endMs - 1);
+  if (patch.endMs != null) c.endMs = Math.max(patch.endMs, c.startMs + 1);
+  for (const w of c.words) {
+    w.startMs = Math.max(w.startMs, c.startMs);
+    w.endMs = Math.min(w.endMs, c.endMs);
+    if (w.endMs <= w.startMs) w.endMs = w.startMs + 1;
+  }
+  next.subtitles.sort((a, b) => a.startMs - b.startMs);
   return next;
 }
 

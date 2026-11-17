@@ -11,6 +11,8 @@ import {
   findReplaceCues,
   fixOverlaps,
   mergeCueWithNext,
+  moveCue,
+  resizeCue,
   setVersionSubtitleStyle,
   shiftAllCues,
   splitCue,
@@ -621,6 +623,34 @@ describe("subtitle cues (ADR-025)", () => {
     const issues = diagnoseCues(d);
     expect(issues.some((i) => i.kind === "overlap")).toBe(true);
     expect(d.subtitles[0].endMs).toBe(3000); // unchanged
+  });
+
+  it("moveCue keeps duration and shifts word timings", () => {
+    const d = moveCue(withCues(), "a", 4000);
+    const a = d.subtitles.find((c) => c.id === "a")!;
+    expect([a.startMs, a.endMs]).toEqual([4000, 6000]);
+    expect(a.words[0].startMs).toBe(4000);
+    expect(a.words[1].endMs).toBe(5800);
+    // Clamps at 0.
+    const d0 = moveCue(d, "a", -500);
+    expect(d0.subtitles.find((c) => c.id === "a")!.startMs).toBe(0);
+    // Stays sorted (a now starts after b).
+    expect(d.subtitles[0].id).toBe("b");
+  });
+
+  it("resizeCue clamps word timings into the new range", () => {
+    const d = resizeCue(withCues(), "a", { startMs: 1500 });
+    const a = d.subtitles.find((c) => c.id === "a")!;
+    expect(a.startMs).toBe(1500);
+    expect(a.words[0].startMs).toBe(1500); // clamped up, not shifted left
+    expect(a.words[1].endMs).toBe(2800);
+    const d2 = resizeCue(d, "a", { endMs: 2000 });
+    const a2 = d2.subtitles.find((c) => c.id === "a")!;
+    expect(a2.words[1].endMs).toBe(2000);
+    expect(a2.words[1].startMs).toBeLessThan(a2.words[1].endMs);
+    // End can never go before start.
+    const d3 = resizeCue(d2, "a", { endMs: 100 });
+    expect(d3.subtitles.find((c) => c.id === "a")!.endMs).toBe(1501);
   });
 
   it("findReplaceCues replaces all occurrences", () => {

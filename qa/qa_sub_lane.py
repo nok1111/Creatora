@@ -157,8 +157,8 @@ js(c, """(() => {
   const lane = document.querySelector('[data-sublane]');
   let sc = lane.parentElement;
   while (sc && sc.scrollWidth <= sc.clientWidth) sc = sc.parentElement;
-  if (sc) sc.scrollLeft = 0;
-})()""", False)
+  if (sc) sc.scrollLeft = 9.5 * %f - 300;
+})()""" % js(c, "window.__qa.useEditor.getState().pxPerSec", False), False)
 time.sleep(0.3)
 b3 = next(b for b in c.rects("[data-cue]") if "third caption" in b["text"])
 c.click(b3["cx"], b3["cy"])

@@ -840,6 +840,7 @@ export const en = {
     addCue: "Add cue",
     newCueSeed: "New cue",
     addCueAtPlayhead: "Add caption at playhead",
+    editCue: "Edit text",
     laneHint: "Double-click to add a caption — drag blocks to retime",
   },
   exports: {

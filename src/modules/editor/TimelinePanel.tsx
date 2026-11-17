@@ -37,12 +37,15 @@ import {
   findClip,
   moveClips,
   moveClipToTrack,
+  moveCue,
   moveTrackOrder,
   removeClips,
   removeCue,
   removeEffect,
+  duplicateCue,
   removeTrack,
   removeTransition,
+  resizeCue,
   setTransitionDuration,
   renameTrack,
   setTrackFlag,
@@ -137,6 +140,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   // Caption-lane selection/inline-edit — cues live in doc.subtitles (ADR-025).
   const [selCueId, setSelCueId] = useState<string | null>(null);
   const [editCueId, setEditCueId] = useState<string | null>(null);
+  const [cueCtx, setCueCtx] = useState<{ x: number; y: number; cue: SubtitleCue } | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track; clip: Clip; transition?: Transition } | null>(null);
   // Drop feedback: ghost position + validity for the lane under the pointer.
@@ -235,7 +239,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
 
   if (!doc) return null;
   const durationMs = Math.max(timelineDuration(doc), 10_000);
-  const lanesW = msToPx(durationMs) + 200;
+  // The lane must stay reachable even for cues past the clip timeline end.
+  const cuesEndMs = doc.subtitles.reduce((m, c) => Math.max(m, c.endMs), 0);
+  const lanesW = msToPx(Math.max(durationMs, cuesEndMs)) + 200;
 
   /** Snap candidates honoring snapEnabled + frame snapping always. */
   const snap = (ms: number, ignoreClipIds: string[] = []): number => {
@@ -248,7 +254,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           ignored.add(c.startMs + c.durationMs);
         }
       }
-      const pts = snapPoints(doc, playheadNow()).filter((p) => !ignored.has(p));
+      const pts = snapPoints(doc, playheadNow(), !useEditor.getState().playing).filter(
+        (p) => !ignored.has(p),
+      );
       for (const p of pts) {
         if (Math.abs(msToPx(p) - msToPx(ms)) <= SNAP_PX) {
           setSnapLine(p);
@@ -566,7 +574,6 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     const lane = (e.currentTarget as HTMLElement).closest("[data-sublane]") as HTMLElement;
     const laneRect = lane.getBoundingClientRect();
     const grabOffsetMs = pxToMs(e.clientX - laneRect.left) - cue.startMs;
-    const dur = cue.endMs - cue.startMs;
 
     const onMove = (ev: PointerEvent) => {
       const cursorMs = pxToMs(ev.clientX - laneRect.left);
@@ -575,15 +582,15 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         if (!cur) return d;
         if (mode === "move") {
           const target = Math.max(0, Math.round(snap(cursorMs - grabOffsetMs)));
-          return updateCue(d, cue.id, { startMs: target, endMs: target + dur });
+          return moveCue(d, cue.id, target);
         }
         const target = Math.round(snap(cursorMs));
         if (mode === "left") {
           const s = Math.max(0, Math.min(target, cur.endMs - MIN_CUE_MS));
-          return updateCue(d, cue.id, { startMs: s });
+          return resizeCue(d, cue.id, { startMs: s });
         }
         const en = Math.max(target, cur.startMs + MIN_CUE_MS);
-        return updateCue(d, cue.id, { endMs: en });
+        return resizeCue(d, cue.id, { endMs: en });
       });
     };
     const onUp = () => {
@@ -1280,6 +1287,13 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     )}
                     style={{ left: msToPx(cue.startMs), width: w }}
                     onPointerDown={(e) => onCuePointerDown(e, cue, "move")}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelCueId(cue.id);
+                      select([]);
+                      setCueCtx({ x: e.clientX, y: e.clientY, cue });
+                    }}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       setSelCueId(cue.id);
@@ -1317,12 +1331,16 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     )}
                     {!editing && (
                       <>
+                        {/* Edge handles shrink on narrow cues so the body
+                            always keeps a grabbable middle. */}
                         <div
-                          className="absolute left-0 top-0 h-full w-[7px] cursor-ew-resize"
+                          className="absolute left-0 top-0 h-full cursor-ew-resize"
+                          style={{ width: Math.max(2.5, Math.min(7, w / 4)) }}
                           onPointerDown={(e) => onCuePointerDown(e, cue, "left")}
                         />
                         <div
-                          className="absolute right-0 top-0 h-full w-[7px] cursor-ew-resize"
+                          className="absolute right-0 top-0 h-full cursor-ew-resize"
+                          style={{ width: Math.max(2.5, Math.min(7, w / 4)) }}
                           onPointerDown={(e) => onCuePointerDown(e, cue, "right")}
                         />
                       </>
@@ -1717,6 +1735,68 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           </div>
         </div>
       </div>
+
+      {/* Cue context menu — same affordances as clips, cue-scoped. */}
+      <AnchoredMenu
+        open={!!cueCtx}
+        onClose={() => setCueCtx(null)}
+        anchor={cueCtx ? { x: cueCtx.x, y: cueCtx.y } : null}
+        side="bottom"
+        align="start"
+        offset={2}
+        className="min-w-44"
+      >
+        {cueCtx &&
+          (() => {
+            const ph = playheadNow();
+            const inCue = ph > cueCtx.cue.startMs && ph < cueCtx.cue.endMs;
+            const cue = cueCtx.cue;
+            return (
+              <>
+                <AnchoredMenuItem
+                  onClick={() => {
+                    setEditCueId(cue.id);
+                    setCueCtx(null);
+                  }}
+                >
+                  <Pencil className="size-3.5" /> {t("subs.editCue")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  disabled={!inCue}
+                  onClick={() => {
+                    mutate((d) => {
+                      const r = splitCue(d, cue.id, playheadNow());
+                      if (r) setSelCueId(r.left);
+                      return r ? r.doc : d;
+                    });
+                    setCueCtx(null);
+                  }}
+                >
+                  <Scissors className="size-3.5" /> {t("subs.splitAtPlayhead")}
+                </AnchoredMenuItem>
+                <AnchoredMenuItem
+                  onClick={() => {
+                    mutate((d) => duplicateCue(d, cue.id)?.doc ?? d);
+                    setCueCtx(null);
+                  }}
+                >
+                  <CopyPlus className="size-3.5" /> {t("subs.duplicateCue")}
+                </AnchoredMenuItem>
+                <AnchoredMenuSeparator />
+                <AnchoredMenuItem
+                  destructive
+                  onClick={() => {
+                    mutate((d) => removeCue(d, cue.id));
+                    setSelCueId(null);
+                    setCueCtx(null);
+                  }}
+                >
+                  <Trash2 className="size-3.5" /> {t("subs.deleteCue")}
+                </AnchoredMenuItem>
+              </>
+            );
+          })()}
+      </AnchoredMenu>
 
       {/* Clip context menu */}
       <AnchoredMenu

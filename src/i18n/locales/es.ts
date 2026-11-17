@@ -843,6 +843,7 @@ export const es: typeof en = {
     addCue: "Añadir segmento",
     newCueSeed: "Nuevo segmento",
     addCueAtPlayhead: "Añadir subtítulo en el cursor",
+    editCue: "Editar texto",
     laneHint: "Doble clic para añadir un subtítulo — arrastra los bloques para ajustar",
   },
   exports: {
