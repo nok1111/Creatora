@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { fontFamilyFor } from "@/lib/fonts";
 import { useProject } from "@/stores/project";
 import { effectiveDoc } from "@/lib/timeline-engine";
 import { useEditor } from "@/stores/editor";
@@ -670,6 +671,7 @@ export function Preview({
               <span
                 style={{
                   fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
+                  fontFamily: fontFamilyFor(st.fontFile),
                   color: st.color,
                   WebkitTextStroke:
                     st.outlineWidth > 0 && st.outlineColor
@@ -777,7 +779,7 @@ export function Preview({
             const color = active ? ss.highlightColor : st.color;
             if (ss.mode === "pop")
               return active ? (
-                <span key={i} style={{ color }}>{w.word.trim()}</span>
+                <span key={i} data-subword style={{ color }}>{w.word.trim()}</span>
               ) : null;
             if (ss.mode === "jump") {
               // All words visible; the spoken word bounces up + highlights.
@@ -837,11 +839,19 @@ export function Preview({
               <span
                 style={{
                   fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
+                  fontFamily: fontFamilyFor(st.fontFile),
                   color: st.color,
                   WebkitTextStroke:
                     st.outlineWidth > 0 && st.outlineColor
                       ? `${(st.outlineWidth / viewDoc.canvas.height) * 100}cqh ${st.outlineColor}`
                       : undefined,
+                  textShadow:
+                    st.shadowColor && (st.shadowX || st.shadowY)
+                      ? `${((st.shadowX ?? 0) / viewDoc.canvas.width) * 100}cqw ${((st.shadowY ?? 0) / viewDoc.canvas.height) * 100}cqh 0 ${st.shadowColor}`
+                      : undefined,
+                  lineHeight: st.lineSpacingPx
+                    ? `calc(1em + ${(st.lineSpacingPx / viewDoc.canvas.height) * 100}cqh)`
+                    : undefined,
                   background: st.backgroundColor ?? undefined,
                   padding: st.backgroundColor
                     ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`

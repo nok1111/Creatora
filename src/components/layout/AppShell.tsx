@@ -64,7 +64,7 @@ export function AppShell() {
             className="ml-auto flex max-w-56 shrink-0 items-center gap-1.5 rounded-full border border-topbar-border px-2.5 py-1 text-xs text-topbar-foreground transition-colors hover:bg-topbar-accent hover:text-topbar-accent-foreground"
           >
             <Clapperboard className="size-3.5 shrink-0 text-primary" />
-            <span className="hidden truncate sm:inline">{doc.meta.name}</span>
+            <span className="hidden truncate sm:inline">{doc.meta?.name}</span>
             {dirty && <span className="size-1.5 shrink-0 rounded-full bg-warning" />}
           </button>
         )}
