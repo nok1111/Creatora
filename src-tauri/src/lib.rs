@@ -138,6 +138,7 @@ pub fn run() {
             render::commands::preview_render_plan,
             social::posts::create_social_post,
             social::posts::update_social_post,
+            social::posts::save_social_post,
             social::posts::get_social_post,
             social::posts::list_social_posts,
             social::posts::delete_social_post,

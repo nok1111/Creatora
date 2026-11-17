@@ -11,6 +11,7 @@
 use crate::db::Db;
 use crate::jobs::JobManager;
 use crate::social::validate::now_unix;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
@@ -19,10 +20,13 @@ const TICK_SECS: u64 = 60;
 
 /// Spawn the background tick. Runs for the app lifetime.
 pub fn start(app: AppHandle, db: Arc<Db>) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(TICK_SECS));
-        if let Err(e) = tick(&app, &db) {
-            log::warn!("social scheduler tick: {e}");
+    std::thread::spawn(move || {
+        let mut reminded = HashSet::new();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(TICK_SECS));
+            if let Err(e) = tick(&app, &db, &mut reminded) {
+                log::warn!("social scheduler tick: {e}");
+            }
         }
     });
 }
@@ -35,6 +39,17 @@ pub struct Due {
     pub account_id: Option<String>,
     pub export_asset_id: Option<String>,
     pub title: String,
+    pub scheduled_at: String,
+}
+
+/// A reminder fires once per (target, scheduled time): rescheduling gives a
+/// new key so it can fire again; a stale key is dropped once the target is
+/// no longer due.
+pub type ReminderKey = (String, String);
+
+/// True the first time `d` is seen as due; false on every later tick.
+pub fn first_reminder(reminded: &mut HashSet<ReminderKey>, d: &Due) -> bool {
+    reminded.insert((d.target_id.clone(), d.scheduled_at.clone()))
 }
 
 pub fn due_targets(db: &Arc<Db>, now: i64) -> Result<Vec<Due>, crate::error::AppError> {
@@ -74,13 +89,22 @@ pub fn due_targets(db: &Arc<Db>, now: i64) -> Result<Vec<Due>, crate::error::App
                 account_id: r.4,
                 export_asset_id: r.5,
                 title: r.6,
+                scheduled_at: r.7,
             })
             .collect())
     })
 }
 
-fn tick(app: &AppHandle, db: &Arc<Db>) -> Result<(), crate::error::AppError> {
+fn tick(
+    app: &AppHandle,
+    db: &Arc<Db>,
+    reminded: &mut HashSet<ReminderKey>,
+) -> Result<(), crate::error::AppError> {
     let due = due_targets(db, now_unix())?;
+    reminded.retain(|k| {
+        due.iter()
+            .any(|d| d.target_id == k.0 && d.scheduled_at == k.1)
+    });
     for d in due {
         let can_auto = d.auto_publish && d.account_id.is_some() && d.export_asset_id.is_some();
         if can_auto {
@@ -106,10 +130,10 @@ fn tick(app: &AppHandle, db: &Arc<Db>) -> Result<(), crate::error::AppError> {
                     );
                 }
             }
-        } else {
-            // Reminder only — flip to failed? No: keep 'scheduled' so the
-            // card stays visible, just emit the event. Frontend shows a
-            // toast "post is due — publish manually".
+        } else if first_reminder(reminded, &d) {
+            // Reminder only — keep 'scheduled' so the card stays visible and
+            // nag once per due time. Frontend shows a toast "post is due —
+            // publish manually".
             let _ = app.emit(
                 DUE_EVENT,
                 serde_json::json!({
@@ -132,4 +156,31 @@ fn tick(app: &AppHandle, db: &Arc<Db>) -> Result<(), crate::error::AppError> {
     let jobs_state = tauri::Manager::state::<JobManager>(app);
     super::analytics::maybe_run_due(app, &jobs_state, db);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn due(id: &str, at: &str) -> Due {
+        Due {
+            target_id: id.into(),
+            post_id: "p".into(),
+            platform: "youtube".into(),
+            auto_publish: false,
+            account_id: None,
+            export_asset_id: None,
+            title: "t".into(),
+            scheduled_at: at.into(),
+        }
+    }
+
+    #[test]
+    fn reminder_fires_once_per_scheduled_time() {
+        let mut seen = HashSet::new();
+        assert!(first_reminder(&mut seen, &due("a", "2026-11-01T10:00")));
+        assert!(!first_reminder(&mut seen, &due("a", "2026-11-01T10:00")));
+        assert!(first_reminder(&mut seen, &due("a", "2026-11-02T10:00")));
+        assert!(first_reminder(&mut seen, &due("b", "2026-11-01T10:00")));
+    }
 }

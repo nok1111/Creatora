@@ -207,6 +207,9 @@ export const api = {
     cmd<import("./social-types").SocialPost>("create_social_post", { input }),
   updateSocialPost: (id: string, input: import("./social-types").PostInput) =>
     cmd<import("./social-types").SocialPost>("update_social_post", { id, input }),
+  /** Transactional create/update + target reconcile (prunes removed platforms). */
+  saveSocialPost: (id: string | null, input: import("./social-types").PostInput, markReady: boolean) =>
+    cmd<import("./social-types").SocialPost>("save_social_post", { id, input, markReady }),
   deleteSocialPost: (id: string) => cmd<void>("delete_social_post", { id }),
   duplicateSocialPost: (id: string) =>
     cmd<import("./social-types").SocialPost>("duplicate_social_post", { id }),

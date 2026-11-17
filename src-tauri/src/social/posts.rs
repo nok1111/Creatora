@@ -136,72 +136,7 @@ pub struct PostInput {
 
 #[tauri::command]
 pub fn create_social_post(db: State<'_, Arc<Db>>, input: PostInput) -> CmdResult<SocialPost> {
-    let id = now_uuid();
-    for t in &input.targets {
-        if !valid_platform(&t.platform) {
-            return Err(AppError::InvalidInput(format!(
-                "unknown platform: {}",
-                t.platform
-            )));
-        }
-    }
-    let hashtags = dedupe_hashtags(&input.hashtags);
-    let auto_sched = input.targets.iter().any(|t| t.scheduled_at.is_some());
-    db.with(|conn| {
-        conn.execute(
-            "INSERT INTO social_posts(id, project_id, title, caption,
-                 hashtags_json, thumbnail_asset_id, notes, status)
-             VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
-            params![
-                id,
-                input.project_id,
-                input.title,
-                input.caption,
-                serde_json::to_string(&hashtags).unwrap(),
-                input.thumbnail_asset_id,
-                input.notes,
-                if auto_sched { "scheduled" } else { "draft" },
-            ],
-        )?;
-        for t in &input.targets {
-            let st = if t.scheduled_at.is_some() {
-                "scheduled"
-            } else {
-                "draft"
-            };
-            conn.execute(
-                &format!(
-                    "INSERT INTO social_post_targets({TARGET_COLS})
-                     VALUES(?1,?2,?3,?4,?5,NULL,?6,?7,?8,?9,?10,?11,?12,
-                            NULL,NULL,NULL,NULL)"
-                ),
-                params![
-                    now_uuid(),
-                    id,
-                    t.platform,
-                    t.account_id,
-                    t.version_id,
-                    t.title,
-                    t.caption,
-                    t.hashtags
-                        .as_ref()
-                        .map(|h| serde_json::to_string(&dedupe_hashtags(h)).unwrap()),
-                    serde_json::to_string(&t.platform_meta).unwrap(),
-                    st,
-                    t.scheduled_at,
-                    t.auto_publish as i64,
-                ],
-            )?;
-            if let Some(hs) = &t.hashtags {
-                record_hashtags(conn, hs)?;
-            }
-        }
-        record_hashtags(conn, &hashtags)?;
-        refresh_post_status(conn, &id)?;
-        let mut p = get_post(conn, &id)?;
-        p.targets = targets_of(conn, &id)?;
-        Ok(p)
-    })
+    db.with(|conn| save_post(conn, None, &input, false))
 }
 
 #[tauri::command]
@@ -377,6 +312,34 @@ pub fn upsert_post_target(
     post_id: String,
     input: TargetInput,
 ) -> CmdResult<SocialPostTarget> {
+    db.with(|conn| upsert_target(conn, &post_id, &input))
+}
+
+/// Status a target takes when its editable fields are saved. System-owned
+/// states (`published`, `publishing`) are never rewritten by an edit; a
+/// schedule promotes to `scheduled`; otherwise `ready`/`failed`/`cancelled`
+/// survive and anything else falls back to `draft`.
+pub(crate) fn next_target_status(existing: Option<&str>, scheduled: bool) -> &'static str {
+    match existing {
+        Some("published") => "published",
+        Some("publishing") => "publishing",
+        _ if scheduled => "scheduled",
+        Some("ready") => "ready",
+        Some("failed") => "failed",
+        Some("cancelled") => "cancelled",
+        _ => "draft",
+    }
+}
+
+fn target_key(platform: &str, version_id: &Option<String>) -> (String, String) {
+    (platform.to_string(), version_id.clone().unwrap_or_default())
+}
+
+pub(crate) fn upsert_target(
+    conn: &Connection,
+    post_id: &str,
+    input: &TargetInput,
+) -> Result<SocialPostTarget, AppError> {
     if !valid_platform(&input.platform) {
         return Err(AppError::InvalidInput(format!(
             "unknown platform: {}",
@@ -388,25 +351,24 @@ pub fn upsert_post_target(
         .as_ref()
         .map(|h| serde_json::to_string(&dedupe_hashtags(h)).unwrap());
     let meta = serde_json::to_string(&input.platform_meta).unwrap();
-    db.with(|conn| {
+    {
         // Upsert on (post_id, platform, version_id) — version NULL stored
         // as '' to make UNIQUE work in SQLite (NULLs never equal).
         let ver = input.version_id.clone().unwrap_or_default();
-        let existing: Option<String> = conn
+        let existing: Option<(String, String)> = conn
             .query_row(
-                "SELECT id FROM social_post_targets
+                "SELECT id, status FROM social_post_targets
                  WHERE post_id=?1 AND platform=?2
                    AND COALESCE(version_id,'')=?3",
                 params![post_id, input.platform, ver],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .ok();
-        let status = if input.scheduled_at.is_some() {
-            "scheduled"
-        } else {
-            "draft"
-        };
-        let tid = match existing {
+        let status = next_target_status(
+            existing.as_ref().map(|e| e.1.as_str()),
+            input.scheduled_at.is_some(),
+        );
+        let tid = match existing.map(|e| e.0) {
             Some(tid) => {
                 conn.execute(
                     "UPDATE social_post_targets SET account_id=?1,
@@ -459,13 +421,116 @@ pub fn upsert_post_target(
         if let Some(hs) = &input.hashtags {
             record_hashtags(conn, hs)?;
         }
-        refresh_post_status(conn, &post_id)?;
+        refresh_post_status(conn, post_id)?;
         Ok(conn.query_row(
             &format!("SELECT {TARGET_COLS} FROM social_post_targets WHERE id=?1"),
             [&tid],
             row_to_target_pub,
         )?)
-    })
+    }
+}
+
+/// Create-or-update a post and reconcile its targets in ONE transaction:
+/// every input target is upserted (duplicate platform/version entries
+/// collapse), targets absent from the input are removed unless they are
+/// already published/publishing (their history must survive), and
+/// `mark_ready` promotes draft targets. Any failure rolls everything back.
+pub(crate) fn save_post(
+    conn: &Connection,
+    id: Option<&str>,
+    input: &PostInput,
+    mark_ready: bool,
+) -> Result<SocialPost, AppError> {
+    for t in &input.targets {
+        if !valid_platform(&t.platform) {
+            return Err(AppError::InvalidInput(format!(
+                "unknown platform: {}",
+                t.platform
+            )));
+        }
+    }
+    let hashtags = dedupe_hashtags(&input.hashtags);
+    let tags_json = serde_json::to_string(&hashtags).unwrap();
+    let tx = conn.unchecked_transaction()?;
+    let post_id = match id {
+        Some(id) => {
+            let changed = tx.execute(
+                "UPDATE social_posts SET title=?1, caption=?2, hashtags_json=?3,
+                     thumbnail_asset_id=?4, notes=?5, project_id=?6,
+                     updated_at=datetime('now')
+                 WHERE id=?7",
+                params![
+                    input.title,
+                    input.caption,
+                    tags_json,
+                    input.thumbnail_asset_id,
+                    input.notes,
+                    input.project_id,
+                    id
+                ],
+            )?;
+            if changed == 0 {
+                return Err(AppError::NotFound(format!("post {id}")));
+            }
+            id.to_string()
+        }
+        None => {
+            let id = now_uuid();
+            tx.execute(
+                "INSERT INTO social_posts(id, project_id, title, caption,
+                     hashtags_json, thumbnail_asset_id, notes, status)
+                 VALUES(?1,?2,?3,?4,?5,?6,?7,'draft')",
+                params![
+                    id,
+                    input.project_id,
+                    input.title,
+                    input.caption,
+                    tags_json,
+                    input.thumbnail_asset_id,
+                    input.notes,
+                ],
+            )?;
+            id
+        }
+    };
+    record_hashtags(&tx, &hashtags)?;
+    let mut keep = std::collections::BTreeSet::new();
+    for t in &input.targets {
+        keep.insert(target_key(&t.platform, &t.version_id));
+        let saved = upsert_target(&tx, &post_id, t)?;
+        if mark_ready && saved.status == "draft" {
+            tx.execute(
+                "UPDATE social_post_targets SET status='ready',
+                     updated_at=datetime('now') WHERE id=?1",
+                [&saved.id],
+            )?;
+        }
+    }
+    for existing in targets_of(&tx, &post_id)? {
+        if !keep.contains(&target_key(&existing.platform, &existing.version_id))
+            && !matches!(existing.status.as_str(), "published" | "publishing")
+        {
+            tx.execute(
+                "DELETE FROM social_post_targets WHERE id=?1",
+                [&existing.id],
+            )?;
+        }
+    }
+    refresh_post_status(&tx, &post_id)?;
+    let mut p = get_post(&tx, &post_id)?;
+    p.targets = targets_of(&tx, &post_id)?;
+    tx.commit()?;
+    Ok(p)
+}
+
+#[tauri::command]
+pub fn save_social_post(
+    db: State<'_, Arc<Db>>,
+    id: Option<String>,
+    input: PostInput,
+    mark_ready: bool,
+) -> CmdResult<SocialPost> {
+    db.with(|conn| save_post(conn, id.as_deref(), &input, mark_ready))
 }
 
 #[tauri::command]
@@ -522,18 +587,14 @@ pub fn schedule_post_target(
     auto_publish: bool,
 ) -> CmdResult<()> {
     db.with(|conn| {
-        let post: String = conn
+        let (post, current): (String, String) = conn
             .query_row(
-                "SELECT post_id FROM social_post_targets WHERE id=?1",
+                "SELECT post_id, status FROM social_post_targets WHERE id=?1",
                 [&id],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .map_err(|_| AppError::NotFound(format!("target {id}")))?;
-        let status = if scheduled_at.is_some() {
-            "scheduled"
-        } else {
-            "draft"
-        };
+        let status = next_target_status(Some(&current), scheduled_at.is_some());
         conn.execute(
             "UPDATE social_post_targets SET scheduled_at=?1, auto_publish=?2,
                  status=?3, updated_at=datetime('now') WHERE id=?4",
@@ -862,4 +923,190 @@ pub fn reveal_path(path: String) -> CmdResult<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn db() -> (Db, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("creatora-posts-{}", uuid::Uuid::new_v4()));
+        (Db::open(&dir).unwrap(), dir)
+    }
+
+    fn target(platform: &str, scheduled: Option<&str>) -> TargetInput {
+        TargetInput {
+            platform: platform.into(),
+            account_id: None,
+            version_id: None,
+            title: None,
+            caption: None,
+            hashtags: None,
+            platform_meta: serde_json::json!({}),
+            scheduled_at: scheduled.map(str::to_string),
+            auto_publish: false,
+        }
+    }
+
+    fn input(title: &str, targets: Vec<TargetInput>) -> PostInput {
+        PostInput {
+            project_id: None,
+            title: title.into(),
+            caption: String::new(),
+            hashtags: vec![],
+            thumbnail_asset_id: None,
+            notes: None,
+            targets,
+        }
+    }
+
+    #[test]
+    fn status_transitions_never_rewrite_system_states() {
+        assert_eq!(next_target_status(Some("published"), false), "published");
+        assert_eq!(next_target_status(Some("published"), true), "published");
+        assert_eq!(next_target_status(Some("publishing"), true), "publishing");
+        assert_eq!(next_target_status(Some("ready"), false), "ready");
+        assert_eq!(next_target_status(Some("ready"), true), "scheduled");
+        assert_eq!(next_target_status(Some("failed"), false), "failed");
+        assert_eq!(next_target_status(Some("failed"), true), "scheduled");
+        assert_eq!(next_target_status(Some("scheduled"), false), "draft");
+        assert_eq!(next_target_status(None, true), "scheduled");
+        assert_eq!(next_target_status(None, false), "draft");
+    }
+
+    #[test]
+    fn editing_a_published_target_keeps_it_published() {
+        let (db, dir) = db();
+        db.with(|c| {
+            let p = save_post(c, None, &input("a", vec![target("youtube", None)]), false)?;
+            c.execute(
+                "UPDATE social_post_targets SET status='published',
+                     platform_post_id='yt1', platform_url='https://y/1' WHERE id=?1",
+                [&p.targets[0].id],
+            )?;
+            let again = save_post(
+                c,
+                Some(&p.id),
+                &input("a2", vec![target("youtube", None)]),
+                true,
+            )?;
+            assert_eq!(again.targets[0].status, "published");
+            assert_eq!(again.targets[0].platform_post_id.as_deref(), Some("yt1"));
+            assert_eq!(again.status, "published");
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn removed_platforms_are_pruned_but_published_history_survives() {
+        let (db, dir) = db();
+        db.with(|c| {
+            let p = save_post(
+                c,
+                None,
+                &input(
+                    "a",
+                    vec![
+                        target("youtube", None),
+                        target("tiktok", None),
+                        target("facebook", None),
+                    ],
+                ),
+                false,
+            )?;
+            let fb = p.targets.iter().find(|t| t.platform == "facebook").unwrap();
+            c.execute(
+                "UPDATE social_post_targets SET status='published' WHERE id=?1",
+                [&fb.id],
+            )?;
+            let again = save_post(
+                c,
+                Some(&p.id),
+                &input("a", vec![target("youtube", None)]),
+                false,
+            )?;
+            let mut left: Vec<_> = again.targets.iter().map(|t| t.platform.as_str()).collect();
+            left.sort();
+            assert_eq!(left, vec!["facebook", "youtube"]);
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn duplicate_platform_inputs_collapse_to_one_target() {
+        let (db, dir) = db();
+        db.with(|c| {
+            let p = save_post(
+                c,
+                None,
+                &input("a", vec![target("youtube", None), target("youtube", None)]),
+                false,
+            )?;
+            assert_eq!(p.targets.len(), 1);
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn mark_ready_promotes_drafts_and_schedule_wins() {
+        let (db, dir) = db();
+        db.with(|c| {
+            let p = save_post(
+                c,
+                None,
+                &input(
+                    "a",
+                    vec![
+                        target("youtube", None),
+                        target("tiktok", Some("2026-12-01T10:00")),
+                    ],
+                ),
+                true,
+            )?;
+            let st = |pl: &str| {
+                p.targets
+                    .iter()
+                    .find(|t| t.platform == pl)
+                    .unwrap()
+                    .status
+                    .clone()
+            };
+            assert_eq!(st("youtube"), "ready");
+            assert_eq!(st("tiktok"), "scheduled");
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn failed_save_rolls_back_everything() {
+        let (db, dir) = db();
+        db.with(|c| {
+            let bad = input("a", vec![target("youtube", None), target("myspace", None)]);
+            assert!(save_post(c, None, &bad, false).is_err());
+            let n: i64 = c.query_row("SELECT COUNT(*) FROM social_posts", [], |r| r.get(0))?;
+            assert_eq!(n, 0);
+            // Missing post id must not leave stray targets either.
+            assert!(save_post(
+                c,
+                Some("nope"),
+                &input("a", vec![target("youtube", None)]),
+                false
+            )
+            .is_err());
+            let t: i64 =
+                c.query_row("SELECT COUNT(*) FROM social_post_targets", [], |r| r.get(0))?;
+            assert_eq!(t, 0);
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

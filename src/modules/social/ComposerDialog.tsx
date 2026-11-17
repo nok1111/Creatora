@@ -42,7 +42,7 @@ export function ComposerDialog({
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [targets, setTargets] = useState<Record<string, DraftTarget>>({});
-  const [createdId, setCreatedId] = useState<string | null>(postId ?? null);
+  const createdId = postId ?? null;
 
   const { data: projectList } = useQuery({
     queryKey: ["projects-social"],
@@ -116,28 +116,7 @@ export function ComposerDialog({
           };
         }),
       };
-      const post = createdId
-        ? await api.updateSocialPost(createdId, input)
-        : await api.createSocialPost(input);
-      setCreatedId(post.id);
-      // Upsert each enabled target so schedule/overrides persist.
-      for (const p of enabledPlatforms) {
-        const t = targets[p]!;
-        const saved = await api.upsertPostTarget(post.id, {
-          platform: p,
-          accountId: t.accountId ?? null,
-          versionId: t.versionId ?? null,
-          title: t.title ?? null,
-          caption: t.caption ?? null,
-          hashtags: t.hashtags ?? null,
-          platformMeta: t.platformMeta ?? {},
-          scheduledAt: t.scheduledAt ?? null,
-          autoPublish: t.autoPublish ?? false,
-        });
-        if (markReady && saved.status === "draft") {
-          await api.setTargetStatus(saved.id, "ready");
-        }
-      }
+      await api.saveSocialPost(createdId, input, markReady);
       toast.success(markReady ? tr("social.postReady") : tr("social.draftSaved"));
       onClose();
     } catch (e) {
