@@ -984,12 +984,40 @@ export function getVersion(doc: ProjectDoc, versionId: string): FormatVersion | 
 
 // ---------- subtitle cues (ADR-025) ----------
 
+/** Proportional word timings across the cue's own range. */
+function distributeWords(cue: SubtitleCue): SubtitleCue["words"] {
+  const parts = cue.text.split(/\s+/).filter((p) => p.length > 0);
+  if (parts.length === 0) return [];
+  const total = Math.max(parts.length * 80, cue.endMs - cue.startMs);
+  const weights = parts.map((p) => Math.max(1, p.length));
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  let t = cue.startMs;
+  const words = parts.map((p, i) => {
+    const dur = Math.max(80, Math.round((total * weights[i]) / wSum));
+    const w = {
+      word: p + (i < parts.length - 1 ? " " : ""),
+      startMs: Math.round(t),
+      endMs: Math.round(Math.min(cue.endMs, t + dur)),
+    };
+    t += dur;
+    return w;
+  });
+  words[words.length - 1].endMs = cue.endMs;
+  return words;
+}
+
 export function updateCue(doc: ProjectDoc, cueId: string, patch: Partial<SubtitleCue>): ProjectDoc {
   const next = cloneDoc(doc);
   const c = next.subtitles.find((x) => x.id === cueId);
   if (!c) return next;
   Object.assign(c, patch);
   if (c.endMs <= c.startMs) c.endMs = c.startMs + 1;
+  // Text edits must re-derive word timings — word modes render words[],
+  // not cue.text, so stale words would keep showing the old caption.
+  if (patch.text !== undefined && c.words.length > 0) {
+    if (c.words.map((w) => w.word).join("") !== c.text)
+      c.words = distributeWords(c);
+  }
   next.subtitles.sort((a, b) => a.startMs - b.startMs);
   return next;
 }
@@ -1089,25 +1117,8 @@ export function mergeCueWithNext(doc: ProjectDoc, cueId: string): { doc: Project
     so karaoke/pop/jump/impact work without audio. */
 export function autoTimeWords(doc: ProjectDoc, cueId: string): ProjectDoc {
   const cue = doc.subtitles.find((x) => x.id === cueId);
-  if (!cue) return doc;
-  const parts = cue.text.split(/\s+/).filter((p) => p.length > 0);
-  if (parts.length === 0) return doc;
-  const total = Math.max(parts.length * 80, cue.endMs - cue.startMs);
-  const weights = parts.map((p) => Math.max(1, p.length));
-  const wSum = weights.reduce((a, b) => a + b, 0);
-  let t = cue.startMs;
-  const words = parts.map((p, i) => {
-    const dur = Math.max(80, Math.round((total * weights[i]) / wSum));
-    const w = {
-      word: p + (i < parts.length - 1 ? " " : ""),
-      startMs: Math.round(t),
-      endMs: Math.round(Math.min(cue.endMs, t + dur)),
-    };
-    t += dur;
-    return w;
-  });
-  words[words.length - 1].endMs = cue.endMs;
-  return updateCue(doc, cueId, { words });
+  if (!cue || !cue.text.trim()) return doc;
+  return updateCue(doc, cueId, { words: distributeWords(cue) });
 }
 
 /** Auto-time every cue that has text but no word timings yet. */
@@ -1214,7 +1225,12 @@ export function findReplaceCues(doc: ProjectDoc, find: string, replace: string):
   let count = 0;
   for (const c of next.subtitles) {
     const hits = c.text.split(find).length - 1;
-    if (hits > 0) { c.text = c.text.split(find).join(replace); count += hits; }
+    if (hits > 0) {
+      c.text = c.text.split(find).join(replace);
+      if (c.words.length > 0 && c.words.map((w) => w.word).join("") !== c.text)
+        c.words = distributeWords(c);
+      count += hits;
+    }
   }
   return { doc: next, count };
 }

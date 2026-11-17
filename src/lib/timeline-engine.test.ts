@@ -23,6 +23,7 @@ import {
   setVersionSubtitleStyle,
   shiftAllCues,
   splitCue,
+  updateCue,
   duplicateClips,
   extractClips,
   findClip,
@@ -682,6 +683,18 @@ describe("subtitle cues (ADR-025)", () => {
     const b = d.subtitles.find((c) => c.id === "b")!;
     expect(b.words.length).toBe(2); // "Second cue" auto-timed
     expect(a.words).toEqual(withCues().subtitles[0].words); // untouched
+  });
+
+  it("updateCue re-times words when the text changes", () => {
+    const d = updateCue(withCues(), "a", { text: "Brand new caption" });
+    const a = d.subtitles.find((c) => c.id === "a")!;
+    // Old words said "Hello world" — must reflect the new text now.
+    expect(a.words.map((w) => w.word).join("")).toBe("Brand new caption");
+    expect(a.words.length).toBe(3);
+    // Timing-only edits keep existing words untouched.
+    const d2 = updateCue(withCues(), "a", { startMs: 1200 });
+    expect(d2.subtitles.find((c) => c.id === "a")!.words.map((w) => w.word).join(""))
+      .toBe("Hello world");
   });
 
   it("findReplaceCues replaces all occurrences", () => {
