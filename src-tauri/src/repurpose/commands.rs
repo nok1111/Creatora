@@ -110,6 +110,33 @@ fn energy_envelope(path: &Path) -> Option<(Vec<f32>, i64)> {
 
 /// Analyze a source video → ranked clip suggestions. Job `repurpose.analyze`;
 /// the finished payload is an `AnalyzeResult`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeOut {
+    pub duration_ms: i64,
+    pub fps_num: u32,
+    pub fps_den: u32,
+}
+
+/// Cheap source facts for manual trim mode — probe only, no whisper.
+#[tauri::command]
+pub fn repurpose_probe(path: String) -> Result<ProbeOut, AppError> {
+    let src = PathBuf::from(&path);
+    if !src.is_file() {
+        return Err(AppError::NotFound(format!("source {path}")));
+    }
+    let info = crate::media::probe::probe(&src)?;
+    if !info.has_audio {
+        return Err(AppError::InvalidInput("no_audio".into()));
+    }
+    let (fps_num, fps_den) = clean_fps(info.fps_num, info.fps_den);
+    Ok(ProbeOut {
+        duration_ms: info.duration_ms.unwrap_or(0),
+        fps_num,
+        fps_den,
+    })
+}
+
 #[tauri::command]
 pub fn repurpose_analyze(
     app: AppHandle,

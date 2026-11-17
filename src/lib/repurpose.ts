@@ -90,6 +90,22 @@ export function clampRange(
   return { startMs: s, endMs: e };
 }
 
+/** Evenly seeded manual ranges — clip i is centred in its slot at `lenMs`
+ * (clamped to the clip bounds and the source duration). */
+export function spreadRanges(
+  n: number,
+  durationMs: number,
+  lenMs: number,
+): { id: string; startMs: number; endMs: number }[] {
+  if (n <= 0 || durationMs <= 0) return [];
+  const len = Math.min(Math.max(MIN_CLIP_MS, lenMs), durationMs);
+  const step = durationMs / n;
+  return Array.from({ length: n }, (_, i) => {
+    const center = step * (i + 0.5);
+    return { id: `manual-${i + 1}`, ...clampRange(center - len / 2, center + len / 2, durationMs) };
+  });
+}
+
 /** Mirrors `is_non_speech_cue` in candidates.rs — a cue that is only
  * non-verbal markup like `[Music]`, `(laughter)` or `*sighs*` is not speech. */
 export function isNonSpeechCue(text: string): boolean {

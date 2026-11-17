@@ -208,6 +208,8 @@ export const api = {
     maxMs: number;
     count: number;
   }) => cmd<string>("repurpose_analyze", { opts: o }),
+  repurposeProbe: (path: string) =>
+    cmd<{ durationMs: number; fpsNum: number; fpsDen: number }>("repurpose_probe", { path }),
 
   // ---------- social studio (ADR-028) ----------
   listSocialPosts: (opts?: { status?: string; platform?: string; query?: string }) =>

@@ -136,6 +136,10 @@ Ignored Rust tests cover the E2E chain (`filter_verify`, `filter_thumbs`,
   uses; captions are `sliceCues` re-timed to the clip (word timings follow).
 - `transcribe_to_cues` (subtitles/commands.rs) is the single whisper wrapper
   shared with `transcribe_media`.
+- Manual mode: `ManualTrim.tsx` stacks one colored range slider per clip over a
+  ruler (pointer-drag handles/body, keyboard ±1s/±5s). `repurpose_probe` gives
+  fps/duration without whisper; the transcript job only runs when captions are
+  on. `spreadRanges` seeds even ranges, `clampRange` bounds them.
 - Cues that are only non-verbal markup (`[Music]`, `(laughter)`) are filtered
   before ranking (`is_non_speech_cue` in candidates.rs, twin in repurpose.ts,
   also skipped by `sliceCues`); a video with no speech reports `noSpeech` in

@@ -32,6 +32,7 @@ import {
   LENGTH_PRESETS,
   DEFAULT_TARGET_IDS,
   TARGET_PRESET_IDS,
+  spreadRanges,
   buildClipDoc,
   captionFromText,
   clampRange,
@@ -41,6 +42,7 @@ import {
   type MotionSample,
 } from "@/lib/repurpose";
 import { useOpenInEditor } from "@/lib/open-in-editor";
+import { ManualTrim, type ManualRange } from "@/modules/repurpose/ManualTrim";
 import { setDragPayload } from "@/lib/drag-payload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,6 +161,8 @@ export function RepurposePage() {
   const [dragOver, setDragOver] = useState(false);
   const [lengthId, setLengthId] = useState<(typeof LENGTH_PRESETS)[number]["id"]>("standard");
   const [count, setCount] = useState(5);
+  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [ranges, setRanges] = useState<ManualRange[]>([]);
   const [language, setLanguage] = useState("auto");
   const [modelName, setModelName] = useState("");
   const [targets, setTargets] = useState<string[]>(DEFAULT_TARGET_IDS);
@@ -184,6 +188,18 @@ export function RepurposePage() {
     return (assets ?? []).filter((a) => !q || a.name.toLowerCase().includes(q));
   }, [assets, libQuery]);
   const presentModels = useMemo(() => (models ?? []).filter((m) => m.present), [models]);
+
+  // Manual mode: one stacked slider per clip. Re-seed on source/count change,
+  // keeping whatever the user already dragged for slots that still exist.
+  useEffect(() => {
+    if (mode !== "manual" || !asset?.durationMs) return;
+    setRanges((rs) =>
+      spreadRanges(count, asset.durationMs!, LENGTH_PRESETS.find((l) => l.id === lengthId)!.idealMs).map(
+        (s, i) => (rs[i] ? { ...s, startMs: rs[i]!.startMs, endMs: rs[i]!.endMs } : s),
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, asset?.id, asset?.durationMs, count]);
   const model = modelName || presentModels.find((m) => m.name === PREFERRED_MODEL)?.name || presentModels[0]?.name || "";
 
   useEffect(
@@ -296,24 +312,13 @@ export function RepurposePage() {
 
   const analyze = async () => {
     if (!asset || !model) return;
-    const len = LENGTH_PRESETS.find((l) => l.id === lengthId)!;
     setBusy("analyze");
     setProgress({ p: 0 });
     setResult(null);
     setRows([]);
     setMade(null);
     try {
-      const id = await api.repurposeAnalyze({
-        path: asset.filePath,
-        model,
-        language,
-        minMs: len.minMs,
-        idealMs: len.idealMs,
-        maxMs: len.maxMs,
-        count,
-      });
-      setJobId(id);
-      const fin = await awaitJob<AnalyzeResult>(id);
+      const fin = await runAnalyze(count);
       if (fin.status === "done" && fin.result) {
         setResult(fin.result);
         setRows(fin.result.candidates.map((c) => ({ ...c, selected: true })));
@@ -322,6 +327,79 @@ export function RepurposePage() {
           description: /whisper|transcri/i.test(fin.error ?? "") ? t("rp.errTranscribe") : fin.error,
         });
       }
+    } catch (e) {
+      if (String(e instanceof Error ? e.message : e).includes("no_audio")) {
+        toast.error(t("rp.errNoAudio"));
+      } else {
+        reportError(e);
+      }
+    } finally {
+      setBusy(null);
+      setProgress(null);
+      setJobId(null);
+    }
+  };
+
+  const runAnalyze = async (countArg: number) => {
+    const len = LENGTH_PRESETS.find((l) => l.id === lengthId)!;
+    const id = await api.repurposeAnalyze({
+      path: asset!.filePath,
+      model,
+      language,
+      minMs: len.minMs,
+      idealMs: len.idealMs,
+      maxMs: len.maxMs,
+      count: countArg,
+    });
+    setJobId(id);
+    return awaitJob<AnalyzeResult>(id);
+  };
+
+  // Manual sliders → review rows. Transcript runs only when captions are on
+  // (it's the only part that needs one); otherwise a cheap probe gives fps.
+  const useManual = async () => {
+    if (!asset?.durationMs || ranges.length === 0) return;
+    setBusy("analyze");
+    setProgress({ p: 0 });
+    setResult(null);
+    setRows([]);
+    setMade(null);
+    try {
+      let res: AnalyzeResult;
+      if (captions) {
+        const fin = await runAnalyze(1);
+        if (fin.status !== "done" || !fin.result) {
+          toast.error(t("common.error"), { description: fin.error ?? "" });
+          return;
+        }
+        res = fin.result;
+      } else {
+        const p = await api.repurposeProbe(asset.filePath);
+        res = {
+          durationMs: p.durationMs,
+          cues: [],
+          candidates: [],
+          cached: false,
+          noSpeech: false,
+          hasEnergy: false,
+          fpsNum: p.fpsNum,
+          fpsDen: p.fpsDen,
+        };
+      }
+      setResult(res);
+      setRows(
+        ranges.map((r, i) => ({
+          id: `manual-${i + 1}`,
+          rank: i + 1,
+          startMs: r.startMs,
+          endMs: r.endMs,
+          score: 0,
+          title: t("rp.clipN", { n: i + 1 }),
+          text: "",
+          reasons: [],
+          selected: true,
+        })),
+      );
     } catch (e) {
       if (String(e instanceof Error ? e.message : e).includes("no_audio")) {
         toast.error(t("rp.errNoAudio"));
@@ -360,6 +438,20 @@ export function RepurposePage() {
       reset();
       return;
     }
+    let res = result;
+    if (captions && result.cues.length === 0 && !result.noSpeech) {
+      // Captions were switched on after a probe-only (manual) run — fetch
+      // the transcript now so the clips actually get subtitles.
+      setBusy("analyze");
+      const fin = await runAnalyze(1);
+      if (fin.status !== "done" || !fin.result) {
+        toast.error(t("common.error"), { description: fin.error ?? "" });
+        setBusy(null);
+        return;
+      }
+      res = { ...result, cues: fin.result.cues, noSpeech: fin.result.noSpeech };
+      setResult(res);
+    }
     const ids = TARGET_PRESET_IDS.filter((id) => targets.includes(id));
     const master = presetById(ids[0]!)!;
     const style = SUBTITLE_PRESETS.find((s) => s.id === styleId)!.style;
@@ -377,8 +469,8 @@ export function RepurposePage() {
             name: `${asset.name.replace(/\.[^.]+$/, "")} — ${title}`.slice(0, 80),
             width: master.canvas.width,
             height: master.canvas.height,
-            fpsNum: result.fpsNum || 30,
-            fpsDen: result.fpsDen || 1,
+            fpsNum: res.fpsNum || 30,
+            fpsDen: res.fpsDen || 1,
           });
           createdId = proj.doc.meta.id;
           let motion: MotionSample[] | undefined;
@@ -399,7 +491,7 @@ export function RepurposePage() {
             },
             startMs: r.startMs,
             endMs: r.endMs,
-            cues: result.cues,
+            cues: res.cues,
             presetIds: ids,
             captions,
             captionStyle: style,
@@ -689,6 +781,24 @@ export function RepurposePage() {
       <section className="space-y-4 rounded-xl border border-border bg-card p-4">
         <h2 className="text-sm font-semibold">{t("rp.stepOptions")}</h2>
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <p className="text-xs font-medium text-muted-foreground">{t("rp.mode")}</p>
+            <div className="flex gap-1.5">
+              {(["auto", "manual"] as const).map((m) => (
+                <button
+                  key={m}
+                  aria-pressed={mode === m}
+                  onClick={() => setMode(m)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs",
+                    mode === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {t(m === "auto" ? "rp.modeAuto" : "rp.modeManual")}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground">{t("rp.clipLength")}</p>
             <div className="flex flex-wrap gap-1.5">
@@ -696,7 +806,17 @@ export function RepurposePage() {
                 <button
                   key={l.id}
                   aria-pressed={lengthId === l.id}
-                  onClick={() => setLengthId(l.id)}
+                  onClick={() => {
+                    setLengthId(l.id);
+                    if (mode === "manual" && asset?.durationMs) {
+                      setRanges((rs) =>
+                        rs.map((r) => {
+                          const c = (r.startMs + r.endMs) / 2;
+                          return { ...r, ...clampRange(c - l.idealMs / 2, c + l.idealMs / 2, asset.durationMs!) };
+                        }),
+                      );
+                    }
+                  }}
                   className={cn(
                     "rounded-md border px-2.5 py-1 text-xs",
                     lengthId === l.id
@@ -757,6 +877,15 @@ export function RepurposePage() {
           )}
         </div>
 
+        {mode === "manual" && asset?.durationMs != null && asset.durationMs > 0 && (
+          <ManualTrim
+            durationMs={asset.durationMs}
+            ranges={ranges}
+            disabled={busy !== null}
+            onChange={(id, r) => setRanges((rs) => rs.map((x) => (x.id === id ? { ...x, ...r } : x)))}
+          />
+        )}
+
         {needModel && (
           <div className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
             <span className="flex-1">{t("rp.noModel")}</span>
@@ -772,9 +901,17 @@ export function RepurposePage() {
         )}
 
         <div className="flex items-center gap-3">
-          <Button disabled={!asset || !model || busy !== null} onClick={() => void analyze()}>
+          <Button
+            disabled={
+              !asset ||
+              busy !== null ||
+              ranges.length === 0 && mode === "manual" ||
+              (mode === "auto" || captions) && !model
+            }
+            onClick={() => void (mode === "auto" ? analyze() : useManual())}
+          >
             {busy === "analyze" ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Sparkles className="mr-1.5 size-4" />}
-            {busy === "analyze" ? t("rp.analyzing") : t("rp.analyze")}
+            {busy === "analyze" ? t("rp.analyzing") : t(mode === "auto" ? "rp.analyze" : "rp.useClips")}
           </Button>
           {busy === "analyze" && jobId && (
             <Button variant="ghost" size="sm" onClick={() => void api.cancelJob(jobId)}>

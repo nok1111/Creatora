@@ -3,6 +3,7 @@ import {
   buildClipDoc,
   captionFromText,
   isNonSpeechCue,
+  spreadRanges,
   clampRange,
   DEFAULT_TARGET_IDS,
   platformOfPreset,
@@ -80,6 +81,24 @@ describe("sliceCues", () => {
 
   it("drops cues that only touch the boundary", () => {
     expect(sliceCues([cue("t", 0, 5000, "edge.")], 5000, 10000)).toEqual([]);
+  });
+});
+
+describe("spreadRanges", () => {
+  it("seeds n centred clips inside the source", () => {
+    const rs = spreadRanges(3, 120_000, 20_000);
+    expect(rs).toHaveLength(3);
+    for (const r of rs) {
+      expect(r.startMs).toBeGreaterThanOrEqual(0);
+      expect(r.endMs).toBeLessThanOrEqual(120_000);
+      expect(r.endMs - r.startMs).toBe(20_000);
+    }
+    expect(rs[0]!.endMs).toBeLessThanOrEqual(rs[1]!.startMs);
+  });
+
+  it("shrinks to the source when it is shorter than the length", () => {
+    const [r] = spreadRanges(1, 8_000, 30_000);
+    expect(r!.endMs - r!.startMs).toBe(8_000);
   });
 });
 
