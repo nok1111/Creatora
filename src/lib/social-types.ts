@@ -96,6 +96,8 @@ export interface Finding {
   message: string;
   fix: string | null;
   fixAction: string;
+  /** Interpolation values for the translated message (`find.<code>`). */
+  params?: Record<string, string | number> | null;
 }
 
 export interface ValidationResult {

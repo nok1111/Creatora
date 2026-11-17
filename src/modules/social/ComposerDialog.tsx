@@ -465,7 +465,7 @@ export function ComposerDialog({
                   )}
                   {cap && (
                     <p className="text-[10px] leading-snug text-muted-foreground">
-                      {cap.statusNote}
+                      {tr(`social.note_${p}`, { defaultValue: cap.statusNote })}
                     </p>
                   )}
                 </div>

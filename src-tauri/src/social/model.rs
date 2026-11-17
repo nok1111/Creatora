@@ -124,6 +124,10 @@ pub struct Finding {
     /// openFormats | openCaptions | pickFile | connectAccount | none
     #[serde(default)]
     pub fix_action: String,
+    /// Interpolation values for the frontend's translated message
+    /// (`message` stays the English fallback).
+    #[serde(default)]
+    pub params: serde_json::Value,
 }
 
 /// What a platform can really do — surfaced in UI so nothing is implied.

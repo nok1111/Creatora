@@ -78,12 +78,12 @@ export function ValidationPanel({
           )}
         </span>
       </div>
-      {data.targets.map((t) => (
-        <div key={t.targetId} className="space-y-1">
+      {data.targets.map((tg) => (
+        <div key={tg.targetId} className="space-y-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {PLATFORM_LABEL[t.platform as SocialPlatform] ?? t.platform}
+            {PLATFORM_LABEL[tg.platform as SocialPlatform] ?? tg.platform}
           </p>
-          {t.findings.map((f, i) => (
+          {tg.findings.map((f, i) => (
             <div
               key={i}
               className={cn(
@@ -97,13 +97,16 @@ export function ValidationPanel({
             >
               <span className="mt-px shrink-0">{ICON[f.severity]}</span>
               <div className="min-w-0 flex-1">
-                <p>{f.message}</p>
+                <p>
+                  {t(`find.${f.code}`, { ...(f.params ?? {}), defaultValue: f.message })}
+                </p>
                 {f.fix && (
                   <button
-                    onClick={() => go(f, t.targetId)}
+                    onClick={() => go(f, tg.targetId)}
                     className="mt-0.5 flex items-center gap-0.5 text-[10px] text-primary hover:underline"
                   >
-                    {f.fix} <ArrowRight className="size-2.5" />
+                    {t(`find.${f.code}_fix`, { defaultValue: f.fix })}{" "}
+                    <ArrowRight className="size-2.5" />
                   </button>
                 )}
               </div>

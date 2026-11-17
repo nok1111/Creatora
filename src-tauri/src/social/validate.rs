@@ -5,6 +5,7 @@
 use super::model::{extract_hashtags, Finding, SocialPost, SocialPostTarget};
 use super::rules::PlatformRules;
 use crate::error::{AppError, CmdResult};
+use serde_json::json;
 
 /// Facts about what will actually be published — from the exported file
 /// (probed) when present, else from the project's version canvas.
@@ -27,6 +28,14 @@ fn f(sev: &str, code: &str, msg: impl Into<String>, fix: Option<&str>, action: &
         message: msg.into(),
         fix: fix.map(str::to_string),
         fix_action: action.into(),
+        params: serde_json::Value::Null,
+    }
+}
+
+impl Finding {
+    fn with(mut self, params: serde_json::Value) -> Self {
+        self.params = params;
+        self
     }
 }
 
@@ -54,13 +63,16 @@ pub fn validate_target(
 
     // --- metadata ---
     if meta.title_required && title.trim().is_empty() {
-        out.push(f(
-            "error",
-            "title_empty",
-            format!("{} requires a title", rules.display_name),
-            Some("Add a title in Caption Studio"),
-            "openCaptions",
-        ));
+        out.push(
+            f(
+                "error",
+                "title_empty",
+                format!("{} requires a title", rules.display_name),
+                Some("Add a title in Caption Studio"),
+                "openCaptions",
+            )
+            .with(json!({"platform": rules.display_name})),
+        );
     }
     if meta.title_max_chars > 0 && title.chars().count() > meta.title_max_chars {
         out.push(f(
@@ -74,19 +86,22 @@ pub fn validate_target(
             ),
             Some("Shorten the title"),
             "openCaptions",
-        ));
+        ).with(json!({"n": title.chars().count(), "platform": rules.display_name, "max": meta.title_max_chars})));
     }
     if meta.caption_max_chars > 0 && caption.chars().count() > meta.caption_max_chars {
-        out.push(f(
-            "error",
-            "caption_too_long",
-            format!(
-                "Caption exceeds {} chars on {}",
-                meta.caption_max_chars, rules.display_name
-            ),
-            Some("Trim the caption"),
-            "openCaptions",
-        ));
+        out.push(
+            f(
+                "error",
+                "caption_too_long",
+                format!(
+                    "Caption exceeds {} chars on {}",
+                    meta.caption_max_chars, rules.display_name
+                ),
+                Some("Trim the caption"),
+                "openCaptions",
+            )
+            .with(json!({"platform": rules.display_name, "max": meta.caption_max_chars})),
+        );
     }
     let all_tags: Vec<String> = tags
         .iter()
@@ -105,7 +120,7 @@ pub fn validate_target(
             ),
             Some("Remove extra hashtags"),
             "openCaptions",
-        ));
+        ).with(json!({"n": all_tags.len(), "platform": rules.display_name, "max": meta.hashtag_max})));
     }
 
     // --- media presence ---
@@ -150,22 +165,25 @@ pub fn validate_target(
                     ),
                     Some("Create a matching version in Multi-Format"),
                     "openFormats",
-                ));
+                ).with(json!({"w": w, "h": h, "platform": rules.display_name, "labels": labels.join(", ")})));
             }
         }
         let below_rec = !vid.recommended.is_empty()
             && vid.recommended.iter().all(|(rw, rh)| w < *rw || h < *rh);
         if below_rec {
-            out.push(f(
-                "recommendation",
-                "res_below_recommended",
-                format!(
-                    "{w}×{h} is below all recommended resolutions for {}",
-                    rules.display_name
-                ),
-                Some("Export at a recommended resolution"),
-                "openFormats",
-            ));
+            out.push(
+                f(
+                    "recommendation",
+                    "res_below_recommended",
+                    format!(
+                        "{w}×{h} is below all recommended resolutions for {}",
+                        rules.display_name
+                    ),
+                    Some("Export at a recommended resolution"),
+                    "openFormats",
+                )
+                .with(json!({"w": w, "h": h, "platform": rules.display_name})),
+            );
         }
         if (vid.min_width > 0 && w < vid.min_width) || (vid.min_height > 0 && h < vid.min_height) {
             out.push(f(
@@ -177,7 +195,7 @@ pub fn validate_target(
                 ),
                 Some("Upscale via a larger canvas version"),
                 "openFormats",
-            ));
+            ).with(json!({"w": w, "h": h, "platform": rules.display_name, "minw": vid.min_width, "minh": vid.min_height})));
         }
     }
 
@@ -193,7 +211,7 @@ pub fn validate_target(
                 ),
                 Some("Split or shorten the video"),
                 "openFormats",
-            ));
+            ).with(json!({"min": format!("{:.1}", d as f64 / 60000.0), "platform": rules.display_name})));
         }
         if vid.min_duration_ms > 0 && d < vid.min_duration_ms {
             out.push(f(
@@ -207,36 +225,44 @@ pub fn validate_target(
                 ),
                 Some("Extend the video"),
                 "openFormats",
-            ));
+            ).with(json!({"sec": format!("{:.1}", d as f64 / 1000.0), "platform": rules.display_name, "minSec": format!("{:.1}", vid.min_duration_ms as f64 / 1000.0)})));
         }
         if vid.short_max_ms > 0 && d > vid.short_max_ms {
-            out.push(f(
-                "info",
-                "not_a_short",
-                format!(
-                    "Over {}s — won't qualify as a short-form placement on {}",
-                    vid.short_max_ms / 1000,
-                    rules.display_name
-                ),
-                None,
-                "none",
-            ));
+            out.push(
+                f(
+                    "info",
+                    "not_a_short",
+                    format!(
+                        "Over {}s — won't qualify as a short-form placement on {}",
+                        vid.short_max_ms / 1000,
+                        rules.display_name
+                    ),
+                    None,
+                    "none",
+                )
+                .with(json!({"sec": vid.short_max_ms / 1000, "platform": rules.display_name})),
+            );
         }
     }
 
     if let Some(b) = media.bytes {
         if vid.max_file_bytes > 0 && b > vid.max_file_bytes {
-            out.push(f(
-                "error",
-                "file_too_large",
-                format!(
-                    "{:.1} GB exceeds the {} file limit",
-                    b as f64 / 1e9,
-                    rules.display_name
+            out.push(
+                f(
+                    "error",
+                    "file_too_large",
+                    format!(
+                        "{:.1} GB exceeds the {} file limit",
+                        b as f64 / 1e9,
+                        rules.display_name
+                    ),
+                    Some("Export with a lower bitrate"),
+                    "openFormats",
+                )
+                .with(
+                    json!({"gb": format!("{:.1}", b as f64 / 1e9), "platform": rules.display_name}),
                 ),
-                Some("Export with a lower bitrate"),
-                "openFormats",
-            ));
+            );
         }
     }
 
@@ -252,67 +278,82 @@ pub fn validate_target(
 
     if let Some(c) = &media.codec {
         if !vid.codecs.is_empty() && !vid.codecs.iter().any(|k| c.to_lowercase().contains(k)) {
-            out.push(f(
-                "warning",
-                "codec_unlisted",
-                format!(
-                    "Codec '{c}' isn't in the documented list for {}",
-                    rules.display_name
-                ),
-                Some("Re-export as H.264"),
-                "openFormats",
-            ));
+            out.push(
+                f(
+                    "warning",
+                    "codec_unlisted",
+                    format!(
+                        "Codec '{c}' isn't in the documented list for {}",
+                        rules.display_name
+                    ),
+                    Some("Re-export as H.264"),
+                    "openFormats",
+                )
+                .with(json!({"codec": c, "platform": rules.display_name})),
+            );
         }
     }
 
     // --- account / API reality ---
     if !account_connected {
-        out.push(f(
-            "warning",
-            "no_account",
-            format!(
-                "No {} account connected — export works, publishing doesn't",
-                rules.display_name
-            ),
-            Some("Connect an account in Social → Accounts"),
-            "connectAccount",
-        ));
+        out.push(
+            f(
+                "warning",
+                "no_account",
+                format!(
+                    "No {} account connected — export works, publishing doesn't",
+                    rules.display_name
+                ),
+                Some("Connect an account in Social → Accounts"),
+                "connectAccount",
+            )
+            .with(json!({"platform": rules.display_name})),
+        );
     }
     if rules.capabilities.requires_app_review {
-        out.push(f(
-            "info",
-            "app_review",
-            format!(
-                "{} publishing requires an approved developer app. {}",
-                rules.display_name, rules.capabilities.status_note
-            ),
-            None,
-            "none",
-        ));
+        out.push(
+            f(
+                "info",
+                "app_review",
+                format!(
+                    "{} publishing requires an approved developer app. {}",
+                    rules.display_name, rules.capabilities.status_note
+                ),
+                None,
+                "none",
+            )
+            .with(json!({"platform": rules.display_name})),
+        );
     }
     if rules.capabilities.requires_hosted_media {
-        out.push(f(
-            "warning",
-            "hosted_media",
-            format!(
+        out.push(
+            f(
+                "warning",
+                "hosted_media",
+                format!(
                 "{} API cannot ingest local files — the video must be reachable at a public URL",
                 rules.display_name
             ),
-            Some("Host the file and provide its URL in platform options"),
-            "none",
-        ));
+                Some("Host the file and provide its URL in platform options"),
+                "none",
+            )
+            .with(json!({"platform": rules.display_name})),
+        );
     }
     if meta.thumbnail_required && post.thumbnail_asset_id.is_none() {
-        out.push(f(
-            "warning",
-            "no_thumbnail",
-            format!(
-                "{} recommends/requires a custom thumbnail",
-                rules.display_name
-            ),
-            Some("Pick a thumbnail in the composer"),
-            "pickFile",
-        ));
+        out.push(
+            f(
+                "warning",
+                "no_thumbnail",
+                format!(
+                    "{} recommends/requires a custom thumbnail",
+                    rules.display_name
+                ),
+                Some("Pick a thumbnail in the composer"),
+                "pickFile",
+            )
+            .with(json!({"platform": rules.display_name})),
+        );
     }
 
     // --- scheduling ---
@@ -331,13 +372,16 @@ pub fn validate_target(
     }
 
     if out.is_empty() {
-        out.push(f(
-            "passed",
-            "all_good",
-            format!("Ready for {} (rules v{rules_updated})", rules.display_name),
-            None,
-            "none",
-        ));
+        out.push(
+            f(
+                "passed",
+                "all_good",
+                format!("Ready for {} (rules v{rules_updated})", rules.display_name),
+                None,
+                "none",
+            )
+            .with(json!({"platform": rules.display_name, "updated": rules_updated})),
+        );
     }
     out
 }

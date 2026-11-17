@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   Clapperboard,
   ExternalLink,
+  FileVideo,
   FolderOpen,
   Loader2,
+  Pencil,
   Send,
   Upload,
 } from "lucide-react";
@@ -30,6 +33,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { ValidationPanel } from "./ValidationPanel";
 import { PlatformIcon } from "./PlatformIcon";
+import { fmtDbTime } from "./format";
 import { reportError } from "@/lib/errors";
 
 /** Post detail: per-target export/publish pipeline + attempts + validation. */
@@ -51,12 +55,17 @@ export function PostDetail({
     queryKey: ["social-post", postId],
     queryFn: () => api.getSocialPost(postId),
   });
+  const { data: previews } = useQuery({
+    queryKey: ["social-thumbs"],
+    queryFn: () => api.socialPostPreviews(),
+  });
   const [busy, setBusy] = useState<string | null>(null);
 
   if (!post) return null;
+  const preview = previews?.[postId];
 
   const exportTarget = async (t: SocialPostTarget) => {
-    const outDir = await open({ directory: true, title: "Choose export folder" });
+    const outDir = await open({ directory: true, title: tr("social.d_chooseFolder") });
     if (!outDir) return;
     setBusy(t.id);
     try {
@@ -75,8 +84,8 @@ export function PostDetail({
 
   const pickFile = async (t: SocialPostTarget) => {
     const f = await open({
-      title: "Pick exported media file",
-      filters: [{ name: "Media", extensions: ["mp4", "mov", "mkv", "webm", "jpg", "png"] }],
+      title: tr("social.d_pickFile"),
+      filters: [{ name: tr("social.d_mediaFilter"), extensions: ["mp4", "mov", "mkv", "webm", "jpg", "png"] }],
     });
     if (!f || Array.isArray(f)) return;
     setBusy(t.id);
@@ -104,8 +113,8 @@ export function PostDetail({
       if (fin.status === "done") {
         toast.success(
           fin.result?.url
-            ? `Published: ${fin.result.url}`
-            : "Upload accepted by platform",
+            ? tr("social.d_published", { url: fin.result.url })
+            : tr("social.d_uploadAccepted"),
         );
       } else {
         toast.error(fin.error ?? tr("social.publishFailed"));
@@ -141,27 +150,47 @@ export function PostDetail({
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-sm">
             <span className="min-w-0 truncate">
-              {post.title || "Untitled post"}
+              {post.title || tr("social.untitled")}
             </span>
-            {post.projectId && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto mr-6 shrink-0"
-                onClick={() => run(() => openById(post.projectId!))}
-              >
-                <Clapperboard className="mr-1 size-3" />
-                {tr("nav.openInEditor")}
-              </Button>
-            )}
+            <div className="ml-auto mr-6 flex shrink-0 gap-1.5">
+              {onEdit && (
+                <Button size="sm" variant="outline" onClick={onEdit}>
+                  <Pencil className="mr-1 size-3" />
+                  {tr("social.edit")}
+                </Button>
+              )}
+              {post.projectId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => run(() => openById(post.projectId!))}
+                >
+                  <Clapperboard className="mr-1 size-3" />
+                  {tr("nav.openInEditor")}
+                </Button>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          {post.caption && (
-            <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-              {post.caption}
-            </p>
-          )}
+          <div className="flex items-start gap-3">
+            <div className="flex aspect-video w-40 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+              {preview ? (
+                <img
+                  src={convertFileSrc(preview)}
+                  alt={tr("social.d_previewAlt")}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <FileVideo className="size-6 text-muted-foreground" />
+              )}
+            </div>
+            {post.caption && (
+              <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                {post.caption}
+              </p>
+            )}
+          </div>
 
           {post.targets.map((t) => {
             const acct = accounts.find((a) => a.id === t.accountId);
@@ -182,7 +211,7 @@ export function PostDetail({
           })}
           {post.targets.length === 0 && (
             <p className="text-xs italic text-muted-foreground">
-              No platform targets — edit the post to add some.
+              {tr("social.d_noTargets")}
             </p>
           )}
 
@@ -210,6 +239,7 @@ function TargetRow({
   onPublish: () => void;
   onStatus: (s: string) => void;
 }) {
+  const { t: tr, i18n } = useTranslation();
   const { data: attempts } = useQuery({
     queryKey: ["attempts", t.id],
     queryFn: () => api.listPublicationAttempts(t.id),
@@ -231,7 +261,7 @@ function TargetRow({
                 : "bg-muted text-muted-foreground",
           )}
         >
-          {t.status}
+          {tr(`social.st_${t.status}`, { defaultValue: t.status })}
         </span>
         <span className="flex-1" />
         {t.platformUrl && (
@@ -241,16 +271,18 @@ function TargetRow({
             rel="noreferrer"
             className="flex items-center gap-0.5 text-[10px] text-primary hover:underline"
           >
-            view <ExternalLink className="size-2.5" />
+            {tr("social.d_view")} <ExternalLink className="size-2.5" />
           </a>
         )}
       </div>
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         <span>
-          account: {accountName ?? "none"}
-          {t.versionId ? ` · version: ${t.versionId}` : ""}
-          {t.scheduledAt ? ` · ${new Date(t.scheduledAt).toLocaleString()}` : ""}
-          {t.autoPublish ? " · ⚡auto" : ""}
+          {tr("social.d_account", { name: accountName ?? tr("social.d_none") })}
+          {t.versionId ? ` · ${tr("social.d_version", { id: t.versionId })}` : ""}
+          {t.scheduledAt
+            ? ` · ${new Date(t.scheduledAt).toLocaleString(i18n.language)}`
+            : ""}
+          {t.autoPublish ? ` · ⚡${tr("social.d_auto")}` : ""}
         </span>
       </div>
       {t.lastError && (
@@ -262,10 +294,10 @@ function TargetRow({
         {busy && <Loader2 className="size-3.5 animate-spin" />}
         <Button size="sm" variant="secondary" onClick={onExport} disabled={busy}>
           <Upload className="mr-1 size-3" />
-          {t.exportAssetId ? "Re-export" : "Export for platform"}
+          {t.exportAssetId ? tr("social.d_reExport") : tr("social.d_export")}
         </Button>
         <Button size="sm" variant="ghost" onClick={onPickFile} disabled={busy}>
-          <FolderOpen className="mr-1 size-3" /> Link file
+          <FolderOpen className="mr-1 size-3" /> {tr("social.d_linkFile")}
         </Button>
         {t.exportAssetId && (
           <LinkedFile assetId={t.exportAssetId} />
@@ -277,18 +309,18 @@ function TargetRow({
             disabled={busy || !t.exportAssetId || !t.accountId}
             title={
               !t.accountId
-                ? "connect an account first"
+                ? tr("social.d_tipNoAccount")
                 : !t.exportAssetId
-                  ? "export or link a file first"
-                  : "Upload to platform now"
+                  ? tr("social.d_tipNoExport")
+                  : tr("social.d_tipReady")
             }
           >
-            <Send className="mr-1 size-3" /> Publish now
+            <Send className="mr-1 size-3" /> {tr("social.d_publishNow")}
           </Button>
         )}
         {t.status === "publishing" && (
           <Button size="sm" variant="ghost" onClick={() => onStatus("cancelled")}>
-            Cancel
+            {tr("social.d_cancel")}
           </Button>
         )}
       </div>
@@ -308,9 +340,9 @@ function TargetRow({
                   a.status === "failed" && "text-destructive",
                 )}
               >
-                {a.status}
+                {tr(`pubhist.st_${a.status}`, { defaultValue: a.status })}
               </span>
-              <span>{a.startedAt.replace("T", " ").slice(0, 16)}</span>
+              <span>{fmtDbTime(a.startedAt, i18n.language)}</span>
               {a.error && <span className="truncate">{a.error}</span>}
             </div>
           ))}
