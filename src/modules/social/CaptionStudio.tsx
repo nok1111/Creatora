@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PromptDialog } from "@/components/PromptDialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 /**
  * Caption Studio — shared title/caption/hashtag editing with counters,
@@ -27,6 +28,7 @@ export function CaptionStudio({
   hashtags: string[];
   onHashtags: (v: string[]) => void;
 }) {
+  const { t: tr } = useTranslation();
   const [tagInput, setTagInput] = useState("");
   const [naming, setNaming] = useState(false);
   const { data: templates, refetch: refetchTemplates } = useQuery({
@@ -63,7 +65,7 @@ export function CaptionStudio({
   const saveTemplate = async (name: string) => {
     if (!name.trim()) return;
     await api.saveCaptionTemplate({ name: name.trim(), body: caption, hashtags });
-    toast.success("Template saved");
+    toast.success(tr("social.cs_tplSaved"));
     void refetchTemplates();
   };
 
@@ -71,8 +73,8 @@ export function CaptionStudio({
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">
-            Title
+          <label htmlFor="social-title" className="text-xs font-medium text-muted-foreground">
+            {tr("social.cs_title")}
           </label>
           <span
             className={cn(
@@ -84,26 +86,28 @@ export function CaptionStudio({
           </span>
         </div>
         <input
+          id="social-title"
           value={title}
           onChange={(e) => onTitle(e.target.value)}
-          placeholder="Post title"
+          placeholder={tr("social.cs_titlePh")}
           className="h-8 w-full rounded border border-input bg-background px-2 text-sm"
         />
       </div>
 
       <div className="flex flex-1 flex-col space-y-1">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">
-            Caption
+          <label htmlFor="social-caption" className="text-xs font-medium text-muted-foreground">
+            {tr("social.cs_caption")}
           </label>
           <span className="text-[10px] text-muted-foreground">
-            {caption.length} chars · {inText.length} # in text
+            {tr("social.cs_chars", { n: caption.length, tags: inText.length })}
           </span>
         </div>
         <textarea
+          id="social-caption"
           value={caption}
           onChange={(e) => onCaption(e.target.value)}
-          placeholder={"Caption…\n#hashtags inline work too"}
+          placeholder={tr("social.cs_captionPh")}
           className="min-h-28 w-full flex-1 resize-none rounded border border-input bg-background p-2 text-xs"
         />
       </div>
@@ -111,7 +115,7 @@ export function CaptionStudio({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <Hash className="size-3" /> Hashtags ({allTags.length})
+            <Hash className="size-3" /> {tr("social.cs_hashtags", { n: allTags.length })}
           </label>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -137,13 +141,13 @@ export function CaptionStudio({
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addTag()}
-            placeholder="+ tag"
+            placeholder={tr("social.cs_addTag")}
             className="h-5 w-16 rounded border border-dashed border-input bg-transparent px-1 text-[10px]"
           />
         </div>
         {suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            <span className="text-[9px] text-muted-foreground">used before:</span>
+            <span className="text-[9px] text-muted-foreground">{tr("social.cs_usedBefore")}</span>
             {suggestions.slice(0, 8).map((h) => (
               <button
                 key={h}
@@ -161,7 +165,7 @@ export function CaptionStudio({
       <div className="space-y-1.5 border-t border-border pt-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-muted-foreground">
-            Templates
+            {tr("social.cs_templates")}
           </label>
           <Button size="sm" variant="ghost" onClick={() => setNaming(true)}>
             <Save className="size-3" />
@@ -195,7 +199,7 @@ export function CaptionStudio({
         ))}
         {(templates ?? []).length === 0 && (
           <p className="text-[10px] italic text-muted-foreground">
-            save the current caption as a reusable template
+            {tr("social.cs_templatesEmpty")}
           </p>
         )}
       </div>
@@ -203,12 +207,12 @@ export function CaptionStudio({
       {/* mini preview */}
       <div className="space-y-1 border-t border-border pt-2">
         <label className="text-xs font-medium text-muted-foreground">
-          Preview
+          {tr("social.cs_preview")}
         </label>
         <div className="rounded border border-border bg-muted/30 p-2 text-xs">
-          <p className="font-semibold">{title || "Post title"}</p>
+          <p className="font-semibold">{title || tr("social.cs_titlePh")}</p>
           <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-            {caption || "Caption…"}
+            {caption || tr("social.cs_caption") + "…"}
           </p>
           {allTags.length > 0 && (
             <p className="mt-1 text-primary">
@@ -220,10 +224,10 @@ export function CaptionStudio({
 
       <PromptDialog
         open={naming}
-        title="Save caption template"
-        description="Reusable caption + hashtags for future posts."
-        placeholder="Template name"
-        confirmLabel="Save"
+        title={tr("social.cs_saveTpl")}
+        description={tr("social.cs_saveTplDesc")}
+        placeholder={tr("social.cs_tplName")}
+        confirmLabel={tr("common.save")}
         onSubmit={(v) => void saveTemplate(v)}
         onClose={() => setNaming(false)}
       />

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, X } from "lucide-react";
 import { api } from "@/lib/ipc";
@@ -7,6 +7,8 @@ import { useSocial } from "@/stores/social";
 import {
   PLATFORM_LABEL,
   SOCIAL_PLATFORMS,
+  extractHashtags,
+  type Finding,
   type SocialPlatform,
   type TargetInput,
 } from "@/lib/social-types";
@@ -25,16 +27,52 @@ import { reportError } from "@/lib/errors";
 
 interface DraftTarget extends TargetInput {
   enabled: boolean;
+  /** Raw text of the hashtags override ("" = inherit the shared hashtags). */
+  hashtagsRaw?: string;
+}
+
+interface MetaLimits {
+  titleMaxChars: number;
+  captionMaxChars: number;
+  hashtagMax: number;
+}
+
+/** Content errors the user can fix inside the composer. Media errors
+ *  (missing export, aspect…) only exist after an export and never block
+ *  marking a post ready. */
+const BLOCKING_CODES = new Set(["title_empty", "title_too_long", "caption_too_long"]);
+
+const parseTags = (raw: string) =>
+  raw
+    .split(/[\s,]+/)
+    .map((x) => x.replace(/^#+/, ""))
+    .filter(Boolean);
+
+function Counter({ n, max }: { n: number; max: number }) {
+  if (!max) return null;
+  return (
+    <span
+      className={cn(
+        "text-[10px]",
+        n > max ? "text-destructive" : "text-muted-foreground",
+      )}
+    >
+      {n}/{max}
+    </span>
+  );
 }
 
 export function ComposerDialog({
   postId,
   onClose,
+  onGoAccounts,
 }: {
   postId?: string;
   onClose: () => void;
+  onGoAccounts?: () => void;
 }) {
   const { t: tr } = useTranslation();
+  const qc = useQueryClient();
   const { accounts, capabilities } = useSocial();
   const [saving, setSaving] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -42,12 +80,26 @@ export function ComposerDialog({
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [targets, setTargets] = useState<Record<string, DraftTarget>>({});
-  const createdId = postId ?? null;
+  const [savedId, setSavedId] = useState<string | null>(postId ?? null);
 
   const { data: projectList } = useQuery({
     queryKey: ["projects-social"],
     queryFn: () => api.listProjects(),
   });
+  const { data: ruleset } = useQuery({
+    queryKey: ["platform-ruleset"],
+    queryFn: () => api.platformRuleset(),
+    staleTime: Infinity,
+  });
+  const limitsOf = (p: SocialPlatform): MetaLimits => {
+    const plat = (ruleset?.platforms as Record<string, { metadata?: Partial<MetaLimits> }> | undefined)?.[p];
+    return {
+      titleMaxChars: plat?.metadata?.titleMaxChars ?? 0,
+      captionMaxChars: plat?.metadata?.captionMaxChars ?? 0,
+      hashtagMax: plat?.metadata?.hashtagMax ?? 0,
+    };
+  };
+
   // Load existing post for edit mode.
   useEffect(() => {
     if (!postId) return;
@@ -66,6 +118,7 @@ export function ComposerDialog({
           title: tg.title,
           caption: tg.caption,
           hashtags: tg.hashtags,
+          hashtagsRaw: tg.hashtags?.map((h) => `#${h}`).join(" ") ?? "",
           platformMeta: tg.platformMeta,
           scheduledAt: tg.scheduledAt,
           autoPublish: tg.autoPublish,
@@ -80,43 +133,79 @@ export function ComposerDialog({
     [targets],
   );
 
+  // Toggling keeps the platform's configuration so off/on doesn't wipe it.
   const toggle = (p: SocialPlatform) =>
     setTargets((t) => ({
       ...t,
-      [p]: { platform: p, enabled: !t[p]?.enabled },
+      [p]: { ...t[p], platform: p, enabled: !t[p]?.enabled },
     }));
 
   const setT = (p: SocialPlatform, patch: Partial<DraftTarget>) =>
     setTargets((t) => ({ ...t, [p]: { ...t[p]!, ...patch } }));
 
+  const buildInput = () => ({
+    projectId,
+    title,
+    caption,
+    hashtags,
+    targets: enabledPlatforms.map((p) => {
+      const t = targets[p]!;
+      const tags = parseTags(t.hashtagsRaw ?? "");
+      return {
+        platform: p,
+        accountId: t.accountId ?? null,
+        versionId: t.versionId ?? null,
+        title: t.title?.trim() ? t.title : null,
+        caption: t.caption?.trim() ? t.caption : null,
+        hashtags: tags.length ? tags : null,
+        platformMeta: t.platformMeta ?? {},
+        scheduledAt: t.scheduledAt ?? null,
+        autoPublish: t.autoPublish ?? false,
+      };
+    }),
+  });
+
+  const focusField = (id: string) => document.getElementById(id)?.focus();
+
+  const onFix = (f: Finding): boolean => {
+    if (f.fixAction === "openCaptions") {
+      focusField(f.code.startsWith("title") ? "social-title" : "social-caption");
+      return true;
+    }
+    if (f.fixAction === "connectAccount" && onGoAccounts) {
+      onGoAccounts();
+      return true;
+    }
+    if (f.fixAction === "pickFile") {
+      toast.info(tr("social.fixPickFileHint"));
+      return true;
+    }
+    return false;
+  };
+
   const save = async (markReady: boolean) => {
     if (!title.trim()) {
       toast.error(tr("social.titleRequired"));
+      focusField("social-title");
       return;
     }
     setSaving(true);
     try {
-      const input = {
-        projectId,
-        title,
-        caption,
-        hashtags,
-        targets: enabledPlatforms.map((p) => {
-          const t = targets[p]!;
-          return {
-            platform: p,
-            accountId: t.accountId ?? null,
-            versionId: t.versionId ?? null,
-            title: t.title ?? null,
-            caption: t.caption ?? null,
-            hashtags: t.hashtags ?? null,
-            platformMeta: t.platformMeta ?? {},
-            scheduledAt: t.scheduledAt ?? null,
-            autoPublish: t.autoPublish ?? false,
-          };
-        }),
-      };
-      await api.saveSocialPost(createdId, input, markReady);
+      const post = await api.saveSocialPost(savedId, buildInput(), false);
+      setSavedId(post.id);
+      await qc.invalidateQueries({ queryKey: ["validate-post", post.id] });
+      void qc.invalidateQueries({ queryKey: ["social-post", post.id] });
+      if (markReady) {
+        const v = await api.validateSocialPost(post.id);
+        const blocked = v.targets.some((t) =>
+          t.findings.some((f) => f.severity === "error" && BLOCKING_CODES.has(f.code)),
+        );
+        if (blocked) {
+          toast.error(tr("social.blockedReady"));
+          return;
+        }
+        await api.saveSocialPost(post.id, buildInput(), true);
+      }
       toast.success(markReady ? tr("social.postReady") : tr("social.draftSaved"));
       onClose();
     } catch (e) {
@@ -131,7 +220,7 @@ export function ComposerDialog({
       <DialogContent className="flex h-[85vh] max-w-3xl flex-col overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="text-sm">
-            {postId ? "Edit post" : "New social post"}
+            {postId ? tr("social.composerEdit") : tr("social.composerNew")}
           </DialogTitle>
         </DialogHeader>
 
@@ -141,7 +230,7 @@ export function ComposerDialog({
             {/* project link */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
-                Source project
+                {tr("social.sourceProject")}
               </label>
               <select
                 value={projectId ?? ""}
@@ -160,13 +249,14 @@ export function ComposerDialog({
             {/* platforms */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">
-                Platforms
+                {tr("social.platformsLbl")}
               </label>
               <div className="flex flex-wrap gap-1.5">
                 {SOCIAL_PLATFORMS.map((p) => (
                   <button
                     key={p}
                     onClick={() => toggle(p)}
+                    aria-pressed={!!targets[p]?.enabled}
                     className={cn(
                       "flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs",
                       targets[p]?.enabled
@@ -188,6 +278,16 @@ export function ComposerDialog({
                 (a) => a.platform === p && a.status === "active",
               );
               const cap = capabilities.find((c) => c.platform === p);
+              const lim = limitsOf(p);
+              const effTitle = t.title?.trim() ? t.title : title;
+              const effCaption = t.caption?.trim() ? t.caption : caption;
+              const overrideTags = parseTags(t.hashtagsRaw ?? "");
+              const effTagCount = new Set(
+                [
+                  ...(overrideTags.length ? overrideTags : hashtags),
+                  ...extractHashtags(effCaption),
+                ].map((x) => x.toLowerCase()),
+              ).size;
               return (
                 <div
                   key={p}
@@ -199,7 +299,7 @@ export function ComposerDialog({
                     </span>
                     {cap?.requiresAppReview && (
                       <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] text-warning">
-                        needs approved app
+                        {tr("social.needsApp")}
                       </span>
                     )}
                   </div>
@@ -223,7 +323,7 @@ export function ComposerDialog({
                     </label>
                     <label className="space-y-0.5">
                       <span className="text-muted-foreground">
-                        Format version
+                        {tr("social.formatVersion")}
                       </span>
                       <VersionSelect
                         projectId={projectId}
@@ -233,20 +333,46 @@ export function ComposerDialog({
                     </label>
                   </div>
                   <label className="block space-y-0.5 text-xs">
-                    <span className="text-muted-foreground">
-                      Title override (blank = shared)
+                    <span className="flex items-center justify-between text-muted-foreground">
+                      {tr("social.titleOverride")}
+                      <Counter n={effTitle.length} max={lim.titleMaxChars} />
                     </span>
                     <input
                       value={t.title ?? ""}
                       onChange={(e) => setT(p, { title: e.target.value })}
-                      placeholder={title || "Title"}
+                      placeholder={title || tr("social.cs_title")}
+                      className="h-7 w-full rounded border border-input bg-background px-2"
+                    />
+                  </label>
+                  <label className="block space-y-0.5 text-xs">
+                    <span className="flex items-center justify-between text-muted-foreground">
+                      {tr("social.captionOverride")}
+                      <Counter n={effCaption.length} max={lim.captionMaxChars} />
+                    </span>
+                    <textarea
+                      value={t.caption ?? ""}
+                      onChange={(e) => setT(p, { caption: e.target.value })}
+                      placeholder={caption}
+                      rows={2}
+                      className="w-full resize-none rounded border border-input bg-background px-2 py-1"
+                    />
+                  </label>
+                  <label className="block space-y-0.5 text-xs">
+                    <span className="flex items-center justify-between text-muted-foreground">
+                      {tr("social.hashtagsOverride")}
+                      <Counter n={effTagCount} max={lim.hashtagMax} />
+                    </span>
+                    <input
+                      value={t.hashtagsRaw ?? ""}
+                      onChange={(e) => setT(p, { hashtagsRaw: e.target.value })}
+                      placeholder={hashtags.map((h) => `#${h}`).join(" ")}
                       className="h-7 w-full rounded border border-input bg-background px-2"
                     />
                   </label>
                   <div className="flex items-end gap-2 text-xs">
                     <label className="flex-1 space-y-0.5">
                       <span className="text-muted-foreground">
-                        Schedule (local)
+                        {tr("social.scheduleLocal")}
                       </span>
                       <input
                         type="datetime-local"
@@ -266,7 +392,7 @@ export function ComposerDialog({
                         }
                       />
                       <span title={tr("social.autoPublishTip")}>
-                        auto-publish
+                        {tr("social.autoPublish")}
                       </span>
                     </label>
                   </div>
@@ -315,7 +441,7 @@ export function ComposerDialog({
                     >
                       {["private", "unlisted", "public"].map((v) => (
                         <option key={v} value={v}>
-                          privacy: {v}
+                          {tr("social.privacyOpt", { v })}
                         </option>
                       ))}
                     </select>
@@ -330,8 +456,8 @@ export function ComposerDialog({
             })}
 
             {/* validation */}
-            {createdId && (
-              <ValidationPanel postId={createdId} key={createdId} />
+            {savedId && (
+              <ValidationPanel postId={savedId} key={savedId} onFix={onFix} />
             )}
           </div>
 
@@ -351,7 +477,7 @@ export function ComposerDialog({
         {/* footer */}
         <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
           <Button size="sm" variant="ghost" onClick={onClose}>
-            <X className="mr-1 size-3.5" /> Close
+            <X className="mr-1 size-3.5" /> {tr("common.close")}
           </Button>
           <Button
             size="sm"
@@ -360,10 +486,10 @@ export function ComposerDialog({
             onClick={() => void save(false)}
           >
             {saving && <Loader2 className="mr-1 size-3.5 animate-spin" />}
-            Save draft
+            {tr("social.saveDraft")}
           </Button>
           <Button size="sm" disabled={saving} onClick={() => void save(true)}>
-            Mark ready
+            {tr("social.markReady")}
           </Button>
         </div>
       </DialogContent>

@@ -26,7 +26,14 @@ const ICON: Record<Finding["severity"], React.ReactNode> = {
 };
 
 /** Validation Center — per-target findings with fix actions. */
-export function ValidationPanel({ postId }: { postId: string }) {
+export function ValidationPanel({
+  postId,
+  onFix,
+}: {
+  postId: string;
+  /** Host-specific handler; return true when the fix was handled in-place. */
+  onFix?: (f: Finding, targetId: string) => boolean | void;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { openById, run } = useOpenInEditor();
@@ -40,15 +47,15 @@ export function ValidationPanel({ postId }: { postId: string }) {
   });
   if (!data) return null;
 
-  const go = (action: string) => {
+  const go = (f: Finding, targetId: string) => {
+    if (onFix?.(f, targetId)) return;
+    const action = f.fixAction;
     if (action === "openFormats") {
       // Load the exact project linked to this post before showing the editor.
       const pid = post.data?.projectId;
       if (pid) run(() => openById(pid));
       else navigate("/editor");
     }
-    // openCaptions/pickFile/connectAccount stay in-module — the composer
-    // already shows caption + file pickers; accounts live in the tab.
   };
 
   const errors = data.targets
@@ -60,9 +67,14 @@ export function ValidationPanel({ postId }: { postId: string }) {
       <div className="flex items-center justify-between text-xs">
         <span className="font-semibold">{t("social.preflight")}</span>
         <span className="text-[10px] text-muted-foreground">
-          rules v{data.rulesVersion} · updated {data.rulesUpdated}
+          {t("social.rulesInfo", {
+            version: data.rulesVersion,
+            updated: data.rulesUpdated,
+          })}
           {errors > 0 && (
-            <span className="ml-1 text-destructive">· {errors} error(s)</span>
+            <span className="ml-1 text-destructive">
+              · {t("social.nErrors", { count: errors })}
+            </span>
           )}
         </span>
       </div>
@@ -88,7 +100,7 @@ export function ValidationPanel({ postId }: { postId: string }) {
                 <p>{f.message}</p>
                 {f.fix && (
                   <button
-                    onClick={() => go(f.fixAction)}
+                    onClick={() => go(f, t.targetId)}
                     className="mt-0.5 flex items-center gap-0.5 text-[10px] text-primary hover:underline"
                   >
                     {f.fix} <ArrowRight className="size-2.5" />

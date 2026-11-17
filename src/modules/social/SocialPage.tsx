@@ -89,6 +89,12 @@ export function SocialPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<SocialPost | null>(null);
   const qc = useQueryClient();
+  const goAccounts = () => {
+    setComposing(null);
+    setDetailId(null);
+    setTab("accounts");
+    void refreshPosts();
+  };
 
   useEffect(() => {
     void refreshAll();
@@ -308,6 +314,7 @@ export function SocialPage() {
       {composing && (
         <ComposerDialog
           postId={composing.id}
+          onGoAccounts={goAccounts}
           onClose={() => {
             setComposing(null);
             void refreshPosts();
@@ -315,7 +322,15 @@ export function SocialPage() {
         />
       )}
       {detailId && (
-        <PostDetail postId={detailId} onClose={() => setDetailId(null)} />
+        <PostDetail
+          postId={detailId}
+          onClose={() => setDetailId(null)}
+          onEdit={() => {
+            setComposing({ id: detailId });
+            setDetailId(null);
+          }}
+          onGoAccounts={goAccounts}
+        />
       )}
 
       <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>

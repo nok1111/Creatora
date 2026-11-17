@@ -16,6 +16,7 @@ import { awaitJob } from "@/services/jobs";
 import { useSocial } from "@/stores/social";
 import {
   PLATFORM_LABEL,
+  type Finding,
   type SocialPostTarget,
 } from "@/lib/social-types";
 import { Button } from "@/components/ui/button";
@@ -34,9 +35,13 @@ import { reportError } from "@/lib/errors";
 export function PostDetail({
   postId,
   onClose,
+  onEdit,
+  onGoAccounts,
 }: {
   postId: string;
   onClose: () => void;
+  onEdit?: () => void;
+  onGoAccounts?: () => void;
 }) {
   const { accounts } = useSocial();
   const { t: tr } = useTranslation();
@@ -112,6 +117,23 @@ export function PostDetail({
     }
   };
 
+  const onFix = (f: Finding, targetId: string): boolean => {
+    if (f.fixAction === "openCaptions" && onEdit) {
+      onEdit();
+      return true;
+    }
+    if (f.fixAction === "connectAccount" && onGoAccounts) {
+      onGoAccounts();
+      return true;
+    }
+    if (f.fixAction === "pickFile") {
+      const t = post.targets.find((x) => x.id === targetId);
+      if (t) void pickFile(t);
+      return true;
+    }
+    return false;
+  };
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[80vh] max-w-2xl flex-col overflow-hidden p-0">
@@ -163,7 +185,7 @@ export function PostDetail({
             </p>
           )}
 
-          <ValidationPanel postId={postId} />
+          <ValidationPanel postId={postId} onFix={onFix} />
         </div>
       </DialogContent>
     </Dialog>
