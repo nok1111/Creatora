@@ -101,6 +101,9 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
   const [replace, setReplace] = useState("");
   const [shift, setShift] = useState("0");
   const [issues, setIssues] = useState<ReturnType<typeof diagnoseCues> | null>(null);
+  /** Tools column tab — each section gets the full column instead of
+      stacking into one long compressed scroll. */
+  const [toolsTab, setToolsTab] = useState<"style" | "timing" | "transcribe" | "export">("style");
   /** Resizable tools column — user drags the left edge wider/narrower. */
   const [toolsW, setToolsW] = useState(() => {
     const v = Number(localStorage.getItem("subsToolsW"));
@@ -351,12 +354,37 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         className="w-1 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-primary/70"
         title={t("subs.resizeTools")}
       />
-      {/* Tools */}
+      {/* Tools — tabbed so each section gets the full column height */}
       <div
         style={{ width: toolsW }}
-        className="shrink-0 space-y-2 overflow-y-auto border-l border-border p-2 text-xs"
+        className="flex shrink-0 flex-col border-l border-border text-xs"
       >
+        <div className="flex gap-0.5 border-b border-border p-1">
+          {(
+            [
+              ["style", Wand2, t("subs.styleTab")],
+              ["timing", Clock, t("subs.timing")],
+              ["transcribe", Mic2, t("subs.transcribe")],
+              ["export", Download, t("subs.exportTab")],
+            ] as const
+          ).map(([id, Icon, label]) => (
+            <button
+              key={id}
+              onClick={() => setToolsTab(id)}
+              className={`flex flex-1 flex-col items-center gap-0.5 rounded px-1 py-1.5 text-[9px] transition-colors ${
+                toolsTab === id
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
         {/* Transcription */}
+        {toolsTab === "transcribe" && (
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium"><Mic2 className="size-3" /> {t("subs.transcribe")}</p>
           <div className="grid grid-cols-2 gap-1">
@@ -450,8 +478,10 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             </p>
           )}
         </div>
+        )}
 
         {/* Timing tools */}
+        {toolsTab === "timing" && (
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium"><Clock className="size-3" />{t("subs.timing")}</p>
           <div className="flex items-center gap-1">
@@ -499,19 +529,24 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             </div>
           )}
         </div>
+        )}
 
         {/* Style */}
+        {toolsTab === "style" && (
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium">
             <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-accent-foreground">{t("subs.versionLbl")}</span>}
           </p>
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <div
+            className="grid gap-1.5"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(62px, 1fr))" }}
+          >
             {SUBTITLE_PRESETS.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setStyle(p.style)}
                 title={p.label}
-                className="w-16 shrink-0 overflow-hidden rounded-md border-2 border-border transition-all hover:border-accent"
+                className="overflow-hidden rounded-md border-2 border-border transition-all hover:border-accent"
               >
                 <div className="flex h-9 items-center justify-center bg-[#0d0d12] px-0.5">
                   <span
@@ -537,7 +572,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           </div>
           <div className="mt-1 text-[10px]">
             <label className="mb-1 block text-muted-foreground">{t("subs.animation")}</label>
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-3 gap-1">
               {([
                 ["none", "Static", "Plain text"],
                 ["karaoke", "Karaoke", "Word fill"],
@@ -723,8 +758,10 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               className="col-span-2 h-6 rounded border border-border bg-transparent px-1 disabled:opacity-40" />
           </div>
         </div>
+        )}
 
         {/* Export */}
+        {toolsTab === "export" && (
         <div className="flex gap-1">
           {(["srt", "vtt", "ass"] as const).map((f) => (
             <Button key={f} variant="secondary" size="sm" className="h-6 flex-1 text-[10px]"
@@ -732,6 +769,8 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               <Download className="mr-1 size-3" />{f.toUpperCase()}
             </Button>
           ))}
+        </div>
+        )}
         </div>
       </div>
     </div>

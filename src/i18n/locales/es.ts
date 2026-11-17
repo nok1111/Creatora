@@ -859,6 +859,8 @@ export const es: typeof en = {
     applyStyleTip: "Aplicar como estilo maestro",
     cueStyleDefault: "Estilo por defecto",
     resizeTools: "Arrastra para redimensionar",
+    styleTab: "Estilo",
+    exportTab: "Exportar",
     autoTime: "Tiempos auto (palabras)",
     autoTimeTip: "Reparte el tiempo entre palabras de cada cue escrito a mano — sin audio",
     autoTimeOne: "Tiempos auto",
