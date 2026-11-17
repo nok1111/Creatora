@@ -839,6 +839,8 @@ export const en = {
     noCaptionsBody: "Transcribe an audio or video asset locally, or add a cue manually at the playhead.",
     addCue: "Add cue",
     newCueSeed: "New cue",
+    addCueAtPlayhead: "Add caption at playhead",
+    laneHint: "Double-click to add a caption — drag blocks to retime",
   },
   exports: {
     title: "Export Center",

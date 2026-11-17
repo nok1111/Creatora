@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Blend,
+  Captions,
   Copy,
   CopyPlus,
   Eye,
@@ -26,6 +27,7 @@ import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
   addClip,
+  addCue,
   addEffect,
   addTrack,
   addTransition,
@@ -37,6 +39,7 @@ import {
   moveClipToTrack,
   moveTrackOrder,
   removeClips,
+  removeCue,
   removeEffect,
   removeTrack,
   removeTransition,
@@ -46,10 +49,12 @@ import {
   snapPoints,
   snapToFrame,
   splitClip,
+  splitCue,
   timecode,
   timelineDuration,
   transitionsFor,
   trimClip,
+  updateCue,
   updateEffect,
   updateTextFx,
   retimeClipKeyframes,
@@ -68,7 +73,7 @@ import {
   AnchoredMenuSeparator,
 } from "@/components/ui/anchored-menu";
 import { useTranslation } from "react-i18next";
-import type { Clip, Effect, Track, TrackKind, ProjectDoc, Transition, TextFx } from "@/lib/project-types";
+import type { Clip, Effect, Track, TrackKind, ProjectDoc, Transition, TextFx, SubtitleCue } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 
 /**
@@ -96,6 +101,12 @@ const laneHeight = (fxRows: number) =>
   TRACK_H + Math.max(1, fxRows) * FX_ROW_H;
 /** dropHint.trackId sentinel for the "new track" zone (not a real lane). */
 const NEW_TRACK = "__new_track__";
+/** Caption lane height — sits directly under the ruler, above the tracks. */
+const SUB_LANE_H = 30;
+/** Shortest a cue can be dragged/resized to. */
+const MIN_CUE_MS = 200;
+/** Default duration for a cue created by double-clicking the lane. */
+const NEW_CUE_MS = 2000;
 const HEADER_W = 176;
 const SNAP_PX = 10;
 
@@ -123,6 +134,9 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingTrack, setEditingTrack] = useState<string | null>(null);
+  // Caption-lane selection/inline-edit — cues live in doc.subtitles (ADR-025).
+  const [selCueId, setSelCueId] = useState<string | null>(null);
+  const [editCueId, setEditCueId] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track; clip: Clip; transition?: Transition } | null>(null);
   // Drop feedback: ghost position + validity for the lane under the pointer.
@@ -195,6 +209,29 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     // Re-attach only when the scroll container appears/disappears — not on
     // every doc mutation (scrubbing would churn listeners each frame).
   }, [doc != null]);
+
+  // Caption-lane keys: Delete removes the selected cue, S splits it at the
+  // playhead. Clip selection is cleared when a cue is grabbed, so the
+  // editor-level handlers don't double-fire.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!selCueId) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        mutate((d) => removeCue(d, selCueId));
+        setSelCueId(null);
+      } else if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
+        mutate((d) => {
+          const r = splitCue(d, selCueId, playheadNow());
+          if (r) setSelCueId(r.left);
+          return r ? r.doc : d;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selCueId, mutate]);
 
   if (!doc) return null;
   const durationMs = Math.max(timelineDuration(doc), 10_000);
@@ -505,6 +542,56 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       window.removeEventListener("pointerup", onUp);
       document.body.style.cursor = "";
       endGesture();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  /** Cue block in the caption lane: drag body = move (duration kept),
+      edges = retime. Same gesture plumbing as clips so drags are
+      frame-snapped, undo-coalesced and cancel-safe. */
+  const onCuePointerDown = (
+    e: React.PointerEvent,
+    cue: SubtitleCue,
+    mode: "move" | "left" | "right",
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelCueId(cue.id);
+    setEditCueId(null);
+    select([]);
+    setPlayhead(cue.startMs);
+    beginGesture();
+    document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
+    const lane = (e.currentTarget as HTMLElement).closest("[data-sublane]") as HTMLElement;
+    const laneRect = lane.getBoundingClientRect();
+    const grabOffsetMs = pxToMs(e.clientX - laneRect.left) - cue.startMs;
+    const dur = cue.endMs - cue.startMs;
+
+    const onMove = (ev: PointerEvent) => {
+      const cursorMs = pxToMs(ev.clientX - laneRect.left);
+      mutateInGesture((d) => {
+        const cur = d.subtitles.find((c) => c.id === cue.id);
+        if (!cur) return d;
+        if (mode === "move") {
+          const target = Math.max(0, Math.round(snap(cursorMs - grabOffsetMs)));
+          return updateCue(d, cue.id, { startMs: target, endMs: target + dur });
+        }
+        const target = Math.round(snap(cursorMs));
+        if (mode === "left") {
+          const s = Math.max(0, Math.min(target, cur.endMs - MIN_CUE_MS));
+          return updateCue(d, cue.id, { startMs: s });
+        }
+        const en = Math.max(target, cur.startMs + MIN_CUE_MS);
+        return updateCue(d, cue.id, { endMs: en });
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      endGesture();
+      setSnapLine(null);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -1017,6 +1104,39 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
             className="sticky left-0 z-40 shrink-0 border-r border-border bg-card pt-6"
             style={{ width: HEADER_W }}
           >
+            {/* Caption-lane header — fixed row aligned with the CC lane. */}
+            <div
+              className="flex items-center gap-1.5 border-b border-border/50 px-2"
+              style={{ height: SUB_LANE_H }}
+            >
+              <Captions className="size-3 shrink-0 text-emerald-400" />
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {t("subs.captions")}
+                {doc.subtitles.length > 0 && (
+                  <span className="ml-1 text-[9px] text-muted-foreground/60">
+                    {doc.subtitles.length}
+                  </span>
+                )}
+              </span>
+              <button
+                className="text-muted-foreground hover:text-foreground"
+                title={t("subs.addCueAtPlayhead")}
+                onClick={() => {
+                  const at = Math.round(playheadNow());
+                  mutate(
+                    (d) =>
+                      addCue(d, {
+                        startMs: at,
+                        endMs: at + NEW_CUE_MS,
+                        text: "",
+                        words: [],
+                      }).doc,
+                  );
+                }}
+              >
+                <Plus className="size-3" />
+              </button>
+            </div>
             {doc.timeline.tracks.map((track, ti) => (
               <div
                 key={track.id}
@@ -1104,6 +1224,112 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   {ms % (tickStepMs * 4) === 0 ? `${(ms / 1000).toFixed(0)}s` : ""}
                 </span>
               ))}
+            </div>
+
+            {/* Caption lane — cues as draggable blocks on the same timebase.
+                Click seeks; drag body/edges retimes; double-click edits text;
+                double-click empty space creates a cue. */}
+            <div
+              data-sublane
+              className="relative border-b border-border/60 bg-emerald-500/5"
+              style={{ height: SUB_LANE_H, width: lanesW }}
+              onPointerDown={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setSelCueId(null);
+                setPlayhead(
+                  snapToFrame(Math.max(0, pxToMs(e.clientX - rect.left)), doc),
+                );
+              }}
+              onDoubleClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const ms = Math.max(0, Math.round(pxToMs(e.clientX - rect.left)));
+                let newId = "";
+                mutate((d) => {
+                  const r = addCue(d, {
+                    startMs: ms,
+                    endMs: ms + NEW_CUE_MS,
+                    text: "",
+                    words: [],
+                  });
+                  newId = r.cueId;
+                  return r.doc;
+                });
+                setSelCueId(newId);
+                setEditCueId(newId);
+              }}
+            >
+              {doc.subtitles.length === 0 && (
+                <div className="pointer-events-none absolute inset-0 flex items-center pl-2 text-[10px] text-muted-foreground/60">
+                  {t("subs.laneHint")}
+                </div>
+              )}
+              {doc.subtitles.map((cue) => {
+                const sel = selCueId === cue.id;
+                const editing = editCueId === cue.id;
+                const w = Math.max(10, msToPx(cue.endMs - cue.startMs));
+                return (
+                  <div
+                    key={cue.id}
+                    data-cue={cue.id}
+                    className={cn(
+                      "absolute top-[3px] h-[24px] rounded border text-[9px] leading-[22px]",
+                      editing ? "overflow-visible" : "overflow-hidden",
+                      sel
+                        ? "z-10 border-emerald-300 bg-emerald-400/40 text-emerald-50"
+                        : "border-emerald-500/50 bg-emerald-500/25 text-emerald-100/90 hover:bg-emerald-500/35",
+                    )}
+                    style={{ left: msToPx(cue.startMs), width: w }}
+                    onPointerDown={(e) => onCuePointerDown(e, cue, "move")}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setSelCueId(cue.id);
+                      setEditCueId(cue.id);
+                    }}
+                    title={cue.text}
+                  >
+                    {editing ? (
+                      <input
+                        autoFocus
+                        defaultValue={cue.text}
+                        placeholder={t("subs.newCueSeed")}
+                        className="absolute left-0 top-0 h-full rounded border border-emerald-300 bg-background px-1.5 text-[10px] text-foreground outline-none"
+                        style={{ width: Math.max(180, w) }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                          if (e.key === "Escape") {
+                            e.currentTarget.dataset.cancel = "1";
+                            e.currentTarget.blur();
+                          }
+                        }}
+                        onBlur={(e) => {
+                          if (e.currentTarget.dataset.cancel !== "1")
+                            mutate((d) =>
+                              updateCue(d, cue.id, { text: e.currentTarget.value }),
+                            );
+                          setEditCueId(null);
+                        }}
+                      />
+                    ) : (
+                      <span className="pointer-events-none block truncate px-1.5">
+                        {cue.text || "…"}
+                      </span>
+                    )}
+                    {!editing && (
+                      <>
+                        <div
+                          className="absolute left-0 top-0 h-full w-[7px] cursor-ew-resize"
+                          onPointerDown={(e) => onCuePointerDown(e, cue, "left")}
+                        />
+                        <div
+                          className="absolute right-0 top-0 h-full w-[7px] cursor-ew-resize"
+                          onPointerDown={(e) => onCuePointerDown(e, cue, "right")}
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {doc.timeline.tracks.map((track) => (

@@ -842,6 +842,8 @@ export const es: typeof en = {
     noCaptionsBody: "Transcribe un recurso de audio o video localmente, o añade un segmento manualmente en el cursor.",
     addCue: "Añadir segmento",
     newCueSeed: "Nuevo segmento",
+    addCueAtPlayhead: "Añadir subtítulo en el cursor",
+    laneHint: "Doble clic para añadir un subtítulo — arrastra los bloques para ajustar",
   },
   exports: {
     title: "Centro de exportación",
