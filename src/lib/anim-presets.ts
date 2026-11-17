@@ -351,6 +351,27 @@ export const ANIM_PRESETS: AnimPreset[] = [
     },
   },
   {
+    id: "zoomPunch",
+    label: "Zoom punch",
+    category: "emphasis",
+    paths: ["transform.scaleX", "transform.scaleY"],
+    build: (c, _cv, o) => {
+      // Fast punch to ~+14% and settle back — intensity normalizes like
+      // pulse (160 → 14%): a beat hit, not a slow zoom.
+      const s = 1 + 0.14 * (o.intensity / 160);
+      const up = (from: number) =>
+        bakeKfs(o.delayMs, o.durationMs * 0.35, from, from * s, "easeOut", 3);
+      const down = (from: number) =>
+        bakeKfs(o.delayMs + o.durationMs * 0.35, o.durationMs * 0.65, from * s, from, "easeInOut", 5).slice(1);
+      return {
+        keyframes: {
+          "transform.scaleX": [...up(c.transform.scaleX), ...down(c.transform.scaleX)],
+          "transform.scaleY": [...up(c.transform.scaleY), ...down(c.transform.scaleY)],
+        },
+      };
+    },
+  },
+  {
     id: "shake",
     label: "Shake",
     category: "emphasis",

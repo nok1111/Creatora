@@ -1,0 +1,1547 @@
+{
+  "version": 1,
+  "eases": {
+    "linear": "{u}",
+    "easeIn": "({u}*{u})",
+    "easeOut": "(1-(1-{u})*(1-{u}))",
+    "easeInOut": "({u}*{u}*(3-2*{u}))",
+    "easeInCubic": "({u}*{u}*{u})",
+    "easeOutCubic": "(1-pow(1-{u},3))",
+    "easeInOutCubic": "if(lt({u},0.5),4*{u}*{u}*{u},1-pow(2-2*{u},3)/2)",
+    "easeOutExpo": "if(eq({u},1),1,1-pow(2,0-10*{u}))"
+  },
+  "capabilities": {
+    "beats": true,
+    "subjectMask": false
+  },
+  "entries": [
+    {
+      "id": "velocitySwipe",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Velocity Swipe",
+      "description": "Fast whip-pan to the next clip with directional motion blur that peaks mid-swipe.",
+      "params": [
+        {
+          "key": "direction",
+          "label": "Direction",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Left",
+            "Right",
+            "Up",
+            "Down"
+          ]
+        },
+        {
+          "key": "blur",
+          "label": "Motion blur",
+          "type": "number",
+          "def": 0.16,
+          "min": 0,
+          "max": 0.4,
+          "step": 0.01
+        }
+      ],
+      "derive": {
+        "dx": {
+          "from": "direction",
+          "values": [
+            -1,
+            1,
+            0,
+            0
+          ]
+        },
+        "dy": {
+          "from": "direction",
+          "values": [
+            0,
+            0,
+            -1,
+            1
+          ]
+        }
+      },
+      "expr": "(if(between((X+{dx}*W*(-0.5000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(-0.5000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(-0.5000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(-0.5000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(-0.5000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(-0.5000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(-0.3000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(-0.3000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(-0.3000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(-0.3000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(-0.3000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(-0.3000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(-0.1000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(-0.1000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(-0.1000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(-0.1000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(-0.1000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(-0.1000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(0.1000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(0.1000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(0.1000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(0.1000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(0.1000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(0.1000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(0.3000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(0.3000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(0.3000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(0.3000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(0.3000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(0.3000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(0.5000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(0.5000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(0.5000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(0.5000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(0.5000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(0.5000*{blur}*sin(PI*{T})+1-{T})))))/6",
+      "render": {
+        "kind": "strip"
+      },
+      "defaultDurationMs": 500,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-swipe"
+    },
+    {
+      "id": "liquidMelt",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Liquid Melt",
+      "description": "The outgoing clip melts downward in wavy drips, revealing the next clip underneath.",
+      "params": [
+        {
+          "key": "drip",
+          "label": "Drip length",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "wave",
+          "label": "Wave",
+          "type": "number",
+          "def": 0.06,
+          "min": 0,
+          "max": 0.12,
+          "step": 0.005
+        },
+        {
+          "key": "freq",
+          "label": "Wave count",
+          "type": "number",
+          "def": 3,
+          "min": 1,
+          "max": 8,
+          "step": 0.5
+        },
+        {
+          "key": "wobble",
+          "label": "Side wobble",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "expr": "(if(lt(((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5))),0),0,clip(((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))/0.04,0,1)))*SA(X+({wobble}*0.03*W*exp(0-((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))*4.5)*sin(PI*{T})*sin((Y/H)*40+{T}*12)),Y-({drip}*0.5*H*exp(0-((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))*4.5)*sin(PI*{T})*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3))))+(1-(if(lt(((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5))),0),0,clip(((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))/0.04,0,1))))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X+({wobble}*0.03*W*exp(0-((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))*4.5)*sin(PI*{T})*sin((Y/H)*40+{T}*12))",
+          "ay": "Y-({drip}*0.5*H*exp(0-((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))*4.5)*sin(PI*{T})*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))",
+          "m": "if(lt(((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5))),0),0,clip(((Y/H)-({T}*(1.5+{drip}*0.5+{drip}*0.3*(0.5+0.5*sin((X/W)*37.7)*sin((X/W)*11.3+1.3)))-0.25+{wave}*sin((X/W)*{freq}*6.2832+{T}*5)))/0.04,0,1))"
+        }
+      },
+      "defaultDurationMs": 900,
+      "defaultEase": "easeInOut",
+      "preview": "gl",
+      "thumb": "fxt-melt"
+    },
+    {
+      "id": "rgbDisplacement",
+      "kind": "effect",
+      "category": "vfx",
+      "name": "RGB Displacement",
+      "description": "Splits the red and blue channels apart along an angle — static, pulsing to a rhythm, or glitching in bursts.",
+      "params": [
+        {
+          "key": "amount",
+          "label": "Distance",
+          "type": "number",
+          "def": 1.2,
+          "min": 0,
+          "max": 5,
+          "step": 0.05,
+          "unit": "% width"
+        },
+        {
+          "key": "angle",
+          "label": "Angle",
+          "type": "angle",
+          "def": 0,
+          "min": 0,
+          "max": 360,
+          "step": 5,
+          "unit": "°"
+        },
+        {
+          "key": "mode",
+          "label": "Mode",
+          "type": "enum",
+          "def": 1,
+          "options": [
+            "Static",
+            "Pulse",
+            "Glitch"
+          ]
+        },
+        {
+          "key": "speed",
+          "label": "Speed",
+          "type": "number",
+          "def": 3,
+          "min": 0.5,
+          "max": 8,
+          "step": 0.5,
+          "unit": "Hz"
+        }
+      ],
+      "preview": "svg",
+      "thumb": "fxt-rgb"
+    },
+    {
+      "id": "heroEntrance",
+      "kind": "effect",
+      "category": "intro",
+      "name": "Hero Entrance",
+      "description": "Impact entrance for the whole clip: a fast zoom-slam with an exposure flash and a decaying RGB split.",
+      "params": [
+        {
+          "key": "duration",
+          "label": "Duration",
+          "type": "number",
+          "def": 900,
+          "min": 300,
+          "max": 2500,
+          "step": 50,
+          "unit": "ms"
+        },
+        {
+          "key": "zoom",
+          "label": "Zoom slam",
+          "type": "number",
+          "def": 0.22,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.01
+        },
+        {
+          "key": "flash",
+          "label": "Flash",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "split",
+          "label": "RGB split",
+          "type": "number",
+          "def": 1,
+          "min": 0,
+          "max": 4,
+          "step": 0.05,
+          "unit": "% width"
+        }
+      ],
+      "preview": "svg",
+      "optionalInputs": [
+        "subjectMask"
+      ],
+      "thumb": "fxt-hero"
+    },
+    {
+      "id": "beatImpact",
+      "kind": "effect",
+      "category": "audio",
+      "name": "Beat Impact",
+      "description": "Punches the picture on every detected percussive hit: a zoom pulse and exposure flash that decay between beats.",
+      "params": [
+        {
+          "key": "zoom",
+          "label": "Zoom punch",
+          "type": "number",
+          "def": 0.08,
+          "min": 0,
+          "max": 0.3,
+          "step": 0.005
+        },
+        {
+          "key": "flash",
+          "label": "Flash",
+          "type": "number",
+          "def": 0.25,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "decay",
+          "label": "Decay",
+          "type": "number",
+          "def": 8,
+          "min": 2,
+          "max": 20,
+          "step": 0.5,
+          "unit": "/s"
+        },
+        {
+          "key": "every",
+          "label": "Hit on",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Every beat",
+            "Every 2nd",
+            "Every 4th"
+          ]
+        },
+        {
+          "key": "offset",
+          "label": "Sync offset",
+          "type": "number",
+          "def": 0,
+          "min": -200,
+          "max": 200,
+          "step": 5,
+          "unit": "ms"
+        },
+        {
+          "key": "sensitivity",
+          "label": "Sensitivity",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        }
+      ],
+      "requires": [
+        "beats"
+      ],
+      "preview": "svg",
+      "thumb": "fxt-beat"
+    },
+    {
+      "id": "goldenFilm",
+      "kind": "filter",
+      "category": "vintage",
+      "name": "Golden Film",
+      "description": "Warm analog stock — golden highlights, sunlit mids, soft blacks, film halation and fine grain.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "hal",
+          "label": "Halation",
+          "type": "number",
+          "def": 0.3,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.3,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.15,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "temp",
+          "amt": 0.14
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.02
+            ],
+            [
+              0.3,
+              0.3
+            ],
+            [
+              0.7,
+              0.72
+            ],
+            [
+              1,
+              0.98
+            ]
+          ]
+        },
+        {
+          "op": "curve",
+          "ch": 0,
+          "pts": [
+            [
+              0,
+              0.01
+            ],
+            [
+              0.5,
+              0.51
+            ],
+            [
+              1,
+              0.99
+            ]
+          ]
+        },
+        {
+          "op": "curve",
+          "ch": 2,
+          "pts": [
+            [
+              0,
+              0.05
+            ],
+            [
+              0.5,
+              0.47
+            ],
+            [
+              1,
+              0.95
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            45,
+            0.1
+          ],
+          "hi": [
+            46,
+            0.17
+          ]
+        },
+        {
+          "op": "hsl",
+          "hue": 85,
+          "range": 45,
+          "dh": -12,
+          "ds": 1.05,
+          "dl": 0.02
+        },
+        {
+          "op": "hsl",
+          "hue": 32,
+          "range": 40,
+          "dh": 4,
+          "ds": 1.08,
+          "dl": 0.02
+        },
+        {
+          "op": "vib",
+          "amt": 1.08
+        },
+        {
+          "op": "fade",
+          "amt": 0.05
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:goldenFilm"
+    },
+    {
+      "id": "dreamy",
+      "kind": "filter",
+      "category": "aesthetic",
+      "name": "Dreamy",
+      "description": "Soft-focus editorial glow — peach-lavender split tone, blooming highlights, rich pastel color.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "bloom",
+          "label": "Glow",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "soft",
+          "label": "Diffusion",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.1,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "temp",
+          "amt": 0.02
+        },
+        {
+          "op": "tint",
+          "amt": 0.05
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.015
+            ],
+            [
+              0.5,
+              0.5
+            ],
+            [
+              0.85,
+              0.86
+            ],
+            [
+              1,
+              0.97
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            275,
+            0.1
+          ],
+          "hi": [
+            338,
+            0.11
+          ]
+        },
+        {
+          "op": "hsl",
+          "hue": 20,
+          "range": 40,
+          "dh": -8,
+          "ds": 1,
+          "dl": 0.04
+        },
+        {
+          "op": "vib",
+          "amt": 1.12
+        },
+        {
+          "op": "sat",
+          "amt": 0.97
+        },
+        {
+          "op": "fade",
+          "amt": 0.04
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:dreamy"
+    },
+    {
+      "id": "tealOrange",
+      "kind": "filter",
+      "category": "cinematic",
+      "name": "Teal & Orange",
+      "description": "Blockbuster grade — teal-pushed shadows and foliage, warm orange skin and highlights, punchy S-curve.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.26,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.12,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "ca",
+          "label": "Chromatic edge",
+          "type": "number",
+          "def": 0.15,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.01
+            ],
+            [
+              0.12,
+              0.155
+            ],
+            [
+              0.35,
+              0.375
+            ],
+            [
+              0.65,
+              0.66
+            ],
+            [
+              0.85,
+              0.88
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            200,
+            0.13
+          ],
+          "hi": [
+            32,
+            0.22
+          ]
+        },
+        {
+          "op": "hsl",
+          "hue": 35,
+          "range": 45,
+          "dh": -4,
+          "ds": 1.14,
+          "dl": 0.06
+        },
+        {
+          "op": "hsl",
+          "hue": 210,
+          "range": 65,
+          "dh": -8,
+          "ds": 1.05,
+          "dl": 0.02
+        },
+        {
+          "op": "sat",
+          "amt": 1.08
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:tealOrange"
+    },
+    {
+      "id": "disposable",
+      "kind": "filter",
+      "category": "vintage",
+      "name": "Disposable Camera",
+      "description": "90s flash snapshot — hot warm highlights, greenish shadows, coarse grain, plastic-lens softness.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "vig",
+          "label": "Flash falloff",
+          "type": "number",
+          "def": 0.45,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.68,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "soft",
+          "label": "Lens softness",
+          "type": "number",
+          "def": 0.22,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "ca",
+          "label": "Lens fringing",
+          "type": "number",
+          "def": 0.28,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "bloom",
+          "label": "Flash bloom",
+          "type": "number",
+          "def": 0.22,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.07
+            ],
+            [
+              0.3,
+              0.42
+            ],
+            [
+              0.6,
+              0.7
+            ],
+            [
+              0.85,
+              0.9
+            ],
+            [
+              1,
+              0.95
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            155,
+            0.15
+          ],
+          "hi": [
+            46,
+            0.18
+          ]
+        },
+        {
+          "op": "temp",
+          "amt": 0.08
+        },
+        {
+          "op": "tint",
+          "amt": 0.03
+        },
+        {
+          "op": "hsl",
+          "hue": 90,
+          "range": 60,
+          "dh": -22,
+          "ds": 0.9,
+          "dl": 0.02
+        },
+        {
+          "op": "hsl",
+          "hue": 8,
+          "range": 50,
+          "dh": 12,
+          "ds": 1.15,
+          "dl": 0
+        },
+        {
+          "op": "hsl",
+          "hue": 225,
+          "range": 60,
+          "dh": -18,
+          "ds": 0.82,
+          "dl": -0.01
+        },
+        {
+          "op": "hsl",
+          "hue": 315,
+          "range": 45,
+          "dh": -10,
+          "ds": 0.9,
+          "dl": 0
+        },
+        {
+          "op": "sat",
+          "amt": 1.1
+        },
+        {
+          "op": "fade",
+          "amt": 0.05
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:disposable"
+    },
+    {
+      "id": "cyberNeon",
+      "kind": "filter",
+      "category": "modern",
+      "name": "Cyber Neon",
+      "description": "Neon nightlife — cyan, magenta and violet pulled from every hue, glowing highlights, electric edges.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "bloom",
+          "label": "Neon glow",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "ca",
+          "label": "Chromatic split",
+          "type": "number",
+          "def": 0.4,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "hal",
+          "label": "Light bleed",
+          "type": "number",
+          "def": 0.2,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.2,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "temp",
+          "amt": -0.18
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.03
+            ],
+            [
+              0.4,
+              0.33
+            ],
+            [
+              0.7,
+              0.7
+            ],
+            [
+              1,
+              0.98
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            280,
+            0.3
+          ],
+          "hi": [
+            188,
+            0.22
+          ]
+        },
+        {
+          "op": "tint",
+          "amt": 0.05
+        },
+        {
+          "op": "hsl",
+          "hue": 100,
+          "range": 60,
+          "dh": 60,
+          "ds": 1.2,
+          "dl": 0
+        },
+        {
+          "op": "hsl",
+          "hue": 5,
+          "range": 40,
+          "dh": 35,
+          "ds": 1.15,
+          "dl": 0
+        },
+        {
+          "op": "hsl",
+          "hue": 28,
+          "range": 26,
+          "dh": -14,
+          "ds": 0.9,
+          "dl": 0.02
+        },
+        {
+          "op": "hsl",
+          "hue": 215,
+          "range": 55,
+          "dh": -15,
+          "ds": 1.3,
+          "dl": 0
+        },
+        {
+          "op": "hsl",
+          "hue": 190,
+          "range": 45,
+          "dh": 0,
+          "ds": 1.35,
+          "dl": 0.02
+        },
+        {
+          "op": "hsl",
+          "hue": 315,
+          "range": 50,
+          "dh": 0,
+          "ds": 1.35,
+          "dl": 0.02
+        },
+        {
+          "op": "sat",
+          "amt": 1.04
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:cyberNeon"
+    },
+    {
+      "id": "darkMood",
+      "kind": "filter",
+      "category": "moody",
+      "name": "Dark Mood",
+      "description": "Cinematic noir — rich blacks, sunken mids, muted color, a warm ember left in skin tones.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.4,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.15,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "sharp",
+          "label": "Edge detail",
+          "type": "number",
+          "def": 0.25,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "temp",
+          "amt": -0.03
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0
+            ],
+            [
+              0.12,
+              0.11
+            ],
+            [
+              0.35,
+              0.33
+            ],
+            [
+              0.6,
+              0.57
+            ],
+            [
+              0.85,
+              0.82
+            ],
+            [
+              1,
+              0.95
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            215,
+            0.1
+          ],
+          "hi": [
+            38,
+            0.07
+          ]
+        },
+        {
+          "op": "sat",
+          "amt": 0.74
+        },
+        {
+          "op": "vib",
+          "amt": 0.9
+        },
+        {
+          "op": "hsl",
+          "hue": 28,
+          "range": 42,
+          "dh": 6,
+          "ds": 1.18,
+          "dl": 0.05
+        },
+        {
+          "op": "hsl",
+          "hue": 210,
+          "range": 60,
+          "dh": -8,
+          "ds": 0.9,
+          "dl": -0.01
+        },
+        {
+          "op": "hsl",
+          "hue": 95,
+          "range": 55,
+          "dh": -15,
+          "ds": 0.85,
+          "dl": -0.01
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:darkMood"
+    },
+    {
+      "id": "luxury",
+      "kind": "filter",
+      "category": "modern",
+      "name": "Luxury",
+      "description": "Editorial polish — creamy shadows, luminous skin, sophisticated neutral palette, refined contrast.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "sharp",
+          "label": "Editorial detail",
+          "type": "number",
+          "def": 0.2,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "bloom",
+          "label": "Highlight sheen",
+          "type": "number",
+          "def": 0.12,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.14,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.08,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "temp",
+          "amt": -0.02
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.045
+            ],
+            [
+              0.25,
+              0.29
+            ],
+            [
+              0.55,
+              0.56
+            ],
+            [
+              0.8,
+              0.82
+            ],
+            [
+              1,
+              0.97
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            225,
+            0.11
+          ],
+          "hi": [
+            45,
+            0.05
+          ]
+        },
+        {
+          "op": "hsl",
+          "hue": 30,
+          "range": 42,
+          "dh": 2,
+          "ds": 0.95,
+          "dl": 0.05
+        },
+        {
+          "op": "sat",
+          "amt": 0.86
+        },
+        {
+          "op": "vib",
+          "amt": 1.1
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:luxury"
+    },
+    {
+      "id": "softGlow",
+      "kind": "filter",
+      "category": "aesthetic",
+      "name": "Soft Glow",
+      "description": "Optical diffusion — blooming luminous highlights, gentle light scatter, faithful color and detail.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "bloom",
+          "label": "Glow",
+          "type": "number",
+          "def": 0.62,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "hal",
+          "label": "Halation",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "soft",
+          "label": "Light scatter",
+          "type": "number",
+          "def": 0.32,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.03
+            ],
+            [
+              0.4,
+              0.4
+            ],
+            [
+              0.7,
+              0.72
+            ],
+            [
+              1,
+              0.98
+            ]
+          ]
+        },
+        {
+          "op": "temp",
+          "amt": 0.02
+        },
+        {
+          "op": "sat",
+          "amt": 0.98
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:softGlow"
+    },
+    {
+      "id": "bleachBypass",
+      "kind": "filter",
+      "category": "cinematic",
+      "name": "Bleach Bypass",
+      "description": "Silver-retention cinema — hard contrast, steel-cool tonality, metallic highlights, gritty texture.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "sharp",
+          "label": "Texture",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.28,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "temp",
+          "amt": -0.1
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0
+            ],
+            [
+              0.2,
+              0.11
+            ],
+            [
+              0.5,
+              0.48
+            ],
+            [
+              0.8,
+              0.88
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            215,
+            0.12
+          ],
+          "hi": [
+            222,
+            0.09
+          ]
+        },
+        {
+          "op": "sat",
+          "amt": 0.42
+        },
+        {
+          "op": "vib",
+          "amt": 0.85
+        },
+        {
+          "op": "hsl",
+          "hue": 28,
+          "range": 40,
+          "dh": 0,
+          "ds": 1.25,
+          "dl": 0
+        },
+        {
+          "op": "hsl",
+          "hue": 200,
+          "range": 70,
+          "dh": -5,
+          "ds": 0.82,
+          "dl": 0
+        },
+        {
+          "op": "hsl",
+          "hue": 95,
+          "range": 55,
+          "dh": -10,
+          "ds": 0.75,
+          "dl": -0.02
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:bleachBypass"
+    },
+    {
+      "id": "monochrome",
+      "kind": "filter",
+      "category": "mono",
+      "name": "Monochrome",
+      "description": "Fine-art B&W — channel-mixed luminance, rich separation, deep detailed blacks, silver-print finish.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 85,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "sharp",
+          "label": "Detail",
+          "type": "number",
+          "def": 0.25,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "grain",
+          "label": "Film grain",
+          "type": "number",
+          "def": 0.22,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "vig",
+          "label": "Vignette",
+          "type": "number",
+          "def": 0.18,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "lut": [
+        {
+          "op": "mixer",
+          "m": [
+            [
+              0.45,
+              0.42,
+              0.13
+            ],
+            [
+              0.45,
+              0.42,
+              0.13
+            ],
+            [
+              0.45,
+              0.42,
+              0.13
+            ]
+          ]
+        },
+        {
+          "op": "curve",
+          "ch": 3,
+          "pts": [
+            [
+              0,
+              0.01
+            ],
+            [
+              0.15,
+              0.12
+            ],
+            [
+              0.5,
+              0.51
+            ],
+            [
+              0.85,
+              0.88
+            ],
+            [
+              1,
+              0.98
+            ]
+          ]
+        },
+        {
+          "op": "split",
+          "sh": [
+            225,
+            0.04
+          ],
+          "hi": [
+            42,
+            0.04
+          ]
+        },
+        {
+          "op": "levels",
+          "inB": 0.02,
+          "inW": 0.99,
+          "outB": 0.01,
+          "outW": 0.97,
+          "gamma": 1.05
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:monochrome"
+    }
+  ]
+}

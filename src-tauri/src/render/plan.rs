@@ -12,6 +12,7 @@
 
 use crate::error::AppError;
 use crate::project::document::{Clip, ProjectDoc, TrackKind};
+use crate::render::fxlib;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -229,6 +230,18 @@ fn collect_segments(
     Ok(segments)
 }
 
+/// The transition whose *incoming* clip is `clip_b`.
+fn group_transition<'a>(
+    doc: &'a ProjectDoc,
+    clip_b_id: &str,
+) -> Option<&'a crate::project::document::Transition> {
+    doc.timeline
+        .tracks
+        .iter()
+        .flat_map(|t| &t.transitions)
+        .find(|tr| tr.clip_b == clip_b_id)
+}
+
 /// Transition kind for the xfade whose *incoming* clip is `clip_b`.
 fn group_kind<'a>(doc: &'a ProjectDoc, clip_b_id: &'a str) -> &'a str {
     doc.timeline
@@ -368,7 +381,18 @@ fn video_chain(seg: &Segment, i: usize, doc: &ProjectDoc, pad_canvas: bool) -> S
         ));
     }
     // Ordered effect stack (canonical params — same math as preview CSS).
-    let fx = effects::effects_chain(&seg.effects);
+    let fx = effects::effects_chain_ctx(
+        &seg.effects,
+        &crate::render::fxeffects::FxCtx {
+            w,
+            h,
+            fps_num: doc.canvas.fps_num,
+            fps_den: doc.canvas.fps_den,
+            clip_ms: seg.duration_ms,
+            source_in_ms: seg.source_in_ms,
+            speed: seg.speed,
+        },
+    );
     if !fx.is_empty() {
         c.push(',');
         c.push_str(&fx);
@@ -706,13 +730,38 @@ pub fn build_plan_with(
                     let d = g.fades[j - 1];
                     let offset = acc_ms - d;
                     let out = lbl("g", group_idx * 16 + j);
-                    filters.push(format!(
-                        "{comb}{}xfade=transition={}:duration={}:offset={}{out}",
-                        lbl("v", m + 1),
-                        xfade_name(group_kind(doc, &segments[m].clip_id)),
-                        ms_to_s(d),
-                        ms_to_s(offset)
-                    ));
+                    // Library transitions (shared/fx manifest) compile to a
+                    // native graph; legacy kinds keep the plain xfade.
+                    let graph = group_transition(doc, &segments[m].clip_id).and_then(|tr| {
+                        let (n, dn) = (doc.canvas.fps_num, doc.canvas.fps_den);
+                        let ctx = fxlib::GraphCtx {
+                            w: doc.canvas.width,
+                            h: doc.canvas.height,
+                            fps_num: n,
+                            fps_den: dn,
+                            a_frames: fxlib::ms_to_frames(acc_ms, n, dn),
+                            b_frames: fxlib::ms_to_frames(segments[m].duration_ms, n, dn),
+                            n_t: fxlib::ms_to_frames(d, n, dn),
+                        };
+                        fxlib::transition_graph(
+                            tr,
+                            &ctx,
+                            &comb,
+                            &lbl("v", m + 1),
+                            &out,
+                            &format!("x{group_idx}_{j}"),
+                        )
+                    });
+                    match graph {
+                        Some(lines) => filters.extend(lines),
+                        None => filters.push(format!(
+                            "{comb}{}xfade=transition={}:duration={}:offset={}{out}",
+                            lbl("v", m + 1),
+                            xfade_name(group_kind(doc, &segments[m].clip_id)),
+                            ms_to_s(d),
+                            ms_to_s(offset)
+                        )),
+                    }
                     comb = out;
                     acc_ms += segments[m].duration_ms - d;
                 }

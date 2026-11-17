@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -14,8 +14,23 @@ import {
   transitionAlpha,
   updateClip,
 } from "@/lib/timeline-engine";
-import { boxShadowFor, cssFilterFor, effectsActiveAt, evalKeyframes, overlayFor, svgFilterFragmentFor } from "@/lib/effects";
+import {
+  boxShadowFor,
+  cssFilterFor,
+  effectsActiveAt,
+  evalKeyframes,
+  fxScaleFor,
+  overlayFor,
+  svgFilterFragmentFor,
+  type FxCtx,
+} from "@/lib/effects";
 import { resumeAudio } from "@/services/audio-preview";
+import { activeLibraryTransitions } from "@/lib/fx/active-transitions";
+import { transitionGL } from "@/lib/fx/gl-transition";
+import type { LayerInfo } from "@/lib/fx/layer-raster";
+import { TransitionLayer } from "@/modules/editor/TransitionLayer";
+import { FilterLayer } from "@/modules/editor/FilterLayer";
+import { filterPassesFor } from "@/lib/fx/gl-filter";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import { angleDeg, scaleFromCorner, snapToGuides } from "@/lib/canvas-manip";
@@ -73,6 +88,21 @@ export function Preview({
   const selection = useEditor((s) => s.selection);
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const [editing, setEditing] = useState<string | null>(null);
+  // WebGL transition preview health: false → keep the DOM crossfade.
+  const [glOk, setGlOk] = useState(true);
+  const layerEls = useRef(new Map<string, HTMLVideoElement | HTMLImageElement>());
+  // Last drift-correction seek per clip — during playback a seek takes a
+  // while to land, so re-seeking on every tick (drift is already >DRIFT_MS
+  // when it lands) turns into a treadmill that pins readyState at 1 and
+  // blanks every raster layer above the video (filters, transitions).
+  const lastSeekMs = useRef(new Map<string, number>());
+  useEffect(() => {
+    const gl = transitionGL();
+    gl.onStatus = (st) => setGlOk(st === "ok");
+    return () => {
+      gl.onStatus = null;
+    };
+  }, []);
 
   // Any user gesture re-arms the AudioContext: the WebAudio chain
   // (MediaElementSource → gain → destination) is silent while the context
@@ -127,21 +157,35 @@ export function Preview({
     ? undefined
     : doc.versions.find((v) => v.id === activeVersionId);
 
-  /** Transform evaluated at playhead: base values overlaid by keyframes. */
-  const evalTransform = (clip: Clip) => {
+  /** Timing/geometry the library effects' curves need for `clip`. */
+  const fxCtxFor = (clip: Clip, layerW = viewDoc.canvas.width, layerH = viewDoc.canvas.height): FxCtx => ({
+    relMs: playheadMs - clip.startMs,
+    fps: viewDoc.canvas.fpsNum / Math.max(1, viewDoc.canvas.fpsDen),
+    canvasW: viewDoc.canvas.width,
+    layerW,
+    layerH,
+    clipMs: clip.durationMs,
+    sourceInMs: clip.sourceInMs,
+    speed: clip.speed || 1,
+  });
+
+  /** Transform evaluated at playhead: base values overlaid by keyframes
+   *  (and the zoom punches of library effects, like the render's zoompan). */
+  const evalTransform = (clip: Clip, withTransition = true) => {
     const rel = playheadMs - clip.startMs;
     const t = clip.transform;
     const k = clip.keyframes;
+    const fxk = fxScaleFor(effectsActiveAt(clip.effects, rel), fxCtxFor(clip));
     return {
       ...t,
       x: evalKeyframes(k["transform.x"], rel, t.x),
       y: evalKeyframes(k["transform.y"], rel, t.y),
-      scaleX: evalKeyframes(k["transform.scaleX"], rel, t.scaleX),
-      scaleY: evalKeyframes(k["transform.scaleY"], rel, t.scaleY),
+      scaleX: evalKeyframes(k["transform.scaleX"], rel, t.scaleX) * fxk,
+      scaleY: evalKeyframes(k["transform.scaleY"], rel, t.scaleY) * fxk,
       rotationDeg: evalKeyframes(k["transform.rotationDeg"], rel, t.rotationDeg),
       opacity:
         evalKeyframes(k["transform.opacity"], rel, t.opacity) *
-        transitionAlpha(viewDoc, clip.id, playheadMs),
+        (withTransition ? transitionAlpha(viewDoc, clip.id, playheadMs) : 1),
     };
   };
 
@@ -195,14 +239,74 @@ export function Preview({
   const active = activeClipsAt(viewDoc, playheadMs);
   const visual = active.filter((a) => a.track.visible && a.track.kind !== "audio" && !a.clip.hidden);
 
-  // Sync every mounted element to the model: seek on drift, rate, volume,
-  // play/pause. Runs every playhead update — cheap for v1 clip counts.
-  const syncEl = (clipId: string, el: HTMLMediaElement | null) => {
-    if (!el) {
-      mediaEls.current.delete(clipId);
-      return;
+  // Library (procedural) transitions play on a WebGL layer; their two clips
+  // stay mounted (decoding, seeking) but are hidden underneath it.
+  const libTransitions = glOk ? activeLibraryTransitions(viewDoc, playheadMs) : [];
+  const glIds = new Set(libTransitions.flatMap((x) => [x.a.id, x.b.id]));
+
+  // Creative filters (kind:"filter") preview on the shared WebGL2
+  // compositor — bounded to 4 filtered clips on screen at once; beyond
+  // that the media stays visible, unfiltered (never black).
+  const MAX_FILTERED = 4;
+  const filterPasses = new Map<string, ReturnType<typeof filterPassesFor>>();
+  if (glOk)
+    for (const { clip } of visual) {
+      if (filterPasses.size >= MAX_FILTERED) break;
+      const p = filterPassesFor(clip, playheadMs - clip.startMs);
+      if (p.length) filterPasses.set(clip.id, p);
     }
-    mediaEls.current.set(clipId, el);
+  const layerFor = (clipId: string): LayerInfo | null => {
+    const hit = findClip(viewDoc, clipId);
+    const el = layerEls.current.get(clipId);
+    const asset = hit?.clip.mediaRef ? assets.get(hit.clip.mediaRef) : undefined;
+    if (!hit || !el || !asset) return null;
+    const evalT = evalTransform(hit.clip, false);
+    const r = clipRect(
+      viewDoc,
+      { ...hit.clip, transform: evalT },
+      asset.width ?? viewDoc.canvas.width,
+      asset.height ?? viewDoc.canvas.height,
+    );
+    const fxAt = effectsActiveAt(hit.clip.effects, playheadMs - hit.clip.startMs);
+    const filter = [
+      svgFilterFragmentFor(fxAt, fxCtxFor(hit.clip, r.w, r.h)) ? `url(#fx-${clipId})` : "",
+      cssFilterFor(fxAt),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return { el, rect: r, rotationDeg: evalT.rotationDeg, opacity: Math.max(0, Math.min(1, evalT.opacity)), filter };
+  };
+
+  // Stable per-clip ref callbacks: an inline arrow ref is recreated on
+  // every render, so React detaches (→ layerEls.delete) and re-attaches
+  // it on EVERY commit. A FilterLayer/TransitionLayer layout effect
+  // reading layerEls mid-commit then sees the element as gone and draws
+  // a blank frame — visible as the filter flickering during playback.
+  // Stable callbacks detach only on real unmount; the per-frame sync
+  // moved into a layout effect below.
+  const refCbs = useRef(new Map<string, (el: HTMLElement | null) => void>());
+  const refFor = (clipId: string) => {
+    let cb = refCbs.current.get(clipId);
+    if (!cb) {
+      cb = (el) => {
+        if (!el) {
+          mediaEls.current.delete(clipId);
+          layerEls.current.delete(clipId);
+          return;
+        }
+        if (el instanceof HTMLMediaElement) mediaEls.current.set(clipId, el);
+        if (el instanceof HTMLVideoElement || el instanceof HTMLImageElement)
+          layerEls.current.set(clipId, el);
+      };
+      refCbs.current.set(clipId, cb);
+    }
+    return cb;
+  };
+
+  // Sync every mounted element to the model: seek on drift, rate, volume,
+  // play/pause. Runs from the layout effect below (every render) — cheap
+  // for v1 clip counts.
+  const syncEl = (clipId: string, el: HTMLMediaElement) => {
     const a = active.find((x) => x.clip.id === clipId);
     if (!a) {
       el.pause();
@@ -232,13 +336,28 @@ export function Preview({
     el.volume = Math.min(1, gain);
     el.playbackRate = a.clip.speed || 1;
     const want = a.sourceMs;
-    if (Math.abs(el.currentTime * 1000 - want) > DRIFT_MS) {
+    // Seek treadmill guard: never re-seek while a seek is in flight, and
+    // during playback allow a settling window after each correction so a
+    // slow-to-land seek can't trigger the next one immediately. Paused
+    // scrubbing still corrects every update (el.seeking gate aside).
+    const isPlaying = useEditor.getState().playing;
+    const lastSeek = lastSeekMs.current.get(clipId) ?? -1e9;
+    const settling = isPlaying && performance.now() - lastSeek < 1200;
+    if (!el.seeking && !settling && Math.abs(el.currentTime * 1000 - want) > DRIFT_MS) {
       el.currentTime = want / 1000;
+      lastSeekMs.current.set(clipId, performance.now());
     }
     if (useEditor.getState().playing && el.paused)
       void el.play().catch((e) => console.warn("preview element play() rejected:", e));
     if (!useEditor.getState().playing && !el.paused) el.pause();
   };
+
+  // Per-frame media sync — replaces the old "ref callback re-runs every
+  // render" mechanism (see refFor above). Children refs attach before
+  // this ancestor layout effect, so mediaEls is already populated.
+  useLayoutEffect(() => {
+    for (const [clipId, el] of mediaEls.current) syncEl(clipId, el);
+  });
 
   return (
     // inline-size container: the stage below sizes its height from 100cqw
@@ -263,12 +382,24 @@ export function Preview({
             grain). One filter per clip, primitives in effect order. */}
         <svg width="0" height="0" className="absolute">
           {visual.map(({ clip }) => {
-            const frag = svgFilterFragmentFor(effectsActiveAt(clip.effects, playheadMs - clip.startMs));
+            const asset = clip.mediaRef ? assets.get(clip.mediaRef) : undefined;
+            const r = clipRect(
+              viewDoc,
+              { ...clip, transform: evalTransform(clip) },
+              asset?.width ?? viewDoc.canvas.width,
+              asset?.height ?? viewDoc.canvas.height,
+            );
+            const frag = svgFilterFragmentFor(
+              effectsActiveAt(clip.effects, playheadMs - clip.startMs),
+              fxCtxFor(clip, r.w, r.h),
+            );
             if (!frag) return null;
             return (
               <filter
                 key={clip.id}
                 id={`fx-${clip.id}`}
+                colorInterpolationFilters="sRGB"
+                primitiveUnits="objectBoundingBox"
                 dangerouslySetInnerHTML={{ __html: frag }}
               />
             );
@@ -311,7 +442,7 @@ export function Preview({
           );
           const fxAt = effectsActiveAt(clip.effects, playheadMs - clip.startMs);
           const filters = [
-            svgFilterFragmentFor(fxAt) ? `url(#fx-${clip.id})` : "",
+            svgFilterFragmentFor(fxAt, fxCtxFor(clip, r.w, r.h)) ? `url(#fx-${clip.id})` : "",
             cssFilterFor(fxAt),
           ]
             .filter(Boolean)
@@ -321,7 +452,7 @@ export function Preview({
             top: pct(r.y, viewDoc.canvas.height),
             width: pct(r.w, viewDoc.canvas.width),
             height: pct(r.h, viewDoc.canvas.height),
-            opacity: Math.max(0, Math.min(1, evalT.opacity)),
+            opacity: glIds.has(clip.id) || filterPasses.has(clip.id) ? 0 : Math.max(0, Math.min(1, evalT.opacity)),
             transform:
               evalT.rotationDeg !== 0
                 ? `rotate(${evalT.rotationDeg}deg)`
@@ -344,7 +475,7 @@ export function Preview({
           const url = convertFileSrc(srcPath);
           // Overlay layers (scanlines…) composite above the media in a
           // sibling div — keeps pointer/drag handlers on the media itself.
-          const overlay = overlayFor(fxAt);
+          const overlay = overlayFor(fxAt, playheadMs - clip.startMs);
           const overlayEl = overlay ? (
             <div
               key={`${clip.id}-fxov`}
@@ -358,10 +489,26 @@ export function Preview({
               }}
             />
           ) : null;
+          const passes = filterPasses.get(clip.id);
+          const filterEl = passes ? (
+            <FilterLayer
+              key={`${clip.id}-flt`}
+              clipId={clip.id}
+              passes={passes}
+              relMs={playheadMs - clip.startMs}
+              projectW={viewDoc.canvas.width}
+              projectH={viewDoc.canvas.height}
+              getLayer={layerFor}
+              onFail={() => setGlOk(false)}
+            />
+          ) : null;
           return isImg ? (
             <>
+              {filterEl}
               <img
                 key={clip.id}
+                ref={refFor(clip.id)}
+                crossOrigin="anonymous"
                 src={url}
                 style={{ ...style, cursor: "move" }}
                 alt={asset.name}
@@ -373,9 +520,11 @@ export function Preview({
             </>
           ) : (
             <>
+              {filterEl}
               <video
                 key={clip.id}
-                ref={(el) => syncEl(clip.id, el)}
+                ref={refFor(clip.id)}
+                crossOrigin="anonymous"
                 src={url}
                 style={{ ...style, cursor: "move" }}
                 preload="auto"
@@ -387,6 +536,17 @@ export function Preview({
             </>
           );
         })}
+
+        {libTransitions.map((x) => (
+          <TransitionLayer
+            key={x.tr.id}
+            active={x}
+            projectW={viewDoc.canvas.width}
+            projectH={viewDoc.canvas.height}
+            getLayer={layerFor}
+            onFail={() => setGlOk(false)}
+          />
+        ))}
 
         {/* Prefetch window: clips starting within 3s get hidden decoders so
             activation doesn't stall on container open. Not synced — load-only. */}
@@ -408,6 +568,7 @@ export function Preview({
             return (
               <video
                 key={`pf-${c.id}`}
+                crossOrigin="anonymous"
                 src={convertFileSrc(srcPath)}
                 preload="auto"
                 muted
@@ -695,7 +856,7 @@ export function Preview({
             return (
               <audio
                 key={clip.id}
-                ref={(el) => syncEl(clip.id, el)}
+                ref={refFor(clip.id)}
                 src={convertFileSrc(
                   previewQuality === "proxy" && asset.proxyPath
                     ? asset.proxyPath

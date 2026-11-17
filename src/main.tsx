@@ -14,6 +14,13 @@ for (const type of ["dragover", "drop"]) {
   });
 }
 
+if (import.meta.env.DEV) {
+  void import("@/lib/fx/dev-probe").then((m) => {
+    m.installFxProbe();
+    void m.installQaHandle();
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

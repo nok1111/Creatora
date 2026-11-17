@@ -101,6 +101,8 @@ export const api = {
     cmd<string[]>("export_versions", { projectPath, outDir, versionIds }),
   analyzeSubject: (path: string, inMs: number, outMs: number, samples = 24) =>
     cmd<string>("analyze_subject", { path, inMs, outMs, samples }),
+  analyzeBeats: (path: string, inMs: number, outMs: number, sensitivity: number) =>
+    cmd<string>("analyze_beats", { path, inMs, outMs, sensitivity }),
   previewRenderPlan: (projectPath: string) =>
     cmd<{ ok: boolean; durationMs?: number; segments?: number; hasAudio?: boolean; reason?: string }>(
       "preview_render_plan",

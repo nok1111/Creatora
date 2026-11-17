@@ -33,6 +33,7 @@ import {
 } from "@/lib/timeline-engine";
 import type { Effect, ProjectDoc } from "@/lib/project-types";
 import { DEFAULT_SUBTITLE_STYLE } from "@/lib/project-types";
+import { fxEntry } from "@/lib/fx/manifest";
 
 /** ffmpeg xfade transition names — mirror of plan.rs::XFADES plus the
     legacy aliases dipToBlack/dipToWhite/crossfade. A catalog merge id not
@@ -94,9 +95,16 @@ describe("fx catalog audit", () => {
   it("every tile resolves to a known primitive", () => {
     for (const { cat, id } of allItems) {
       if (cat === "merge") {
-        expect(KNOWN_XFADES.has(id), `merge '${id}' is not an ffmpeg xfade`).toBe(true);
+        expect(
+          KNOWN_XFADES.has(id) || fxEntry(id)?.kind === "transition",
+          `merge '${id}' is neither an ffmpeg xfade nor a library transition`,
+        ).toBe(true);
       } else {
-        const known = animPreset(id) !== undefined || EFFECTS.some((e) => e.type === id);
+        const known =
+          animPreset(id) !== undefined ||
+          EFFECTS.some((e) => e.type === id) ||
+          fxEntry(id)?.kind === "effect" ||
+          fxEntry(id)?.kind === "filter";
         expect(known, `'${id}' in '${cat}' resolves to nothing`).toBe(true);
       }
     }
@@ -118,10 +126,17 @@ describe("fx catalog audit", () => {
           EFFECT_DROP_PARAMS[def.type]?.[k] ?? s.def,
         ]),
       );
-      const fx = { id: "e", type: def.type, enabled: true, params } as Effect;
+      // Library effects evaluate curves at a playhead and may carry analysis
+      // data (beats) — give them a context where they are active.
+      const fx = { id: "e", type: def.type, enabled: true, params, times: [0, 500, 1000] } as Effect;
+      const ctx = {
+        relMs: 10, fps: 30, canvasW: 1920, layerW: 1920, layerH: 1080,
+        clipMs: 3000, sourceInMs: 0, speed: 1,
+      };
       const out =
         cssFilterFor([fx]) ||
-        svgFilterFragmentFor([fx]) ||
+        svgFilterFragmentFor([fx], ctx) ||
+        (def.toScale?.(params, ctx, fx) !== 1 ? "scale" : "") ||
         boxShadowFor([fx]) ||
         overlayFor([fx]) ||
         "";

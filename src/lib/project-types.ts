@@ -80,6 +80,11 @@ export interface Transition {
   /** Outgoing → incoming clip ids on the same track. */
   clipA: string;
   clipB: string;
+  /** Library-transition parameters (shared/fx manifest). Absent for the
+   *  legacy xfade kinds. */
+  params?: Record<string, number>;
+  /** Ease curve name from the manifest; absent = the entry's default. */
+  ease?: string;
 }
 
 export interface Effect {
@@ -94,6 +99,9 @@ export interface Effect {
   outMs?: number;
   /** Path to an asset the effect needs (lut → .cube file). */
   file?: string | null;
+  /** Analysis data owned by the effect: source-time ms of detected beats
+   *  (beatImpact). Kept in the project so renders are deterministic. */
+  times?: number[] | null;
 }
 
 export interface TextStyle {

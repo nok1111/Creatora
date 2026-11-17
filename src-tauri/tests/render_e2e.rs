@@ -510,6 +510,10 @@ fn fx(kind: &str, params: &[(&str, f64)]) -> Effect {
             .iter()
             .map(|(k, v)| (k.to_string(), *v))
             .collect::<std::collections::BTreeMap<_, _>>(),
+        in_ms: None,
+        out_ms: None,
+        file: None,
+        times: None,
     }
 }
 
@@ -520,6 +524,7 @@ fn kfs(pairs: &[(i64, f64)]) -> Vec<Keyframe> {
             t_ms,
             v,
             ease: "linear".into(),
+                anim: None,
         })
         .collect()
 }
@@ -607,6 +612,8 @@ fn crossfade_blends_midpoint_between_clips() {
         duration_ms: 500,
         clip_a: "a".into(),
         clip_b: "b".into(),
+        params: Default::default(),
+        ease: None,
     });
     doc.timeline.tracks.push(track);
     add_media(&mut doc, "r", &red);
@@ -1154,6 +1161,7 @@ fn keyframe_eval_parity_table() {
         t_ms: t,
         v,
         ease: "linear".into(),
+                anim: None,
     };
     let cases: Vec<(Vec<Keyframe>, i64, f64, f64)> = vec![
         (vec![], 500, 0.7, 0.7),                            // empty → base
@@ -1265,6 +1273,7 @@ fn version_merge_overrides_only_whitelisted() {
                 t_ms: 0,
                 v: 0.0,
                 ease: "linear".into(),
+                anim: None,
             }],
         )]
         .into_iter()
@@ -1619,11 +1628,13 @@ fn version_keyframed_reframe_moves_window() {
                     t_ms: 0,
                     v: 160.0,
                     ease: "linear".into(),
+                anim: None,
                 },
                 Keyframe {
                     t_ms: 2000,
                     v: -160.0,
                     ease: "linear".into(),
+                anim: None,
                 },
             ],
         )]
@@ -2482,6 +2493,10 @@ fn audio_fx_highpass_and_limiter_apply() {
         kind: "highpass".into(),
         enabled: true,
         params,
+        in_ms: None,
+        out_ms: None,
+        file: None,
+        times: None,
     });
     doc.timeline.tracks.push(audio_track("A1", vec![c]));
     add_media(&mut doc, "a", &a);
@@ -2823,11 +2838,13 @@ fn text_scale_keyframes_grow_on_canvas() {
                 t_ms: 0,
                 v: 0.2,
                 ease: "linear".into(),
+                anim: None,
             },
             Keyframe {
                 t_ms: 2000,
                 v: 1.5,
                 ease: "linear".into(),
+                anim: None,
             },
         ],
     );
@@ -2838,11 +2855,13 @@ fn text_scale_keyframes_grow_on_canvas() {
                 t_ms: 0,
                 v: 0.2,
                 ease: "linear".into(),
+                anim: None,
             },
             Keyframe {
                 t_ms: 2000,
                 v: 1.5,
                 ease: "linear".into(),
+                anim: None,
             },
         ],
     );

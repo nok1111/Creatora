@@ -5,6 +5,7 @@ import {
   addEffect,
   addTrack,
   addTransition,
+  setTransitionDuration,
   clipRect,
   diagnoseCues,
   findReplaceCues,
@@ -265,6 +266,44 @@ describe("effects / keyframes / transitions", () => {
     const tr = res!.transitionId;
     d = removeTransition(d, d.timeline.tracks[0].id, tr);
     expect(d.timeline.tracks[0].transitions).toHaveLength(0);
+  });
+
+  it("re-applying a transition on the same junction replaces it (no stacking)", () => {
+    let d = doc();
+    const a = addClip(d, { mediaRef: "a1", startMs: 0, durationMs: 2000 });
+    d = a.doc;
+    const b = addClip(d, { mediaRef: "a1", startMs: 2000, durationMs: 2000 });
+    d = b.doc;
+    const tid = d.timeline.tracks[0].id;
+    d = addTransition(d, tid, a.clipId, b.clipId, 500, "velocitySwipe")!.doc;
+    d = addTransition(d, tid, a.clipId, b.clipId, 900, "liquidMelt")!.doc;
+    const trs = d.timeline.tracks[0].transitions;
+    expect(trs).toHaveLength(1);
+    expect(trs[0].type).toBe("liquidMelt");
+    expect(trs[0].durationMs).toBe(900);
+    expect(findClip(d, b.clipId)!.clip.startMs).toBe(1100);
+  });
+
+  it("transitions ripple later clips so junctions can be chained and resized", () => {
+    let d = doc();
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r = addClip(d, { mediaRef: "a1", startMs: i * 2000, durationMs: 2000 });
+      d = r.doc;
+      ids.push(r.clipId);
+    }
+    const tid = d.timeline.tracks[0].id;
+    d = addTransition(d, tid, ids[0], ids[1], 500, "velocitySwipe")!.doc;
+    // C followed B: still adjacent after the ripple → second transition works
+    expect(findClip(d, ids[2])!.clip.startMs).toBe(3500);
+    d = addTransition(d, tid, ids[1], ids[2], 900, "liquidMelt")!.doc;
+    const start = (i: number) => findClip(d, ids[i])!.clip.startMs;
+    expect([start(0), start(1), start(2)]).toEqual([0, 1500, 2600]);
+    // resizing the first one moves B and C together; B→C overlap is preserved
+    const first = d.timeline.tracks[0].transitions.find((t) => t.clipB === ids[1])!;
+    d = setTransitionDuration(d, tid, first.id, 800);
+    expect([start(0), start(1), start(2)]).toEqual([0, 1200, 2300]);
+    expect(start(1) + 2000 - start(2)).toBe(900);
   });
 
   it("dipToBlack alpha dips each side to zero at midpoint edges", () => {

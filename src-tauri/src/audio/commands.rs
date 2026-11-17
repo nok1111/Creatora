@@ -132,3 +132,22 @@ pub fn suggest_normalize(
         needs_limiter: l.true_peak + gain_db > tp_ceiling,
     })
 }
+
+/// Detect percussive hits in a clip's source window → source-time ms list
+/// (job result). Stored on the beatImpact effect by the frontend.
+#[tauri::command]
+pub fn analyze_beats(
+    app: AppHandle,
+    jobs: State<'_, JobManager>,
+    path: String,
+    in_ms: i64,
+    out_ms: i64,
+    sensitivity: f64,
+) -> CmdResult<String> {
+    Ok(jobs.spawn(app, "audio.beats", move |ctx: &JobCtx| {
+        ctx.progress(0.1, Some("Detecting beats"));
+        let hits = super::beats::detect_beats(std::path::Path::new(&path), in_ms, out_ms, sensitivity)?;
+        ctx.progress(1.0, None);
+        serde_json::to_value(hits).map_err(|e| e.to_string())
+    }))
+}

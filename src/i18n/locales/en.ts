@@ -187,6 +187,7 @@ export const en = {
     fxCatEnd: "End",
     fxCatMerge: "Merge",
     fxCatOverlay: "Overlay",
+    fxCatFilters: "Filters",
     fxDragHint: "Drag onto a clip in the timeline",
     fxBinFooter: "Drag an effect onto a clip. Merge effects go between two adjacent clips.",
     fxDropOnClip: "Drop the effect on a clip",

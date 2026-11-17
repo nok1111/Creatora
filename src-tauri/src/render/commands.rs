@@ -83,6 +83,38 @@ pub fn resolve_sources(
     map
 }
 
+/// Deletes the temp graph file when the render ends (success or not).
+pub struct TempGraphFile(pub std::path::PathBuf);
+impl Drop for TempGraphFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Graphs longer than this travel through a file instead of argv.
+pub const MAX_INLINE_GRAPH: usize = 8_000;
+
+/// Move an oversized `-filter_complex` value into a temp file and switch the
+/// option to `-/filter_complex`. Returns the guard that cleans it up.
+pub fn externalize_filter_graph(args: &mut [String]) -> Option<TempGraphFile> {
+    let i = args.iter().position(|a| a == "-filter_complex")?;
+    if args.get(i + 1)?.len() <= MAX_INLINE_GRAPH {
+        return None;
+    }
+    let path = std::env::temp_dir().join(format!(
+        "creatora_graph_{}_{}.txt",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::write(&path, &args[i + 1]).ok()?;
+    args[i] = "-/filter_complex".into();
+    args[i + 1] = path.to_string_lossy().into_owned();
+    Some(TempGraphFile(path))
+}
+
 /// Spawn ffmpeg for `plan`, stream `-progress` to `progress`, honor
 /// cancellation (`cancelled() → kill child + remove partial output`).
 /// Decoupled from JobCtx so integration tests run it directly.
@@ -100,8 +132,15 @@ pub fn run_ffmpeg(
         "pipe:1".to_string(),
     ];
     args.extend(plan.ffmpeg_args(out));
+    // Long graphs (per-frame sendcmd tracks, beat trees) would blow Windows'
+    // ~32k command-line limit: hand ffmpeg a file instead (`-/filter_complex`
+    // — the old -filter_complex_script was removed in ffmpeg 8).
+    let _graph_file = externalize_filter_graph(&mut args);
 
-    log::info!("render: ffmpeg {}", args.join(" "));
+    log::info!(
+        "render: ffmpeg {}",
+        args.iter().map(|a| if a.len() > 600 { format!("{}…", &a[..600]) } else { a.clone() }).collect::<Vec<_>>().join(" ")
+    );
     let mut child: Child = Command::new(&ffmpeg)
         .args(&args)
         .stdout(Stdio::piped())

@@ -58,6 +58,7 @@ import { WaveformCanvas } from "@/modules/editor/WaveformCanvas";
 import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
 import { getDragPayload, isEffectPayload, type EffectCategory } from "@/lib/drag-payload";
 import { effectDef, EFFECT_DROP_PARAMS } from "@/lib/effects";
+import { fxEntry, fxTransition } from "@/lib/fx/manifest";
 import { ANIM_PRESETS } from "@/lib/anim-presets";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -656,15 +657,38 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       }
       let ok = false;
       mutate((d) => {
-        const r = addTransition(d, track.id, a.id, b.id, 500, itemId);
+        const lib = fxTransition(itemId);
+        const r = addTransition(d, track.id, a.id, b.id, lib?.defaultDurationMs ?? 500, itemId, lib ? { ease: lib.defaultEase } : undefined);
         if (r) { ok = true; return r.doc; }
         return d;
       });
-      if (ok) toast.success(t("editor.fxApplied", { name: itemId }));
+      if (ok) toast.success(t("editor.fxApplied", { name: fxTransition(itemId)?.name ?? itemId }));
       else toast.error(t("editor.fxNeedsAdjacent"));
       return;
     }
     if (category === "overlay") {
+      // Manifest effects/filters (kind:"effect"|"filter") apply with their
+      // manifest param defaults; filters are capped at 3 active per clip.
+      const lib = fxEntry(itemId);
+      if (lib && (lib.kind === "effect" || lib.kind === "filter")) {
+        const activeFilters = target.effects.filter(
+          (x) => x.enabled && fxEntry(x.type)?.kind === "filter",
+        ).length;
+        if (lib.kind === "filter" && activeFilters >= 3) {
+          toast.error("Maximum 3 filters per clip — remove one first");
+          return;
+        }
+        mutate((d) =>
+          addEffect(d, target.id, {
+            id: crypto.randomUUID(),
+            type: lib.id,
+            enabled: true,
+            params: Object.fromEntries(lib.params.map((p) => [p.key, p.def])),
+          }),
+        );
+        toast.success(t("editor.fxApplied", { name: lib.name }));
+        return;
+      }
       const def = effectDef(itemId);
       if (!def) return;
       // Drop defaults are signature-strength (EFFECT_DROP_PARAMS) — a
@@ -688,6 +712,24 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     }
     toast.error(t("editor.fxDropOnClip"));
   };
+
+  // "Apply" button of the Effects bin: target = the selected clip.
+  useEffect(() => {
+    const h = (ev: Event) => {
+      const { category, itemId } = (ev as CustomEvent<{ category: EffectCategory; itemId: string }>).detail;
+      const d = useProject.getState().doc;
+      const id = useEditor.getState().selection[0];
+      if (!d || !id) {
+        toast.error(t("editor.fxDropOnClip"));
+        return;
+      }
+      const track = d.timeline.tracks.find((tr) => tr.clips.some((c) => c.id === id));
+      const clip = track?.clips.find((c) => c.id === id);
+      if (track && clip) applyFxDrop(track, clip.startMs + 1, category, itemId);
+    };
+    window.addEventListener("creatora:apply-fx", h);
+    return () => window.removeEventListener("creatora:apply-fx", h);
+  });
 
   const onDrop = (e: React.DragEvent, track: Track) => {
     e.preventDefault();
@@ -1325,10 +1367,12 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                           top,
                           height: FX_ROW_H - 2,
                         }}
-                        title={`${fx.type} · ${(inMs / 1000).toFixed(1)}–${(outMs / 1000).toFixed(1)}s`}
+                        title={`${effectDef(fx.type)?.label ?? fxEntry(fx.type)?.name ?? fx.type} · ${(inMs / 1000).toFixed(1)}–${(outMs / 1000).toFixed(1)}s`}
                         onPointerDown={(e) => onFxBarPointerDown(e, track, clip, fx)}
                       >
-                        <span className="truncate">{fx.type}</span>
+                        <span className="truncate">
+                          {effectDef(fx.type)?.label ?? fxEntry(fx.type)?.name ?? fx.type}
+                        </span>
                       </div>
                     );
                   });
@@ -1358,7 +1402,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                         top,
                         height: FX_ROW_H - 2,
                       }}
-                      title={`${tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
+                      title={`${fxTransition(tr.type)?.name ?? tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
                       onPointerDown={(e) => onTransitionBarPointerDown(e, track, tr)}
                       onContextMenu={(e) => {
                         e.preventDefault();
@@ -1367,7 +1411,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       }}
                     >
                       <Blend className="mr-0.5 size-2.5 shrink-0" />
-                      <span className="truncate">{tr.type}</span>
+                      <span className="truncate">{fxTransition(tr.type)?.name ?? tr.type}</span>
                     </div>
                   );
                 })}
@@ -1382,7 +1426,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     <div
                       key={tr.id}
                       className="absolute top-1 z-10 flex cursor-context-menu items-center justify-center rounded bg-violet-500/80 text-white hover:bg-violet-400"
-                      title={`${tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
+                      title={`${fxTransition(tr.type)?.name ?? tr.type} · ${(tr.durationMs / 1000).toFixed(2)}s`}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

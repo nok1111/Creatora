@@ -9,6 +9,7 @@
  * timeline t = sourceInMs + (t - startMs) * speed.
  */
 
+import { FX_MANIFEST, defaultParams, fxTransition, validateParams } from "@/lib/fx/manifest";
 import { animPreset, supportsTextFx } from "@/lib/anim-presets";
 import type {
   Clip,
@@ -635,11 +636,30 @@ export function removeEffect(doc: ProjectDoc, clipId: string, effectId: string):
   return next;
 }
 
+/** Move an effect one slot within its clip's stack (order matters:
+    filters and effect fragments apply in array order). */
+export function moveEffect(
+  doc: ProjectDoc,
+  clipId: string,
+  effectId: string,
+  dir: -1 | 1,
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const hit = findClip(next, clipId);
+  if (!hit || hit.track.locked) return next;
+  const i = hit.clip.effects.findIndex((e) => e.id === effectId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= hit.clip.effects.length) return next;
+  const [fx] = hit.clip.effects.splice(i, 1);
+  hit.clip.effects.splice(j, 0, fx);
+  return next;
+}
+
 export function updateEffect(
   doc: ProjectDoc,
   clipId: string,
   effectId: string,
-  patch: Partial<Pick<Effect, "enabled" | "inMs" | "outMs" | "file">> & { params?: Record<string, number> },
+  patch: Partial<Pick<Effect, "enabled" | "inMs" | "outMs" | "file" | "times">> & { params?: Record<string, number> },
 ): ProjectDoc {
   const next = cloneDoc(doc);
   const hit = findClip(next, clipId);
@@ -655,6 +675,7 @@ export function updateEffect(
     fx.outMs = Math.min(hit.clip.durationMs, fx.inMs + 50);
   if (patch.params) Object.assign(fx.params, patch.params);
   if (patch.file !== undefined) fx.file = patch.file;
+  if (patch.times !== undefined) fx.times = patch.times;
   return next;
 }
 
@@ -697,6 +718,13 @@ export function removeKeyframe(
   return next;
 }
 
+/** Shift every clip that starts at/after `fromStart` (except `moved`) by
+ *  `delta` ms — keeps the rest of the track's junctions intact. */
+function rippleAfter(clips: Clip[], moved: Clip, fromStart: number, delta: number) {
+  if (!delta) return;
+  for (const c of clips) if (c !== moved && c.startMs >= fromStart) c.startMs += delta;
+}
+
 /**
  * Create a transition between two adjacent clips on a track.
  * The incoming clip is shifted so `clipB.startMs = clipA.end - durationMs`
@@ -709,6 +737,7 @@ export function addTransition(
   clipBId: string,
   durationMs: number,
   kind = "crossfade",
+  opts?: { params?: Record<string, number>; ease?: string },
 ): { doc: ProjectDoc; transitionId: string } | null {
   const track = doc.timeline.tracks.find((t) => t.id === trackId);
   if (!track || track.locked) return null;
@@ -722,8 +751,12 @@ export function addTransition(
   const next = cloneDoc(doc);
   const nt = next.timeline.tracks.find((t) => t.id === trackId)!;
   const nb = nt.clips.find((c) => c.id === clipBId)!;
-  // Align: B overlaps A's tail by exactly d ms.
+  // Align: B overlaps A's tail by exactly d ms; everything after B on the
+  // track ripples by the same delta so later junctions keep their overlaps
+  // (and stay adjacent for the next transition).
+  const oldBStart = nb.startMs;
   nb.startMs = snapToFrame(aEnd - d, next);
+  rippleAfter(nt.clips, nb, oldBStart, nb.startMs - oldBStart);
   const overlap = aEnd - nb.startMs;
   const tr: Transition = {
     id: uid(),
@@ -732,6 +765,16 @@ export function addTransition(
     clipA: clipAId,
     clipB: clipBId,
   };
+  // Library transitions (shared/fx manifest) start from validated params.
+  const lib = fxTransition(kind);
+  if (lib) {
+    tr.params = validateParams(lib, opts?.params ?? defaultParams(lib)).params;
+    if (opts?.ease && FX_MANIFEST.eases[opts.ease]) tr.ease = opts.ease;
+  }
+  // One transition per junction: re-applying replaces the existing one
+  // (otherwise two transitions stack on the same pair and the preview/render
+  // disagree about which one plays).
+  nt.transitions = nt.transitions.filter((x) => !(x.clipA === clipAId && x.clipB === clipBId));
   nt.transitions.push(tr);
   nt.clips.sort((x, y) => x.startMs - y.startMs);
   return { doc: next, transitionId: tr.id };
@@ -757,9 +800,32 @@ export function setTransitionDuration(
   const nt = next.timeline.tracks.find((t) => t.id === trackId)!;
   const nb = nt.clips.find((c) => c.id === tr.clipB)!;
   const ntr = nt.transitions.find((x) => x.id === transitionId)!;
+  const oldBStart = nb.startMs;
   nb.startMs = snapToFrame(a.startMs + a.durationMs - d, next);
+  rippleAfter(nt.clips, nb, oldBStart, nb.startMs - oldBStart);
   ntr.durationMs = d;
   nt.clips.sort((x, y) => x.startMs - y.startMs);
+  return next;
+}
+
+/** Patch a library transition's params/ease (validated against the manifest). */
+export function updateTransition(
+  doc: ProjectDoc,
+  trackId: string,
+  transitionId: string,
+  patch: { params?: Record<string, number>; ease?: string },
+): ProjectDoc {
+  const next = cloneDoc(doc);
+  const t = next.timeline.tracks.find((x) => x.id === trackId);
+  const tr = t?.transitions.find((x) => x.id === transitionId);
+  if (!t || !tr || t.locked) return next;
+  const lib = fxTransition(tr.type);
+  if (!lib) return next;
+  if (patch.params) tr.params = validateParams(lib, { ...(tr.params ?? {}), ...patch.params }).params;
+  if (patch.ease !== undefined) {
+    if (FX_MANIFEST.eases[patch.ease]) tr.ease = patch.ease;
+    else delete tr.ease;
+  }
   return next;
 }
 

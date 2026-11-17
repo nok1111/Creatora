@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
-import { Diamond, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Diamond, Plus, Trash2 } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
@@ -12,10 +12,12 @@ import {
   effectiveDoc,
   findClip,
   getVersion,
+  moveEffect,
   removeEffect,
   removeKeyframe,
   removeTransition,
   setTransitionDuration,
+  updateTransition,
   setKeyframe,
   setVersionClipOverride,
   transitionsFor,
@@ -24,7 +26,10 @@ import {
 } from "@/lib/timeline-engine";
 import { ANIMATABLE_PATHS, AUDIO_EFFECTS, EFFECTS, effectDef, type AnimatablePath } from "@/lib/effects";
 import { api } from "@/lib/ipc";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { awaitJob } from "@/services/jobs";
+import { toast } from "sonner";
+import { FX_MANIFEST, fxEntry, fxTransition } from "@/lib/fx/manifest";
+import { FxParams } from "@/modules/editor/FxParams";
 import { AudioTools } from "@/modules/editor/AudioTools";
 import { GraphicsInspector, GraphicsSection } from "@/modules/editor/GraphicsInspector";
 import type { Clip } from "@/lib/project-types";
@@ -491,41 +496,77 @@ export function Inspector() {
                       mutate((d) => updateEffect(d, clipId, fx.id, { enabled: e.target.checked }))
                     }
                   />
-                  <span>{def?.label ?? fx.type}</span>
+                  <span>{def?.label ?? fxEntry(fx.type)?.name ?? fx.type}</span>
                 </label>
-                <button
-                  className="text-muted-foreground hover:text-destructive"
-                  onClick={() => mutate((d) => removeEffect(d, clipId, fx.id))}
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              </div>
-              {fx.type === "lut" && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center">
                   <button
-                    className="flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-left text-[10px] hover:bg-muted"
-                    onClick={async () => {
-                      const file = await openDialog({
-                        filters: [{ name: "3D LUT", extensions: ["cube"] }],
-                        multiple: false,
-                      });
-                      if (file)
-                        mutate((d) => updateEffect(d, clipId, fx.id, { file }));
-                    }}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    disabled={clip.effects.indexOf(fx) === 0}
+                    title="Move up (applies earlier)"
+                    onClick={() => mutate((d) => moveEffect(d, clipId, fx.id, -1))}
                   >
-                    {fx.file ? fx.file.split(/[\\/]/).pop() : "Choose .cube…"}
+                    <ChevronUp className="size-3" />
                   </button>
-                  {fx.file && (
-                    <button
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => mutate((d) => updateEffect(d, clipId, fx.id, { file: null }))}
-                    >
-                      <Trash2 className="size-3" />
-                    </button>
-                  )}
+                  <button
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    disabled={clip.effects.indexOf(fx) === clip.effects.length - 1}
+                    title="Move down (applies later)"
+                    onClick={() => mutate((d) => moveEffect(d, clipId, fx.id, 1))}
+                  >
+                    <ChevronDown className="size-3" />
+                  </button>
+                  <button
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => mutate((d) => removeEffect(d, clipId, fx.id))}
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
                 </div>
+              </div>
+              {fxEntry(fx.type) && (
+                <>
+                  <FxParams
+                    entry={fxEntry(fx.type)!}
+                    values={fx.params}
+                    onChange={(k, v) =>
+                      mutate((d) => updateEffect(d, clipId, fx.id, { params: { [k]: v } }))
+                    }
+                  />
+                  {fx.type === "beatImpact" && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent disabled:opacity-50"
+                        disabled={!clip.mediaRef}
+                        onClick={async () => {
+                          const a = assetsQ.data?.find((x) => x.id === clip.mediaRef);
+                          if (!a) return;
+                          try {
+                            const id = await api.analyzeBeats(
+                              a.filePath,
+                              clip.sourceInMs,
+                              clip.sourceInMs + Math.round(clip.durationMs * (clip.speed || 1)),
+                              fx.params.sensitivity ?? 0.5,
+                            );
+                            const fin = await awaitJob<number[]>(id);
+                            if (fin.status !== "done" || !fin.result) throw new Error(fin.error ?? "analysis failed");
+                            mutate((d) => updateEffect(d, clipId, fx.id, { times: fin.result as number[] }));
+                            toast.success(`${fin.result.length} hits detected`);
+                          } catch (e) {
+                            toast.error(String(e));
+                          }
+                        }}
+                      >
+                        Detect beats
+                      </button>
+                      <span className="text-[10px] text-muted-foreground">
+                        {fx.times?.length ? `${fx.times.length} hits` : "no analysis yet"}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
               {def &&
+                !fxEntry(fx.type) &&
                 Object.entries(def.params).map(([pk, spec]) => (
                   <div key={pk} className="flex items-center gap-1.5">
                     <span className="w-14 text-[10px] text-muted-foreground">{pk}</span>
@@ -628,8 +669,8 @@ export function Inspector() {
                 )}
               </div>
               {clipTransitions.map((tr) => (
-                <div key={tr.id} className="flex items-center justify-between gap-1 rounded border border-border p-1.5">
-                  <span className="min-w-0 truncate">{tr.type}</span>
+                <div key={tr.id} className="flex flex-wrap items-center justify-between gap-1 rounded border border-border p-1.5">
+                  <span className="min-w-0 truncate">{fxTransition(tr.type)?.name ?? tr.type}</span>
                   <span className="flex items-center gap-1">
                     <input
                       type="number"
@@ -652,6 +693,33 @@ export function Inspector() {
                   >
                     <Trash2 className="size-3" />
                   </button>
+                  {fxTransition(tr.type) && (
+                    <div className="basis-full space-y-1 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-16 text-[10px] text-muted-foreground">Ease</span>
+                        <select
+                          className="flex-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]"
+                          value={tr.ease ?? fxTransition(tr.type)!.defaultEase ?? "linear"}
+                          onChange={(e) =>
+                            mutate((d) => updateTransition(d, track.id, tr.id, { ease: e.target.value }))
+                          }
+                        >
+                          {Object.keys(FX_MANIFEST.eases).map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <FxParams
+                        entry={fxTransition(tr.type)!}
+                        values={tr.params}
+                        onChange={(k, v) =>
+                          mutate((d) => updateTransition(d, track.id, tr.id, { params: { [k]: v } }))
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               {clipTransitions.length === 0 && (

@@ -1,6 +1,7 @@
 //! Audio analysis — waveform peaks, loudness (EBU R128), silence regions.
 //! All local ffmpeg processing; heavy work runs inside jobs (ADR-026).
 
+pub mod beats;
 pub mod commands;
 
 use crate::media::ffmpeg_path;

@@ -135,3 +135,21 @@
     display: none;
   }
 }
+
+/* ── Effects bin: animated thumbnails (library) ─────────────────────── */
+.fxt{position:relative;height:34px;border-radius:4px;overflow:hidden;background:linear-gradient(90deg,#3b82f6 50%,#f59e0b 50%)}
+.fxt::after{content:"";position:absolute;inset:0}
+.fxt-swipe{background:linear-gradient(90deg,#3b82f6 0 50%,#f59e0b 50% 100%);background-size:200% 100%;animation:fxt-swipe 1.4s ease-in-out infinite;filter:blur(.3px)}
+@keyframes fxt-swipe{0%,15%{background-position:0 0}85%,100%{background-position:100% 0}}
+.fxt-melt{background:#f59e0b}
+.fxt-melt::after{background:linear-gradient(#3b82f6,#3b82f6);clip-path:polygon(0 0,100% 0,100% 100%,0 100%);animation:fxt-melt 1.6s ease-in-out infinite}
+@keyframes fxt-melt{0%{clip-path:polygon(0 0,100% 0,100% 0,0 0)}50%{clip-path:polygon(0 0,100% 0,100% 55%,70% 75%,45% 50%,20% 80%,0 60%)}100%{clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}}
+.fxt-rgb{background:#e5e7eb}
+.fxt-rgb::after{background:linear-gradient(90deg,#ef4444 0 33%,transparent 33%);mix-blend-mode:multiply;animation:fxt-rgb .9s steps(2) infinite}
+@keyframes fxt-rgb{0%,100%{transform:translateX(-4px)}50%{transform:translateX(5px)}}
+.fxt-hero{background:radial-gradient(circle,#fff 0,#3b82f6 60%)}
+.fxt-hero::after{background:#fff;animation:fxt-hero 1.4s ease-out infinite}
+@keyframes fxt-hero{0%{opacity:.9;transform:scale(1.4)}60%,100%{opacity:0;transform:scale(1)}}
+.fxt-beat{background:#1f2937}
+.fxt-beat::after{inset:25% 38%;border-radius:50%;background:#22d3ee;animation:fxt-beat .7s ease-out infinite}
+@keyframes fxt-beat{0%{transform:scale(1.6)}100%{transform:scale(1)}}

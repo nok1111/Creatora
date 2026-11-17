@@ -5,6 +5,11 @@
 pub mod audiofx;
 pub mod commands;
 pub mod effects;
+pub mod fxeffects;
+pub mod fxlib;
+pub mod fxlut;
+#[cfg(test)]
+mod fxlib_parity;
 pub mod keyframes;
 pub mod plan;
 pub mod reframe;

@@ -163,6 +163,13 @@ pub struct Transition {
     /// Outgoing → incoming clip ids on this track.
     pub clip_a: String,
     pub clip_b: String,
+    /// Library-transition parameters (shared/fx manifest, validated at
+    /// render time). Empty for the legacy xfade kinds.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub params: std::collections::BTreeMap<String, f64>,
+    /// Ease curve name (manifest `eases`); None = the entry's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ease: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -342,6 +349,11 @@ pub struct Effect {
     /// Path to an asset the effect needs (lut → .cube file).
     #[serde(rename = "file", default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// Analysis data owned by the effect — source-time ms of detected beats
+    /// (beatImpact). Stored in the project so renders are deterministic and
+    /// the user can re-sync without re-analysing.
+    #[serde(rename = "times", default, skip_serializing_if = "Option::is_none")]
+    pub times: Option<Vec<f64>>,
 }
 
 fn default_true() -> bool {

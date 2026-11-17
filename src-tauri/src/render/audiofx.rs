@@ -80,6 +80,7 @@ mod tests {
             in_ms: None,
             out_ms: None,
             file: None,
+            times: None,
             params: params
                 .iter()
                 .map(|(k, v)| (k.to_string(), *v))

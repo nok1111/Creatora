@@ -124,6 +124,7 @@ pub fn run() {
             audio::commands::analyze_loudness,
             audio::commands::detect_silence,
             audio::commands::suggest_normalize,
+            audio::commands::analyze_beats,
             graphics::list_templates,
             graphics::save_template,
             graphics::delete_template,
