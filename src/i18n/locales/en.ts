@@ -503,6 +503,9 @@ export const en = {
     cs_tplSaved: "Template saved",
   },
   cal: {
+    prev: "Previous",
+    next: "Next",
+    newOnDay: "Click to schedule a post on this day",
     today: "Today",
     month: "Month",
     week: "Week",

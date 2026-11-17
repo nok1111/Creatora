@@ -47,6 +47,7 @@ import { useProject } from "@/stores/project";
 import { cn } from "@/lib/utils";
 import { reportError } from "@/lib/errors";
 import { ComposerDialog } from "./ComposerDialog";
+import { PlatformIcon } from "./PlatformIcon";
 import { CalendarView } from "./CalendarView";
 import { AccountsPanel } from "./AccountsPanel";
 import { PublicationHistory } from "./PublicationHistory";
@@ -85,7 +86,7 @@ export function SocialPage() {
       ? (params.get("tab") as Tab)
       : "posts",
   );
-  const [composing, setComposing] = useState<null | { id?: string }>(null);
+  const [composing, setComposing] = useState<null | { id?: string; schedule?: string }>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<SocialPost | null>(null);
   const qc = useQueryClient();
@@ -111,21 +112,13 @@ export function SocialPage() {
     return () => clearTimeout(id);
   }, [search, refreshPosts]);
 
-  // Card thumbnails: the post's own thumbnail, else the first exported file.
-  const { data: thumbs } = useQuery({
+  // Card previews are resolved in Rust: own thumbnail → exported file →
+  // the linked project's first clip.
+  const { data: previews } = useQuery({
     queryKey: ["social-thumbs"],
-    queryFn: async () => {
-      const m = new Map<string, string>();
-      for (const a of await api.listAssets())
-        if (a.thumbnailPath) m.set(a.id, a.thumbnailPath);
-      return m;
-    },
+    queryFn: () => api.socialPostPreviews(),
   });
-  const thumbOf = (p: SocialPost) => {
-    const id =
-      p.thumbnailAssetId ?? p.targets.find((x) => x.exportAssetId)?.exportAssetId;
-    return (id && thumbs?.get(id)) || null;
-  };
+  const thumbOf = (p: SocialPost) => previews?.[p.id] ?? null;
 
   // Reminder events: local scheduler pings when a non-auto target is due.
   useEffect(() => {
@@ -300,7 +293,12 @@ export function SocialPage() {
         </>
       )}
 
-      {tab === "calendar" && <CalendarView onOpenPost={setDetailId} />}
+      {tab === "calendar" && (
+        <CalendarView
+          onOpenPost={setDetailId}
+          onCreateOnDay={(schedule) => setComposing({ schedule })}
+        />
+      )}
       {tab === "accounts" && <AccountsPanel />}
       {tab === "history" && (
         <PublicationHistory
@@ -314,6 +312,7 @@ export function SocialPage() {
       {composing && (
         <ComposerDialog
           postId={composing.id}
+          defaultSchedule={composing.schedule}
           onGoAccounts={goAccounts}
           onClose={() => {
             setComposing(null);
@@ -514,6 +513,7 @@ function TargetChip({ target }: { target: SocialPostTarget }) {
       )}
       title={target.lastError ?? undefined}
     >
+      <PlatformIcon platform={target.platform} className="size-3" />
       {PLATFORM_LABEL[target.platform]}
       {target.platformUrl && (
         <a

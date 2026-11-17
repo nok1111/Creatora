@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CaptionStudio } from "./CaptionStudio";
+import { PlatformIcon } from "./PlatformIcon";
 import { ValidationPanel } from "./ValidationPanel";
 import { useTranslation } from "react-i18next";
 import { reportError } from "@/lib/errors";
@@ -66,10 +67,13 @@ export function ComposerDialog({
   postId,
   onClose,
   onGoAccounts,
+  defaultSchedule,
 }: {
   postId?: string;
   onClose: () => void;
   onGoAccounts?: () => void;
+  /** datetime-local value pre-filled on newly enabled platforms (calendar "new post on this day"). */
+  defaultSchedule?: string;
 }) {
   const { t: tr } = useTranslation();
   const qc = useQueryClient();
@@ -135,10 +139,21 @@ export function ComposerDialog({
 
   // Toggling keeps the platform's configuration so off/on doesn't wipe it.
   const toggle = (p: SocialPlatform) =>
-    setTargets((t) => ({
-      ...t,
-      [p]: { ...t[p], platform: p, enabled: !t[p]?.enabled },
-    }));
+    setTargets((t) => {
+      const enabling = !t[p]?.enabled;
+      return {
+        ...t,
+        [p]: {
+          ...t[p],
+          platform: p,
+          enabled: enabling,
+          scheduledAt:
+            enabling && !t[p]?.scheduledAt && defaultSchedule
+              ? defaultSchedule
+              : t[p]?.scheduledAt,
+        },
+      };
+    });
 
   const setT = (p: SocialPlatform, patch: Partial<DraftTarget>) =>
     setTargets((t) => ({ ...t, [p]: { ...t[p]!, ...patch } }));
@@ -264,8 +279,9 @@ export function ComposerDialog({
                         : "border-border text-muted-foreground hover:bg-accent",
                     )}
                   >
-                    {targets[p]?.enabled && <CheckCircle2 className="size-3" />}
+                    <PlatformIcon platform={p} colored={!!targets[p]?.enabled} />
                     {PLATFORM_LABEL[p]}
+                    {targets[p]?.enabled && <CheckCircle2 className="size-3" />}
                   </button>
                 ))}
               </div>
@@ -294,7 +310,8 @@ export function ComposerDialog({
                   className="space-y-2 rounded-lg border border-border p-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold">
+                      <PlatformIcon platform={p} />
                       {PLATFORM_LABEL[p]}
                     </span>
                     {cap?.requiresAppReview && (

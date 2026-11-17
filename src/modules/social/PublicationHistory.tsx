@@ -5,9 +5,9 @@ import { useTranslation } from "react-i18next";
 import { api, type PublicationHistoryRow } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { PLATFORM_LABEL } from "@/lib/social-types";
+import { PLATFORM_LABEL, SOCIAL_PLATFORMS } from "@/lib/social-types";
+import { PlatformIcon } from "./PlatformIcon";
 
-const PLATFORMS = ["youtube", "tiktok", "instagram", "facebook"];
 const OUTCOME_KEYS = ["", "published", "failed", "uploading", "cancelled"];
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -43,7 +43,7 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
           className="rounded-md border border-border bg-card px-2 py-1"
         >
           <option value="">{t("pubhist.allPlatforms")}</option>
-          {PLATFORMS.map((p) => (
+          {SOCIAL_PLATFORMS.map((p) => (
             <option key={p} value={p}>
               {PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p}
             </option>
@@ -107,7 +107,12 @@ export function PublicationHistory({ onOpenPost }: { onOpenPost: (postId: string
                     {r.postTitle || t("pubhist.untitled")}
                   </button>
                 </td>
-                <td className="px-3 py-2 text-xs">{PLATFORM_LABEL[r.platform as keyof typeof PLATFORM_LABEL] ?? r.platform}</td>
+                <td className="px-3 py-2 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <PlatformIcon platform={r.platform} />
+                    {PLATFORM_LABEL[r.platform as keyof typeof PLATFORM_LABEL] ?? r.platform}
+                  </span>
+                </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{r.startedAt}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{r.finishedAt ?? "—"}</td>
                 <td className="max-w-[280px] px-3 py-2">

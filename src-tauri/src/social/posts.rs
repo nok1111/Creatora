@@ -900,6 +900,85 @@ pub fn list_scheduled(
     })
 }
 
+fn thumb_of(conn: &Connection, asset_id: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT thumbnail_path FROM media_assets WHERE id=?1",
+        [asset_id],
+        |r| r.get::<_, Option<String>>(0),
+    )
+    .ok()
+    .flatten()
+    .filter(|p| std::path::Path::new(p).is_file())
+}
+
+/// Preview image for a project: its own thumbnail, else the thumbnail of the
+/// earliest clip that references a catalog asset.
+fn project_preview(conn: &Connection, project_id: &str) -> Option<String> {
+    let (file_path, thumb): (String, Option<String>) = conn
+        .query_row(
+            "SELECT file_path, thumbnail_path FROM projects WHERE id=?1",
+            [project_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .ok()?;
+    if let Some(t) = thumb.filter(|p| std::path::Path::new(p).is_file()) {
+        return Some(t);
+    }
+    let doc = crate::project::store::open(std::path::Path::new(&file_path)).ok()?;
+    let mut refs: Vec<(i64, &str)> = doc
+        .timeline
+        .tracks
+        .iter()
+        .flat_map(|t| t.clips.iter())
+        .filter_map(|c| c.media_ref.as_deref().map(|m| (c.start_ms, m)))
+        .collect();
+    refs.sort_by_key(|r| r.0);
+    refs.into_iter().find_map(|(_, m)| thumb_of(conn, m))
+}
+
+/// post id → local image to show on its card. Order: the post's own
+/// thumbnail, an exported file, then the linked project's first clip.
+/// Posts with nothing resolvable are simply absent from the map.
+#[tauri::command]
+pub fn social_post_previews(
+    db: State<'_, Arc<Db>>,
+) -> CmdResult<std::collections::HashMap<String, String>> {
+    db.with(|conn| {
+        let mut stmt =
+            conn.prepare("SELECT id, project_id, thumbnail_asset_id FROM social_posts")?;
+        let posts = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut out = std::collections::HashMap::new();
+        for (id, project_id, thumb_asset) in posts {
+            let mut found = thumb_asset.as_deref().and_then(|a| thumb_of(conn, a));
+            if found.is_none() {
+                let mut s = conn.prepare(
+                    "SELECT export_asset_id FROM social_post_targets
+                     WHERE post_id=?1 AND export_asset_id IS NOT NULL",
+                )?;
+                let ids = s
+                    .query_map([&id], |r| r.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                found = ids.iter().find_map(|a| thumb_of(conn, a));
+            }
+            if found.is_none() {
+                found = project_id.as_deref().and_then(|p| project_preview(conn, p));
+            }
+            if let Some(f) = found {
+                out.insert(id, f);
+            }
+        }
+        Ok(out)
+    })
+}
+
 /// Reveal a file in Explorer — used by "open location" everywhere.
 #[tauri::command]
 pub fn reveal_path(path: String) -> CmdResult<()> {

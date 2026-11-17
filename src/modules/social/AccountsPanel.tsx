@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { reportError } from "@/lib/errors";
+import { PlatformIcon } from "./PlatformIcon";
 
 const accountName = (a: SocialAccount) => a.displayName ?? a.platformUserId;
 
@@ -111,7 +112,10 @@ export function AccountsPanel() {
             className="space-y-3 self-start rounded-lg border border-border bg-card p-4"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">{PLATFORM_LABEL[p]}</h3>
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <PlatformIcon platform={p} className="size-4" />
+                {PLATFORM_LABEL[p]}
+              </h3>
               <div className="flex gap-1">
                 {cap?.publish ? (
                   <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">

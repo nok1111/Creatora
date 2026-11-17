@@ -506,6 +506,9 @@ export const es: typeof en = {
     cs_tplSaved: "Plantilla guardada",
   },
   cal: {
+    prev: "Anterior",
+    next: "Siguiente",
+    newOnDay: "Clic para programar un post este día",
     today: "Hoy",
     month: "Mes",
     week: "Semana",

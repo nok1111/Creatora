@@ -207,6 +207,8 @@ export const api = {
     cmd<import("./social-types").SocialPost>("create_social_post", { input }),
   updateSocialPost: (id: string, input: import("./social-types").PostInput) =>
     cmd<import("./social-types").SocialPost>("update_social_post", { id, input }),
+  /** post id → local preview image (own thumbnail, export, or project's first clip). */
+  socialPostPreviews: () => cmd<Record<string, string>>("social_post_previews"),
   /** Transactional create/update + target reconcile (prunes removed platforms). */
   saveSocialPost: (id: string | null, input: import("./social-types").PostInput, markReady: boolean) =>
     cmd<import("./social-types").SocialPost>("save_social_post", { id, input, markReady }),

@@ -29,6 +29,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { ValidationPanel } from "./ValidationPanel";
+import { PlatformIcon } from "./PlatformIcon";
 import { reportError } from "@/lib/errors";
 
 /** Post detail: per-target export/publish pipeline + attempts + validation. */
@@ -216,7 +217,10 @@ function TargetRow({
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold">{PLATFORM_LABEL[t.platform]}</span>
+        <span className="flex items-center gap-1.5 text-xs font-semibold">
+          <PlatformIcon platform={t.platform} />
+          {PLATFORM_LABEL[t.platform]}
+        </span>
         <span
           className={cn(
             "rounded px-1.5 py-0.5 text-[9px] uppercase",
