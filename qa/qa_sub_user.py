@@ -29,14 +29,17 @@ def seek(ms):
     time.sleep(0.35)
 
 def mode_btn(label):
-    js(c, f"""(()=>{{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.includes('{label}'));b.click();}})()""", await_promise=False)
+    # Match by title (hint) — preset tiles also contain mode names.
+    HINT = {"Karaoke": "Word fill", "Pop": "One word", "Jumpy": "Word bounce", "Impact": "Slam in", "Static": "Plain text"}
+    hint = HINT[label]
+    js(c, f"""(()=>{{const b=[...document.querySelectorAll('button')].find(e=>e.title==='{hint}');b.click();}})()""", await_promise=False)
     time.sleep(0.4)
 
 def substate():
     r = js(c, """(()=>{const s=document.querySelector('[data-subtitle]');
 const w=[...document.querySelectorAll('[data-subword]')];
 return JSON.stringify({has:!!s, text:s?s.textContent.trim():'', n:w.length,
-  words:w.map(e=>({t:e.textContent,c:e.style.color,o:e.style.opacity,tr:e.style.transform,v:e.style.visibility})),
+  words:w.map(e=>({t:e.textContent,c:e.style.color,o:e.style.opacity,tr:e.style.transform,v:e.style.visibility,anim:e.style.animation})),
   font:s?getComputedStyle(s.querySelector('span')).fontFamily:'',
   bg:s?s.querySelector('span').style.background:'',
   stroke:s?s.querySelector('span').style.webkitTextStroke||s.querySelector('span').style.WebkitTextStroke:'',
@@ -75,14 +78,13 @@ check("jump: all words visible", s["n"] == 7)
 check("jump: active word bounces", len(scaled) == 1 and scaled[0]["t"].strip() == "line")
 c.shot("sub_u_jump")
 
-# ---------- 5. Impact: past visible, future hidden, active slammed ----------
+# ---------- 5. Impact: one word at a time, slamming in oversized ----------
 mode_btn("Impact")
 s = substate()
-hidden = [w for w in s["words"] if w["v"] == "hidden"]
-slam = [w for w in s["words"] if "1.25" in (w["tr"] or "")]
-check("impact: future words hidden", len(hidden) == 2, len(hidden))
-check("impact: active word slams", len(slam) == 1)
-check("impact: past words visible", sum(1 for w in s["words"] if w["v"] != "hidden") == 5)
+slam = [w for w in s["words"] if "sub-impact" in (w.get("anim") or "")]
+check("impact: single word shown", s["n"] == 1 and s["words"][0]["t"].strip() == "line", s["words"])
+check("impact: word slams in", len(slam) == 1, s["words"])
+check("impact: active highlighted", s["n"] == 1 and "255, 255, 0" in s["words"][0]["c"], s["words"][0]["c"] if s["n"] else None)
 c.shot("sub_u_impact")
 
 # ---------- 6. Colors via pickers ----------

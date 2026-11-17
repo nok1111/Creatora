@@ -801,18 +801,17 @@ export function Preview({
               );
             }
             if (ss.mode === "impact") {
-              // Words accumulate — each slams in at its moment, oversized.
-              if (!spoken && !active) return <span key={i} data-subword style={{ visibility: "hidden" }}>{w.word}</span>;
+              // One word at a time — the active word slams in oversized.
+              if (!active) return null;
               return (
                 <span
                   key={i}
                   data-subword
                   style={{
-                    color: active ? ss.highlightColor : st.color,
+                    color: ss.highlightColor,
                     display: "inline-block",
-                    transform: active ? "scale(1.25)" : "scale(1)",
                     transformOrigin: "bottom center",
-                    transition: "transform 140ms cubic-bezier(.2,1.5,.3,1), color 80ms",
+                    animation: "sub-impact 300ms cubic-bezier(.2,1.3,.3,1) both",
                   }}
                 >
                   {w.word}
@@ -857,10 +856,10 @@ export function Preview({
                     ? `${(st.backgroundPadPx / viewDoc.canvas.height) * 100}cqh`
                     : undefined,
                   whiteSpace: "pre-wrap",
-                  // Impact slams the whole cue in over the first ~280ms;
-                  // per-word impact layering happens inside wordSpan.
+                  // Impact without word timings slams the whole cue in over
+                  // the first ~280ms; per-word slam happens inside wordSpan.
                   transform:
-                    ss.mode === "impact" && cueAge < 280
+                    ss.mode === "impact" && cue.words.length === 0 && cueAge < 280
                       ? `scale(${1.45 - 0.45 * (cueAge / 280)})`
                       : undefined,
                   transformOrigin: "bottom center",
