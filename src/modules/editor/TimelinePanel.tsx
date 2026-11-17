@@ -32,6 +32,7 @@ import {
   addTrack,
   addTransition,
   applyAnimationPreset,
+  diagnoseCues,
   duplicateClips,
   extractClips,
   findClip,
@@ -168,6 +169,17 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const msToPx = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec]);
   const pxToMs = useCallback((px: number) => (px / pxPerSec) * 1000, [pxPerSec]);
 
+  // Active cue under the playhead — selector returns a primitive, so the
+  // panel only re-renders when the active cue actually changes (cheap at
+  // rAF rates during playback).
+  const activeCueId = useEditor((s) => {
+    const d = useProject.getState().doc;
+    const cue = d?.subtitles.find(
+      (c) => s.playheadMs >= c.startMs && s.playheadMs < c.endMs,
+    );
+    return cue?.id ?? null;
+  });
+
   // Auto-scroll to keep the playhead in view during playback — imperative
   // rAF loop mutates scrollLeft; no React re-render per frame.
   useEffect(() => {
@@ -231,6 +243,17 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           if (r) setSelCueId(r.left);
           return r ? r.doc : d;
         });
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        // Nudge: arrows move the cue one frame (Shift = ±0.5s).
+        e.preventDefault();
+        const d0 = useProject.getState().doc;
+        if (!d0) return;
+        const frameMs = (1000 * d0.canvas.fpsDen) / d0.canvas.fpsNum;
+        const step = (e.shiftKey ? 500 : frameMs) * (e.key === "ArrowRight" ? 1 : -1);
+        mutate((d) => {
+          const cur = d.subtitles.find((c) => c.id === selCueId);
+          return cur ? moveCue(d, selCueId, Math.max(0, cur.startMs + step)) : d;
+        });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -242,6 +265,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   // The lane must stay reachable even for cues past the clip timeline end.
   const cuesEndMs = doc.subtitles.reduce((m, c) => Math.max(m, c.endMs), 0);
   const lanesW = msToPx(Math.max(durationMs, cuesEndMs)) + 200;
+  // Cues overlapping a neighbor get a warning dot on the lane block.
+  const cueOverlaps = new Set(
+    diagnoseCues(doc).filter((i) => i.kind === "overlap").map((i) => i.cueId),
+  );
 
   /** Snap candidates honoring snapEnabled + frame snapping always. */
   const snap = (ms: number, ignoreClipIds: string[] = []): number => {
@@ -582,14 +609,19 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         if (!cur) return d;
         if (mode === "move") {
           const target = Math.max(0, Math.round(snap(cursorMs - grabOffsetMs)));
+          // Scrub the preview to the dragged edge so the caption lands
+          // against picture in real time (paused only — don't fight playback).
+          if (!useEditor.getState().playing) setPlayhead(target);
           return moveCue(d, cue.id, target);
         }
         const target = Math.round(snap(cursorMs));
         if (mode === "left") {
           const s = Math.max(0, Math.min(target, cur.endMs - MIN_CUE_MS));
+          if (!useEditor.getState().playing) setPlayhead(s);
           return resizeCue(d, cue.id, { startMs: s });
         }
         const en = Math.max(target, cur.startMs + MIN_CUE_MS);
+        if (!useEditor.getState().playing) setPlayhead(en - 1);
         return resizeCue(d, cue.id, { endMs: en });
       });
     };
@@ -1111,9 +1143,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
             className="sticky left-0 z-40 shrink-0 border-r border-border bg-card pt-6"
             style={{ width: HEADER_W }}
           >
-            {/* Caption-lane header — fixed row aligned with the CC lane. */}
+            {/* Caption-lane header — fixed row aligned with the CC lane,
+                pinned under the ruler on vertical scroll. */}
             <div
-              className="flex items-center gap-1.5 border-b border-border/50 px-2"
+              className="sticky top-6 z-10 flex items-center gap-1.5 border-b border-border/50 bg-card px-2"
               style={{ height: SUB_LANE_H }}
             >
               <Captions className="size-3 shrink-0 text-emerald-400" />
@@ -1238,7 +1271,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 double-click empty space creates a cue. */}
             <div
               data-sublane
-              className="relative border-b border-border/60 bg-emerald-500/5"
+              className="sticky top-6 z-20 border-b border-emerald-500/25 bg-card"
               style={{ height: SUB_LANE_H, width: lanesW }}
               onPointerDown={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -1273,6 +1306,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               {doc.subtitles.map((cue) => {
                 const sel = selCueId === cue.id;
                 const editing = editCueId === cue.id;
+                const active = activeCueId === cue.id;
                 const w = Math.max(10, msToPx(cue.endMs - cue.startMs));
                 return (
                   <div
@@ -1283,7 +1317,11 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       editing ? "overflow-visible" : "overflow-hidden",
                       sel
                         ? "z-10 border-emerald-300 bg-emerald-400/40 text-emerald-50"
-                        : "border-emerald-500/50 bg-emerald-500/25 text-emerald-100/90 hover:bg-emerald-500/35",
+                        : active
+                          ? "border-emerald-200 bg-emerald-400/35 text-emerald-50"
+                          : cueOverlaps.has(cue.id)
+                            ? "border-amber-400/60 bg-emerald-500/25 text-emerald-100/90 hover:bg-emerald-500/35"
+                            : "border-emerald-500/50 bg-emerald-500/25 text-emerald-100/90 hover:bg-emerald-500/35",
                     )}
                     style={{ left: msToPx(cue.startMs), width: w }}
                     onPointerDown={(e) => onCuePointerDown(e, cue, "move")}
@@ -1299,8 +1337,11 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                       setSelCueId(cue.id);
                       setEditCueId(cue.id);
                     }}
-                    title={cue.text}
+                    title={`${cue.text || t("subs.newCueSeed")} · ${timecode(cue.startMs, doc)}–${timecode(cue.endMs, doc)}`}
                   >
+                    {cueOverlaps.has(cue.id) && !editing && (
+                      <span className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-400" />
+                    )}
                     {editing ? (
                       <input
                         autoFocus
