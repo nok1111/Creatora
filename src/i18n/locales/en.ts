@@ -855,6 +855,7 @@ export const en = {
     deleteStyle: "Delete saved style",
     applyStyleTip: "Apply as the master style",
     cueStyleDefault: "Default style",
+    resizeTools: "Drag to resize",
     autoTime: "Auto-time words",
     autoTimeTip: "Give every typed cue word timings (no audio needed) so word modes work",
     autoTimeOne: "Auto-time words",

@@ -101,6 +101,26 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
   const [replace, setReplace] = useState("");
   const [shift, setShift] = useState("0");
   const [issues, setIssues] = useState<ReturnType<typeof diagnoseCues> | null>(null);
+  /** Resizable tools column — user drags the left edge wider/narrower. */
+  const [toolsW, setToolsW] = useState(() => {
+    const v = Number(localStorage.getItem("subsToolsW"));
+    return v >= 240 ? v : 320;
+  });
+  const toolsDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = toolsW;
+    const move = (ev: PointerEvent) => {
+      const w = Math.min(680, Math.max(240, Math.round(startW + (startX - ev.clientX))));
+      setToolsW(w);
+      localStorage.setItem("subsToolsW", String(w));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const listRef = useRef<HTMLDivElement>(null);
 
   const modelsQ = useQuery({ queryKey: ["models"], queryFn: api.listModels });
@@ -325,8 +345,17 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         </div>
       </div>
 
+      {/* Drag grip — resize the tools column */}
+      <div
+        onPointerDown={toolsDrag}
+        className="w-1 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-primary/70"
+        title={t("subs.resizeTools")}
+      />
       {/* Tools */}
-      <div className="w-72 shrink-0 space-y-2 overflow-y-auto border-l border-border p-2 text-xs">
+      <div
+        style={{ width: toolsW }}
+        className="shrink-0 space-y-2 overflow-y-auto border-l border-border p-2 text-xs"
+      >
         {/* Transcription */}
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium"><Mic2 className="size-3" /> {t("subs.transcribe")}</p>
