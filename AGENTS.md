@@ -94,3 +94,29 @@ Ignored Rust tests cover the E2E chain (`filter_verify`, `filter_thumbs`,
 
 `C:/Users/nokturno/Documents/Creatora/Projects/QA flow 1794793478466.creatora`
 — multi-clip test timeline used for live preview checks.
+
+## Social Studio (`src/modules/social/`, `src-tauri/src/social/`)
+
+- **Saving a post**: always `api.saveSocialPost(id, input, markReady)` →
+  `save_social_post` (one transaction: upsert targets, prune removed platforms
+  except `published`/`publishing`, optional draft→ready). `next_target_status`
+  in `posts.rs` is the only place that decides a target's status on edit —
+  published/publishing are never rewritten by edits or calendar drags.
+- **Scheduler reminders** fire once per (target, scheduled_at) (in-memory set).
+- **Card previews** come from `social_post_previews` (own thumbnail → export →
+  linked project's first clip). Projects never store a thumbnail themselves.
+- **Validator findings** carry `code` + `params`; UI text lives in `find.<code>`
+  / `find.<code>_fix` (en/es), Rust `message` is only the English fallback.
+  New finding ⇒ add the code to both locales and emit `.with(json!({...}))`.
+- **Mark ready** is blocked only by composer-fixable content errors
+  (`title_empty`, `title_too_long`, `caption_too_long`); media errors exist
+  only after export.
+- **Retry** in History is offered only for a target's newest failed/cancelled
+  attempt, behind a confirm dialog (real upload).
+- `PlatformIcon` (lucide + TikTok glyph) is the single source of brand icons.
+- Live QA: `qa/qa_social_s1s3s4.py`, `qa_social_s2.py`, `qa_social_s5.py`,
+  `qa_social_s6.py` (need the app on CDP :9222; they clean up what they create;
+  s6 seeds attempt rows in `%APPDATA%/com.creatora.app/creatora.db`).
+- Launching the dev binary for QA: Vite on :1420, then
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222 src-tauri/target/debug/creatora.exe`
+  (Rust changes need the exe closed first — Windows locks it).
