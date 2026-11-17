@@ -302,4 +302,60 @@ mod tests {
         let a = to_ass(&d, &d.subtitles, &st);
         assert!(a.matches("Dialogue:").count() == 2);
     }
+
+    #[test]
+    fn ass_jump_scales_per_word() {
+        let d = doc_with_cues();
+        let st = SubtitleStyle {
+            mode: "jump".into(),
+            ..Default::default()
+        };
+        let a = to_ass(&d, &d.subtitles, &st);
+        assert!(a.contains("{\\kf80"));
+        assert!(a.contains("\\fscx130\\fscy130"));
+        assert!(a.matches("Dialogue:").count() == 1);
+    }
+
+    #[test]
+    fn ass_impact_hides_future_words() {
+        let d = doc_with_cues();
+        let st = SubtitleStyle {
+            mode: "impact".into(),
+            ..Default::default()
+        };
+        let a = to_ass(&d, &d.subtitles, &st);
+        assert!(a.contains("\\alpha&HFF&"));
+        assert!(a.contains("\\fscx150\\fscy150"));
+    }
+
+    #[test]
+    fn ass_impact_without_words_slams_cue() {
+        let mut d = doc_with_cues();
+        d.subtitles[0].words.clear();
+        let st = SubtitleStyle {
+            mode: "impact".into(),
+            ..Default::default()
+        };
+        let a = to_ass(&d, &d.subtitles, &st);
+        assert!(a.contains("\\fscx145\\fscy145"));
+        assert!(a.contains("Hello, !"));
+    }
+
+    #[test]
+    fn ass_per_cue_style_emits_named_style() {
+        let mut d = doc_with_cues();
+        d.subtitle_styles.push(NamedSubtitleStyle {
+            id: "s1".into(),
+            name: "Neon".into(),
+            style: SubtitleStyle {
+                mode: "jump".into(),
+                ..Default::default()
+            },
+        });
+        d.subtitles[0].style_id = Some("s1".into());
+        let a = to_ass(&d, &d.subtitles, &d.subtitle_style.clone());
+        assert!(a.matches("Style: Sub").count() == 2);
+        assert!(a.contains(",Sub0,"));
+        assert!(a.contains("{\\kf80"));
+    }
 }
