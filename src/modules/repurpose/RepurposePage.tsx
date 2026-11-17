@@ -3,17 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   CheckCircle2,
   Download,
+  Film,
   FileVideo,
   Loader2,
   Minus,
   Plus,
   Scissors,
+  Search,
   Sparkles,
+  Upload,
   XCircle,
 } from "lucide-react";
 import { api } from "@/lib/ipc";
@@ -35,7 +41,9 @@ import {
   type MotionSample,
 } from "@/lib/repurpose";
 import { useOpenInEditor } from "@/lib/open-in-editor";
+import { setDragPayload } from "@/lib/drag-payload";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/EmptyState";
 import { PlatformIcon } from "@/modules/social/PlatformIcon";
 import { cn } from "@/lib/utils";
@@ -147,6 +155,8 @@ export function RepurposePage() {
   });
 
   const [assetId, setAssetId] = useState("");
+  const [libQuery, setLibQuery] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const [lengthId, setLengthId] = useState<(typeof LENGTH_PRESETS)[number]["id"]>("standard");
   const [count, setCount] = useState(5);
   const [language, setLanguage] = useState("auto");
@@ -169,6 +179,10 @@ export function RepurposePage() {
     () => assets?.find((a) => a.id === assetId),
     [assets, assetId],
   );
+  const usableAssets = useMemo(() => {
+    const q = libQuery.trim().toLowerCase();
+    return (assets ?? []).filter((a) => !q || a.name.toLowerCase().includes(q));
+  }, [assets, libQuery]);
   const presentModels = useMemo(() => (models ?? []).filter((m) => m.present), [models]);
   const model = modelName || presentModels.find((m) => m.name === PREFERRED_MODEL)?.name || presentModels[0]?.name || "";
 
@@ -180,24 +194,88 @@ export function RepurposePage() {
     [jobId],
   );
 
-  const importVideo = async () => {
-    const f = await openDialog({
-      title: t("rp.importVideo"),
-      filters: [{ name: "Video", extensions: ["mp4", "mov", "mkv", "webm", "avi", "m4v"] }],
-    });
-    if (!f || Array.isArray(f)) return;
+  const VIDEO_EXT = new Set(["mp4", "mov", "mkv", "webm", "avi", "m4v"]);
+
+  const importPaths = async (paths: string[]) => {
+    const vids = paths.filter((p) => VIDEO_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""));
+    if (vids.length === 0) return;
     setBusy("model");
     try {
-      const id = await api.importMedia([f]);
+      const id = await api.importMedia(vids);
       const fin = await awaitJob<{ imported?: { id: string }[] }>(id);
       const first = fin.result?.imported?.[0];
       await qc.invalidateQueries({ queryKey: ["repurpose-assets"] });
-      if (first) setAssetId(first.id);
+      if (first) {
+        setAssetId(first.id);
+        reset();
+      }
     } catch (e) {
       reportError(e);
     } finally {
       setBusy(null);
     }
+  };
+
+  const importVideo = async () => {
+    const f = await openDialog({
+      title: t("rp.importVideo"),
+      filters: [{ name: "Video", extensions: [...VIDEO_EXT] }],
+    });
+    if (!f || Array.isArray(f)) return;
+    void importPaths([f]);
+  };
+
+  // OS file drops arrive as DOM drops whose File objects carry no path
+  // (Tauri's native drop handler is disabled for in-app HTML5 DnD). The page
+  // forwards the File objects to the host; Rust answers with real paths on
+  // this channel. Same bridge as LibraryPage — see external_drop.rs.
+  useEffect(() => {
+    const unlistenTauri = getCurrentWindow().onDragDropEvent((e) => {
+      if (e.payload.type === "drop") {
+        setDragOver(false);
+        void importPaths(e.payload.paths);
+      }
+    });
+    const unlistenDrop = listen<string[]>("creatora://external-file-drop", (e) => {
+      void importPaths(e.payload);
+    });
+    return () => {
+      void unlistenTauri.then((f) => f());
+      void unlistenDrop.then((f) => f());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const acceptsDrag = (e: React.DragEvent) =>
+    e.dataTransfer.types.includes("Files") ||
+    e.dataTransfer.types.includes("application/x-creatora-asset");
+
+  const onSourceDragOver = (e: React.DragEvent) => {
+    if (!acceptsDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragOver(true);
+  };
+  const onSourceDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOver(false);
+  };
+  const onSourceDrop = (e: React.DragEvent) => {
+    if (!acceptsDrag(e)) return;
+    e.preventDefault();
+    setDragOver(false);
+    const assetDrag = e.dataTransfer.getData("application/x-creatora-asset");
+    if (assetDrag && (assets ?? []).some((a) => a.id === assetDrag)) {
+      setAssetId(assetDrag);
+      reset();
+      return;
+    }
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    const wv = (window as unknown as {
+      chrome?: { webview?: { postMessageWithAdditionalObjects?: (m: string, o: ArrayLike<object>) => void } };
+    }).chrome?.webview;
+    wv?.postMessageWithAdditionalObjects?.("__CREATORA_EXT_DROP__", files);
   };
 
   const downloadModel = async () => {
@@ -497,28 +575,110 @@ export function RepurposePage() {
       {/* 1 · source */}
       <section className="space-y-3 rounded-xl border border-border bg-card p-4">
         <h2 className="text-sm font-semibold">{t("rp.stepSource")}</h2>
+        <div
+          onDragOver={onSourceDragOver}
+          onDragLeave={onSourceDragLeave}
+          onDrop={onSourceDrop}
+          aria-label={t("rp.dropVideo")}
+          className={cn(
+            "flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors",
+            dragOver
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border text-muted-foreground",
+          )}
+        >
+          <Upload className="size-5" />
+          <p className="text-sm font-medium">{t("rp.dropVideo")}</p>
+          <p className="text-xs">{t("rp.orPickLibrary")}</p>
+        </div>
         {assets && assets.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("rp.noVideos")}</p>
         ) : (
-          <select
-            value={assetId}
-            onChange={(e) => {
-              setAssetId(e.target.value);
-              reset();
-            }}
-            disabled={busy !== null}
-            aria-label={t("rp.pickVideo")}
-            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-          >
-            <option value="">{t("rp.pickVideo")}</option>
-            {(assets ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {a.durationMs ? ` · ${fmtTime(a.durationMs)}` : ""}
-                {a.width && a.height ? ` · ${a.width}×${a.height}` : ""}
-              </option>
-            ))}
-          </select>
+          <>
+            {(assets ?? []).length > 6 && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={libQuery}
+                  onChange={(e) => setLibQuery(e.target.value)}
+                  placeholder={t("rp.searchVideos")}
+                  className="h-8 pl-8 text-xs"
+                />
+              </div>
+            )}
+            <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
+              {usableAssets.map((a) => {
+                const sel = a.id === assetId;
+                const missing = a.status === "missing";
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    data-rp-asset={a.id}
+                    aria-pressed={sel}
+                    disabled={busy !== null || missing}
+                    draggable={!missing}
+                    onClick={() => {
+                      setAssetId(a.id);
+                      reset();
+                    }}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("application/x-creatora-asset", a.id);
+                      e.dataTransfer.setData("application/x-creatora-path", a.filePath);
+                      e.dataTransfer.setData("application/x-creatora-duration", String(a.durationMs ?? 3000));
+                      e.dataTransfer.effectAllowed = "copy";
+                      setDragPayload({
+                        assetId: a.id,
+                        filePath: a.filePath,
+                        durationMs: a.durationMs ?? 3000,
+                        kind: a.kind,
+                      });
+                    }}
+                    onDragEnd={() => setDragPayload(null)}
+                    className={cn(
+                      "group relative cursor-grab overflow-hidden rounded-lg border text-left transition-colors",
+                      sel
+                        ? "border-primary ring-2 ring-primary/40"
+                        : "border-border hover:border-primary/50",
+                      missing && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    <div className="relative aspect-video w-full bg-secondary">
+                      {a.thumbnailPath ? (
+                        <img
+                          src={convertFileSrc(a.thumbnailPath)}
+                          alt=""
+                          draggable={false}
+                          className="absolute inset-0 size-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Film className="size-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      {a.durationMs != null && (
+                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] text-white">
+                          {fmtTime(a.durationMs)}
+                        </span>
+                      )}
+                      {sel && (
+                        <span className="absolute left-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+                          <CheckCircle2 className="size-3.5" />
+                        </span>
+                      )}
+                      {missing && (
+                        <span className="absolute left-1 top-1 rounded bg-warning/90 p-0.5 text-warning-foreground">
+                          <AlertTriangle className="size-3.5" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="truncate px-1.5 py-1 text-[11px]">{a.name}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
         <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void importVideo()}>
           <FileVideo className="mr-1.5 size-3.5" /> {t("rp.importVideo")}

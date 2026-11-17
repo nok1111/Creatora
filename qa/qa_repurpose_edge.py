@@ -111,9 +111,7 @@ def open_wizard():
 
 
 def pick(asset_id):
-    js(c, f"""(() => {{ const s = document.querySelector('select[aria-label="Choose a video"]');
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, {json.dumps(asset_id)});
-      s.dispatchEvent(new Event('change', {{bubbles: true}})); }})()""", False)
+    click(c, f"document.querySelector('button[data-rp-asset=\"{asset_id}\"]')")
     time.sleep(0.4)
 
 

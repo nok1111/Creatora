@@ -95,9 +95,25 @@ try:
     check("top menu has an active 'Repurpose' entry", nav_ok)
 
     # ---- configure ----
-    js(c, f"""(() => {{ const s = document.querySelector('select[aria-label="Choose a video"]');
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, {json.dumps(asset_id)});
-      s.dispatchEvent(new Event('change', {{bubbles: true}})); }})()""", False)
+    sel = f"button[data-rp-asset=\"{asset_id}\"]"
+    check("library tile is rendered", wait_for(c, f"!!document.querySelector('{sel}')", 20))
+    click(c, f"document.querySelector('{sel}')")
+    check("tile click selects the video",
+          wait_for(c, f"document.querySelector('{sel}')?.getAttribute('aria-pressed') === 'true'", 10))
+    # drag a library tile onto the drop zone (internal DnD path)
+    dropped = js(c, f"""(() => {{
+      const tile = document.querySelector('{sel}');
+      const zone = document.querySelector('[aria-label="Drop a video file here"]');
+      if (!tile || !zone) return "missing";
+      const dt = new DataTransfer();
+      tile.dispatchEvent(new DragEvent('dragstart', {{bubbles: true, dataTransfer: dt}}));
+      zone.dispatchEvent(new DragEvent('dragover', {{bubbles: true, dataTransfer: dt}}));
+      zone.dispatchEvent(new DragEvent('drop', {{bubbles: true, dataTransfer: dt}}));
+      tile.dispatchEvent(new DragEvent('dragend', {{bubbles: true, dataTransfer: dt}}));
+      return "ok";
+    }})()""", False)
+    check("library tile drag+drop onto the zone keeps the selection",
+          dropped == "ok" and js(c, f"document.querySelector('{sel}')?.getAttribute('aria-pressed') === 'true'", False))
     time.sleep(0.4)
     click(c, "[...document.querySelectorAll('button[aria-pressed]')].find(e => e.textContent.includes('Short'))")
     click(c, "[...document.querySelectorAll('button[aria-pressed]')].find(e => e.textContent.trim() === '3')")

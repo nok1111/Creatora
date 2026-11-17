@@ -54,9 +54,7 @@ try:
     c.eval("location.hash='#/repurpose'; location.reload()")
     time.sleep(4)
     c = connect()
-    js(c, f"""(() => {{ const s = document.querySelector('select[aria-label="Choose a video"]');
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s, {json.dumps(aid)});
-      s.dispatchEvent(new Event('change',{{bubbles:true}})); }})()""", False)
+    click(f"document.querySelector('button[data-rp-asset=\"{aid}\"]')")
     time.sleep(0.4)
     click("[...document.querySelectorAll('button[aria-pressed]')].find(e=>e.textContent.includes('Short'))")
     click(btn("Find the best clips"), 1.0)
