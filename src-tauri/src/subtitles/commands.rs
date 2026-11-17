@@ -36,7 +36,9 @@ pub fn whisper_path() -> Option<PathBuf> {
         );
     }
     candidates.push(PathBuf::from("whisper-cli")); // PATH
-    candidates.into_iter().find(|p| p.is_file() || p.components().count() == 1)
+    candidates
+        .into_iter()
+        .find(|p| p.is_file() || p.components().count() == 1)
 }
 
 /// Models dir — provisioned; downloads land here too.
@@ -118,7 +120,7 @@ pub fn list_models(app: AppHandle) -> CmdResult<Vec<ModelInfo>> {
         .collect())
 }
 
-fn find_model(app: &AppHandle, name: &str) -> CmdResult<Option<PathBuf>> {
+pub(crate) fn find_model(app: &AppHandle, name: &str) -> CmdResult<Option<PathBuf>> {
     let mut roots = vec![models_dir(app)?];
     if let Some(r) = dev_models_root() {
         roots.push(r);
@@ -324,6 +326,60 @@ fn prepare_audio(src: &Path, out_wav: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Run whisper over `media_path` and return cues with real word timings.
+/// `span` maps the work onto `ctx` progress (lo..hi) so callers can embed it
+/// in a longer job. Cancellation kills nothing mid-run (whisper-cli runs to
+/// completion) but is honoured before and after.
+pub(crate) fn transcribe_to_cues(
+    ctx: &JobCtx,
+    whisper: &Path,
+    model_path: &Path,
+    media_path: &Path,
+    language: Option<&str>,
+    span: (f32, f32),
+) -> Result<Vec<SubtitleCue>, String> {
+    let at = |f: f32| span.0 + (span.1 - span.0) * f;
+    ctx.progress(at(0.0), Some("Extracting audio"));
+    let tmp = std::env::temp_dir().join(format!("creatora_wh_{}.wav", uuid::Uuid::new_v4()));
+    prepare_audio(media_path, &tmp).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })?;
+    if ctx.is_cancelled() {
+        let _ = std::fs::remove_file(&tmp);
+        return Err("cancelled".into());
+    }
+    ctx.progress(at(0.1), Some("Transcribing"));
+    let out_json = tmp.with_extension("json");
+    let mut cmd = Command::new(whisper);
+    cmd.args([
+        "-m",
+        &model_path.to_string_lossy(),
+        "-f",
+        &tmp.to_string_lossy(),
+        "-ojf",
+        "-of",
+        &out_json.with_extension("").to_string_lossy(),
+    ]);
+    if let Some(lang) = language {
+        if lang != "auto" {
+            cmd.args(["-l", lang]);
+        }
+    }
+    let status = cmd.status().map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&tmp);
+    if ctx.is_cancelled() {
+        let _ = std::fs::remove_file(&out_json);
+        return Err("cancelled".into());
+    }
+    if !status.success() {
+        return Err("whisper transcription failed".into());
+    }
+    ctx.progress(at(0.95), Some("Reading transcript"));
+    let json = std::fs::read_to_string(&out_json).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&out_json);
+    Ok(parse_whisper_json(&json))
+}
+
 /// Transcribe `media_path` → cues written into the project's `subtitles`.
 /// Job-based: real progress (whisper prints progress) + cancellation kills
 /// the process.
@@ -341,45 +397,14 @@ pub fn transcribe_media(
     let whisper =
         whisper_path().ok_or_else(|| AppError::NotFound("whisper-cli not provisioned".into()))?;
     let job_id = jobs.spawn(app, "subtitles.transcribe", move |ctx: &JobCtx| {
-        ctx.progress(0.05, Some("Extracting audio"));
-        let tmp = std::env::temp_dir().join(format!("creatora_wh_{}.wav", std::process::id()));
-        prepare_audio(Path::new(&media_path), &tmp).inspect_err(|_| {
-            let _ = std::fs::remove_file(&tmp);
-        })?;
-        if ctx.is_cancelled() {
-            let _ = std::fs::remove_file(&tmp);
-            return Err("cancelled".into());
-        }
-        ctx.progress(0.15, Some("Transcribing"));
-        let out_json = tmp.with_extension("json");
-        let mut cmd = Command::new(&whisper);
-        cmd.args([
-            "-m",
-            &model_path.to_string_lossy(),
-            "-f",
-            &tmp.to_string_lossy(),
-            "-ojf",
-            "-of",
-            &out_json.with_extension("").to_string_lossy(),
-        ]);
-        if let Some(lang) = &language {
-            if lang != "auto" {
-                cmd.args(["-l", lang]);
-            }
-        }
-        let status = cmd.status().map_err(|e| e.to_string())?;
-        let _ = std::fs::remove_file(&tmp);
-        if ctx.is_cancelled() {
-            let _ = std::fs::remove_file(&out_json);
-            return Err("cancelled".into());
-        }
-        if !status.success() {
-            return Err("whisper transcription failed".into());
-        }
-        ctx.progress(0.95, Some("Writing cues"));
-        let json = std::fs::read_to_string(&out_json).map_err(|e| e.to_string())?;
-        let _ = std::fs::remove_file(&out_json);
-        let cues = parse_whisper_json(&json);
+        let cues = transcribe_to_cues(
+            ctx,
+            &whisper,
+            &model_path,
+            Path::new(&media_path),
+            language.as_deref(),
+            (0.05, 0.95),
+        )?;
         let mut doc = store::open(Path::new(&project_path)).map_err(|e| e.to_string())?;
         doc.subtitles = cues.clone();
         store::save(Path::new(&project_path), &doc).map_err(|e| e.to_string())?;

@@ -8,6 +8,7 @@ pub mod jobs;
 pub mod media;
 pub mod project;
 pub mod render;
+pub mod repurpose;
 pub mod social;
 pub mod subtitles;
 
@@ -140,6 +141,7 @@ pub fn run() {
             social::posts::update_social_post,
             social::posts::save_social_post,
             social::posts::social_post_previews,
+            repurpose::commands::repurpose_analyze,
             social::posts::open_external_url,
             social::posts::get_social_post,
             social::posts::list_social_posts,
