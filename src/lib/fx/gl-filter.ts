@@ -162,6 +162,18 @@ class FilterGL {
       this.lost = true;
       this.onStatus?.("lost");
     });
+    cv.addEventListener("webglcontextrestored", () => {
+      // GPU objects from before the loss are invalid — rebuild lazily.
+      this.lost = false;
+      this.gl = null;
+      this.cv = null;
+      this.prog = null;
+      this.srcTex = null;
+      this.fbo = null;
+      this.fboTex = null;
+      this.luts.clear();
+      this.onStatus?.("ok");
+    });
     this.cv = cv;
     this.gl = gl;
     const compile = (type: number, src: string) => {

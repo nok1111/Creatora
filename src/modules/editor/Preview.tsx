@@ -30,7 +30,7 @@ import { transitionGL } from "@/lib/fx/gl-transition";
 import type { LayerInfo } from "@/lib/fx/layer-raster";
 import { TransitionLayer } from "@/modules/editor/TransitionLayer";
 import { FilterLayer } from "@/modules/editor/FilterLayer";
-import { filterPassesFor } from "@/lib/fx/gl-filter";
+import { filterGL, filterPassesFor } from "@/lib/fx/gl-filter";
 import type { Clip } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import { angleDeg, scaleFromCorner, snapToGuides } from "@/lib/canvas-manip";
@@ -88,8 +88,11 @@ export function Preview({
   const selection = useEditor((s) => s.selection);
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const [editing, setEditing] = useState<string | null>(null);
-  // WebGL transition preview health: false → keep the DOM crossfade.
-  const [glOk, setGlOk] = useState(true);
+  // WebGL preview health, tracked PER compositor — a transition-layer
+  // hiccup must never disable creative filters (and vice versa). Each
+  // false → the corresponding DOM fallback; recovery re-enables it.
+  const [glFilterOk, setGlFilterOk] = useState(true);
+  const [glTrOk, setGlTrOk] = useState(true);
   const layerEls = useRef(new Map<string, HTMLVideoElement | HTMLImageElement>());
   // Last drift-correction seek per clip — during playback a seek takes a
   // while to land, so re-seeking on every tick (drift is already >DRIFT_MS
@@ -97,12 +100,24 @@ export function Preview({
   // blanks every raster layer above the video (filters, transitions).
   const lastSeekMs = useRef(new Map<string, number>());
   useEffect(() => {
-    const gl = transitionGL();
-    gl.onStatus = (st) => setGlOk(st === "ok");
+    const tg = transitionGL();
+    tg.onStatus = (st) => setGlTrOk(st === "ok");
+    const fg = filterGL();
+    fg.onStatus = (st) => setGlFilterOk(st === "ok");
     return () => {
-      gl.onStatus = null;
+      tg.onStatus = null;
+      fg.onStatus = null;
     };
   }, []);
+
+  // Filter GL recovery: a sustained failure drops to the unfiltered
+  // DOM video, then retries shortly after — a lost/again-available
+  // context heals itself instead of disabling filters for the session.
+  useEffect(() => {
+    if (glFilterOk) return;
+    const id = window.setTimeout(() => setGlFilterOk(true), 2000);
+    return () => window.clearTimeout(id);
+  }, [glFilterOk]);
 
   // Any user gesture re-arms the AudioContext: the WebAudio chain
   // (MediaElementSource → gain → destination) is silent while the context
@@ -241,7 +256,7 @@ export function Preview({
 
   // Library (procedural) transitions play on a WebGL layer; their two clips
   // stay mounted (decoding, seeking) but are hidden underneath it.
-  const libTransitions = glOk ? activeLibraryTransitions(viewDoc, playheadMs) : [];
+  const libTransitions = glTrOk ? activeLibraryTransitions(viewDoc, playheadMs) : [];
   const glIds = new Set(libTransitions.flatMap((x) => [x.a.id, x.b.id]));
 
   // Creative filters (kind:"filter") preview on the shared WebGL2
@@ -249,7 +264,7 @@ export function Preview({
   // that the media stays visible, unfiltered (never black).
   const MAX_FILTERED = 4;
   const filterPasses = new Map<string, ReturnType<typeof filterPassesFor>>();
-  if (glOk)
+  if (glFilterOk)
     for (const { clip } of visual) {
       if (filterPasses.size >= MAX_FILTERED) break;
       const p = filterPassesFor(clip, playheadMs - clip.startMs);
@@ -499,7 +514,10 @@ export function Preview({
               projectW={viewDoc.canvas.width}
               projectH={viewDoc.canvas.height}
               getLayer={layerFor}
-              onFail={() => setGlOk(false)}
+              onFail={() => {
+                filterGL().release(); // drop stale GPU state so the retry starts clean
+                setGlFilterOk(false);
+              }}
             />
           ) : null;
           return isImg ? (
@@ -544,7 +562,7 @@ export function Preview({
             projectW={viewDoc.canvas.width}
             projectH={viewDoc.canvas.height}
             getLayer={layerFor}
-            onFail={() => setGlOk(false)}
+            onFail={() => setGlTrOk(false)}
           />
         ))}
 

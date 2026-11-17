@@ -231,8 +231,9 @@ export class TransitionGL {
     this.tex = null;
     this.quad = null;
     this.vs = null;
-    // A deliberate drop must not leave the singleton stuck in "lost".
-    this.status = "ok";
+    // A deliberate drop must not leave the singleton stuck in "lost" —
+    // notify so React re-enables the GL path it disabled on "lost".
+    this.setStatus("ok");
     this.listenersBound = false;
     this.canvas = document.createElement("canvas");
   }
