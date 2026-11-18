@@ -288,6 +288,14 @@ export function ComposerDialog({
             </div>
 
             {/* per-target cards */}
+            {enabledPlatforms.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                {tr("social.pickPlatformHint", {
+                  defaultValue:
+                    "Pick a platform above — each one gets its own account, format, caption and schedule.",
+                })}
+              </div>
+            )}
             {enabledPlatforms.map((p) => {
               const t = targets[p]!;
               const platAccounts = accounts.filter(

@@ -482,6 +482,8 @@ export const es: typeof en = {
     composerNew: "Nuevo post social",
     sourceProject: "Proyecto de origen",
     platformsLbl: "Plataformas",
+    pickPlatformHint:
+      "Elige una plataforma arriba — cada una lleva su propia cuenta, formato, caption y programación.",
     needsApp: "requiere app aprobada",
     formatVersion: "Versión de formato",
     titleOverride: "Título propio (vacío = compartido)",
@@ -675,6 +677,7 @@ export const es: typeof en = {
     weekOf: "Semana del {{date}}",
     rescheduled: "Reprogramado al {{date}}",
     empty: "Nada programado en este rango.",
+    emptyMonth: "Nada programado este mes — haz clic en un día para programar un post.",
     auto: "auto",
     reminder: "recordatorio",
     footer:
@@ -911,6 +914,10 @@ export const es: typeof en = {
     kind_analytics_sync: "Sincronización",
     kind_download_model: "Descarga de modelo",
     kind_transcribe: "Transcripción",
+    kind_waveform: "Análisis de onda",
+    kind_beats: "Detección de beats",
+    kind_filmstrip: "Tira de fotogramas",
+    kind_repurpose_analyze: "Análisis de clips",
     status_done: "Terminado",
     status_running: "En curso",
     status_queued: "En cola",

@@ -1148,8 +1148,8 @@ export function Preview({
             const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); endGesture(); };
             window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
           };
-          const sq = "absolute size-3 rounded-[3px] border border-accent bg-white shadow-sm";
-          const ed = "absolute size-2.5 rounded-[2px] border border-accent bg-white shadow-sm";
+          const sq = "absolute size-3 rounded-[3px] border border-accent bg-pop-cream shadow-sm";
+          const ed = "absolute size-2.5 rounded-[2px] border border-accent bg-pop-cream shadow-sm";
           const corners: [number, number, string][] = [
             [-6, -6, "cursor-nwse-resize"],
             [box.w - 6, -6, "cursor-nesw-resize"],

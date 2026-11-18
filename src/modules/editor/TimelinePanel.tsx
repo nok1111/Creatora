@@ -1224,7 +1224,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   <span
                     className="min-w-0 flex-1 cursor-text truncate text-xs text-muted-foreground"
                     onDoubleClick={() => setEditingTrack(track.id)}
-                    title={t("editor.trackRename")}
+                    title={`${track.name} — ${t("editor.trackRename")}`}
                   >
                     {track.name}
                   </span>

@@ -274,6 +274,14 @@ export function CalendarView({
           </div>
         ) : (
           <div className="grid grid-cols-7 content-start gap-1">
+            {byDay.size === 0 && (
+              <p className="col-span-7 py-6 text-center text-xs text-muted-foreground">
+                {t("cal.emptyMonth", {
+                  defaultValue:
+                    "Nothing scheduled this month — click a day to schedule a post.",
+                })}
+              </p>
+            )}
             {Array.from({ length: 7 }, (_, i) => (
               <div
                 key={i}

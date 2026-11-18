@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/ipc";
+import { Notice } from "@/components/Notice";
 import { useProject } from "@/stores/project";
 import { useSuggestions, type ProjectSignals } from "@/services/suggestions";
 import type { ProjectDoc } from "@/lib/project-types";
@@ -57,8 +58,7 @@ export function SuggestionBanner({
   if (!s) return null;
 
   return (
-    <div className="flex items-center gap-3 border-b border-warning/30 bg-warning/10 px-4 py-1.5 text-xs">
-      <Lightbulb className="size-3.5 shrink-0 text-warning" />
+    <Notice tone="warning" icon={Lightbulb}>
       <span className="truncate">
         <b className="mr-1.5">{t(s.title)}:</b>
         {t(s.body)}
@@ -76,6 +76,6 @@ export function SuggestionBanner({
       >
         <X className="size-3.5" />
       </button>
-    </div>
+    </Notice>
   );
 }

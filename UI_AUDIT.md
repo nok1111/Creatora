@@ -136,10 +136,20 @@ blancas con hairline + sombra real, borders con más contraste).
   bundled vía `@fontsource-variable/inter` (verificado
   `document.fonts.check` → true), topbar usa el mark real
   (screenshot `qa/shots/brand/topbar_app.png`).
-- **Iteración 3 — Assets de contenido:** ilustraciones empty-state, artwork de
-  formatos, audio tile, thumbnails de imagen.
-- **Iteración 4 — Densidad/detalles:** banners unificados, exports labels,
-  chips casing, composer rebalance, calendar hints, track headers.
+- **Iteración 3 — Assets de contenido: ✅ commit `29d3db1`.** FormatArt
+  (posters con aspect real en /create + flyout de presets), SpotArt
+  (7 ilustraciones para EmptyState, cableadas en todos los módulos),
+  AudioTile (waveform determinística para assets de audio en Library +
+  MediaBin).
+- **Iteración 4 — Detalles: ✅ implementada.** KIND_KEYS cubre
+  audio.waveform/beats, media.filmstrip, repurpose.analyze + fallback
+  humanizado; chips del Effects bin en title-case; handles de selección
+  `bg-white`→`bg-pop-cream`; chip "Preview: proxy" con dot de estado;
+  componente `Notice` unifica las familias de banners (SuggestionBanner,
+  recovery prompt); tooltip de track headers muestra el nombre completo;
+  hint en composer sin plataformas + hint de mes vacío en el calendario.
+  Nota: `media.filmstrip` jobs fallan a veces en runtime (input inválido)
+  — issue funcional del backend, no de UI; registrado, no arreglado aquí.
 - **Iteración 5 — Light theme + regresión:** retune paralelo y barrido
   EN/ES a 1280/1366/1920.
 

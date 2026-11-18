@@ -24,6 +24,10 @@ const KIND_KEYS: Record<string, string> = {
   "download.model": "kind_download_model",
   "subtitles.download": "kind_download_model",
   "subtitles.transcribe": "kind_transcribe",
+  "audio.waveform": "kind_waveform",
+  "audio.beats": "kind_beats",
+  "media.filmstrip": "kind_filmstrip",
+  "repurpose.analyze": "kind_repurpose_analyze",
 };
 
 const STATUS_TONE: Record<string, string> = {
@@ -77,7 +81,13 @@ export function ExportsPage() {
 
   const kindLabel = (kind: string) => {
     const k = KIND_KEYS[kind];
-    return k ? t(`exports.${k}`) : kind;
+    if (k) return t(`exports.${k}`);
+    // Unknown internal kind — humanize "audio.waveform" → "Audio waveform"
+    // instead of leaking the dotted identifier into the jobs table.
+    return kind
+      .split(/[._]/)
+      .map((s, i) => (i === 0 ? s[0].toUpperCase() + s.slice(1) : s))
+      .join(" ");
   };
   const statusLabel = (status: string) =>
     t(`exports.status_${status}`, { defaultValue: status });

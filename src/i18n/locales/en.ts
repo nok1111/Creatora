@@ -479,6 +479,8 @@ export const en = {
     composerNew: "New social post",
     sourceProject: "Source project",
     platformsLbl: "Platforms",
+    pickPlatformHint:
+      "Pick a platform above — each one gets its own account, format, caption and schedule.",
     needsApp: "needs approved app",
     formatVersion: "Format version",
     titleOverride: "Title override (blank = shared)",
@@ -672,6 +674,7 @@ export const en = {
     weekOf: "Week of {{date}}",
     rescheduled: "Rescheduled to {{date}}",
     empty: "Nothing scheduled in this range.",
+    emptyMonth: "Nothing scheduled this month — click a day to schedule a post.",
     auto: "auto",
     reminder: "reminder",
     footer:
@@ -908,6 +911,10 @@ export const en = {
     kind_analytics_sync: "Stats sync",
     kind_download_model: "Model download",
     kind_transcribe: "Transcription",
+    kind_waveform: "Waveform analysis",
+    kind_beats: "Beat detection",
+    kind_filmstrip: "Filmstrip",
+    kind_repurpose_analyze: "Clip analysis",
     status_done: "Done",
     status_running: "Running",
     status_queued: "Queued",

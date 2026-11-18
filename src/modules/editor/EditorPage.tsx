@@ -20,6 +20,7 @@ import { SuggestionBanner } from "@/components/SuggestionBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { Clapperboard } from "lucide-react";
 import { useEditor } from "@/stores/editor";
+import { cn } from "@/lib/utils";
 import { useSettings, PANEL_DEFAULTS, PANEL_LIMITS } from "@/stores/settings";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import {
@@ -209,12 +210,18 @@ export function EditorPage() {
         </Button>
         <div className="flex-1" />
         <button
-          className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"
+          className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"
           title={t("editor.qualityHint")}
           onClick={() =>
             setPreviewQuality(previewQuality === "proxy" ? "full" : "proxy")
           }
         >
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              previewQuality === "proxy" ? "bg-warning" : "bg-success",
+            )}
+          />
           {previewQuality === "proxy" ? t("editor.qualityProxy") : t("editor.qualityFull")}
         </button>
         <Button size="sm" variant="secondary" onClick={() => setExportOpen(true)}>

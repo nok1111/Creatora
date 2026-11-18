@@ -236,7 +236,10 @@ export function EffectsBin() {
             onClick={() => setSection(s2)}
             className={`rounded-full border px-2 py-0.5 text-[10px] ${section === s2 ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:bg-accent"}`}
           >
-            {s2 === "all" ? "All" : (FX_CATEGORY_LABELS[s2] ?? s2)}
+            {s2 === "all"
+              ? "All"
+              : (FX_CATEGORY_LABELS[s2] ??
+                s2.replace(/[-_]/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()))}
           </button>
         ))}
       </div>

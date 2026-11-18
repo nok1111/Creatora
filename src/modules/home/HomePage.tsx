@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/EmptyState";
 import { SuggestionBanner } from "@/components/SuggestionBanner";
+import { Notice } from "@/components/Notice";
 
 /** Mini aspect-ratio tile for the recents list. */
 function AspectTile({ w, h }: { w: number | null; h: number | null }) {
@@ -219,8 +220,7 @@ export function HomePage() {
 
       {/* Recovery prompt — shown when opening a project with a newer autosave */}
       {project.recovery && (
-        <div className="mt-4 flex items-center gap-3 rounded-lg border border-primary/50 bg-accent p-4">
-          <Undo2 className="size-5 shrink-0 text-primary" />
+        <Notice tone="action" icon={Undo2} className="mt-4 rounded-lg p-4">
           <p className="flex-1 text-sm">{t("home.recoveryFound")}</p>
           <Button size="sm" onClick={() => void project.acceptRecovery()}>
             {t("home.recoveryRestore")}
@@ -228,7 +228,7 @@ export function HomePage() {
           <Button size="sm" variant="ghost" onClick={() => void project.discardRecovery()}>
             {t("home.recoveryDiscard")}
           </Button>
-        </div>
+        </Notice>
       )}
 
       {/* Currently open project indicator */}
