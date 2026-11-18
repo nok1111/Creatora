@@ -373,6 +373,7 @@ function EmptyState({ onNew }: { onNew: () => void }) {
   return (
     <SharedEmptyState
       icon={Share2}
+      art="posts"
       title={t("social.emptyTitle")}
       body={t("social.emptyBody")}
       action={{ label: t("social.newPost"), onClick: onNew }}

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { SpotArt, type SpotKind } from "@/components/SpotArt";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
  */
 export function EmptyState({
   icon: Icon,
+  art,
   title,
   body,
   action,
@@ -16,6 +18,8 @@ export function EmptyState({
   compact = false,
 }: {
   icon: LucideIcon;
+  /** Optional spot illustration — replaces the icon tile when set. */
+  art?: SpotKind;
   title: string;
   body: string;
   action?: { label: string; onClick: () => void };
@@ -35,9 +39,13 @@ export function EmptyState({
         compact ? "p-4" : "p-10",
       )}
     >
-      <div className={cn("flex items-center justify-center rounded-2xl", tones[tone], compact ? "size-10" : "size-14")}>
-        <Icon className={compact ? "size-5" : "size-7"} />
-      </div>
+      {art ? (
+        <SpotArt kind={art} className={compact ? "h-14" : undefined} />
+      ) : (
+        <div className={cn("flex items-center justify-center rounded-2xl", tones[tone], compact ? "size-10" : "size-14")}>
+          <Icon className={compact ? "size-5" : "size-7"} />
+        </div>
+      )}
       <div>
         <div className="text-sm font-semibold">{title}</div>
         <div className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{body}</div>

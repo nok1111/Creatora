@@ -260,6 +260,7 @@ export function ExportsPage() {
                   <EmptyState
                     compact
                     icon={Rocket}
+                    art="export"
                     title={t("exports.emptyTitle")}
                     body={
                       filter === "failed"

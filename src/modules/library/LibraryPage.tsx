@@ -12,6 +12,7 @@ import {
   Star, FolderPlus, Folder, Tag, X, Plus, LayoutGrid, Shapes,
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { AudioTile } from "@/components/AudioTile";
 import { api } from "@/lib/ipc";
 import type { AssetKind, AssetSummary, ImportOutcome } from "@/lib/media-types";
 import { awaitJob, onJobProgress } from "@/services/jobs";
@@ -90,6 +91,8 @@ function AssetCard({ asset, collections, onRelink, onDelete, onFav, onAssign, on
             loading="lazy"
             onError={() => setThumbError(true)}
           />
+        ) : asset.kind === "audio" && !missing ? (
+          <AudioTile seed={asset.id} className="absolute inset-0" />
         ) : (
           <div className="flex flex-col items-center gap-1.5">
             <Icon className="size-8 text-muted-foreground" />
@@ -464,6 +467,7 @@ export function LibraryPage() {
           ) : !assets.data?.length ? (
             <EmptyState
               icon={FolderPlus}
+              art="library"
               title={t("library.empty")}
               body={t("library.emptyHint")}
               action={{ label: t("library.import"), onClick: () => void pickFiles() }}

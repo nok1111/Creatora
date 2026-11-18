@@ -274,6 +274,7 @@ export function HomePage() {
             <EmptyState
               compact
               icon={Clapperboard}
+              art="projects"
               title={t("home.emptyProjects")}
               body={t("home.emptyProjectsHint")}
               action={{ label: t("home.newProject"), onClick: () => navigate("/create") }}
@@ -349,6 +350,7 @@ export function HomePage() {
             <EmptyState
               compact
               icon={Film}
+              art="export"
               title={t("home.emptyExports")}
               body="Exported videos will appear here."
             />

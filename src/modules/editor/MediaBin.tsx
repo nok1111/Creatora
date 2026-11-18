@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Music, Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput, Link2 } from "lucide-react";
+import { Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput, Link2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { addClip } from "@/lib/timeline-engine";
 import { setDragPayload } from "@/lib/drag-payload";
 import type { AssetSummary } from "@/lib/media-types";
 import { EmptyState } from "@/components/EmptyState";
+import { AudioTile } from "@/components/AudioTile";
 import { reportError } from "@/lib/errors";
 
 /** Project media bin: imported assets → click + or drag onto a track. */
@@ -126,11 +127,13 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
                 draggable={false}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
+            ) : a.kind === "audio" ? (
+              <div className="size-9 overflow-hidden rounded">
+                <AudioTile seed={a.id} bars={14} />
+              </div>
             ) : (
               <div className="flex size-9 items-center justify-center rounded bg-secondary">
-                {a.kind === "audio" ? (
-                  <Music className="size-4 text-muted-foreground" />
-                ) : a.kind === "image" ? (
+                {a.kind === "image" ? (
                   <ImageIcon className="size-4 text-muted-foreground" />
                 ) : (
                   <Film className="size-4 text-muted-foreground" />
@@ -183,6 +186,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
           <EmptyState
             compact
             icon={Film}
+            art="media"
             title={t("editor.emptyBin")}
             body="Import videos, audio or images, then drag them onto a track."
             action={{ label: "Import media", onClick: () => void importFiles() }}

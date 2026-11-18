@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Clapperboard, Smartphone, Square, Settings2, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { requestProjectSwitch } from "@/services/project-switch";
+import { FormatArt, type FormatTone } from "@/components/FormatArt";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { reportError } from "@/lib/errors";
@@ -11,13 +12,13 @@ import { reportError } from "@/lib/errors";
 
 const FORMATS = [
   { id: "yt", label: "YouTube video", hint: "Horizontal · 16:9", w: 1920, h: 1080,
-    icon: Clapperboard, bw: 88, bh: 50, tone: "border-primary/40 text-primary" },
+    art: "primary", dashed: false, tone: "border-primary/40 text-primary" },
   { id: "vert", label: "Short / Reel / TikTok", hint: "Vertical · 9:16", w: 1080, h: 1920,
-    icon: Smartphone, bw: 32, bh: 56, tone: "border-accent text-accent-foreground" },
+    art: "lavender", dashed: false, tone: "border-accent text-accent-foreground" },
   { id: "sq", label: "Square post", hint: "Square · 1:1", w: 1080, h: 1080,
-    icon: Square, bw: 48, bh: 48, tone: "border-success/40 text-success" },
+    art: "lime", dashed: false, tone: "border-success/40 text-success" },
   { id: "custom", label: "Custom format", hint: "Any size", w: 1280, h: 720,
-    icon: Settings2, bw: 60, bh: 36, tone: "border-border text-muted-foreground" },
+    art: "muted", dashed: true, tone: "border-border text-muted-foreground" },
 ] as const;
 
 export function CreatePage() {
@@ -70,11 +71,8 @@ export function CreatePage() {
               fmt === f.id ? f.tone + " shadow-lift scale-[1.02]" : "border-border hover:border-muted-foreground/50",
             )}
           >
-            <div
-              className="flex items-center justify-center rounded-lg border border-border bg-surface-0"
-              style={{ width: f.bw, height: f.bh }}
-            >
-              <f.icon className="size-5 opacity-70" />
+            <div className="flex h-14 items-center justify-center">
+              <FormatArt w={f.w} h={f.h} tone={f.art as FormatTone} dashed={f.dashed} height={56} />
             </div>
             <div className="text-center">
               <div className="text-sm font-semibold leading-tight">{f.label}</div>

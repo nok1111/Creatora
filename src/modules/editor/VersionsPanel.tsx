@@ -30,6 +30,7 @@ import type { ExportSettings } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import type { FormatVersion, Keyframe } from "@/lib/project-types";
 import { Button } from "@/components/ui/button";
+import { FormatArt } from "@/components/FormatArt";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { PromptDialog } from "@/components/PromptDialog";
 
@@ -324,9 +325,6 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
           className="flex w-[420px] flex-wrap gap-2 rounded-xl bg-card p-3 shadow-xl"
         >
               {FORMAT_PRESETS.map((p) => {
-                const portrait = p.canvas.height > p.canvas.width;
-                const bw = portrait ? 26 : 44;
-                const bh = portrait ? 44 : Math.max(20, Math.round((44 * p.canvas.height) / p.canvas.width));
                 const ar = `${p.canvas.width}×${p.canvas.height}`;
                 return (
                   <button
@@ -335,11 +333,8 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
                     className="flex w-[96px] flex-col items-center gap-1.5 rounded-lg border-2 border-border p-2 transition-all hover:border-accent hover:bg-accent/10"
                     title={p.label}
                   >
-                    <div
-                      className="flex items-center justify-center rounded border border-border bg-secondary text-[8px] font-medium text-muted-foreground"
-                      style={{ width: bw, height: bh }}
-                    >
-                      {ratioStr(p.canvas.width, p.canvas.height)}
+                    <div className="flex h-11 items-center justify-center">
+                      <FormatArt w={p.canvas.width} h={p.canvas.height} tone="lavender" height={44} />
                     </div>
                     <div className="text-center text-[10px] font-medium leading-tight">
                       {p.platform}

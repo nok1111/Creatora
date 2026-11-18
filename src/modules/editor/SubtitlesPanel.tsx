@@ -336,6 +336,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             <EmptyState
               compact
               icon={Captions}
+              art="media"
               title={t("subs.noCaptions")}
               body={t("subs.noCaptionsBody")}
               action={{

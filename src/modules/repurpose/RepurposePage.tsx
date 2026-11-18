@@ -940,6 +940,7 @@ export function RepurposePage() {
           {rows.length === 0 ? (
             <EmptyState
               icon={Scissors}
+              art="media"
               title={t("rp.found", { count: 0 })}
               body={t(result.noSpeech ? "rp.noSpeech" : "rp.noResults")}
               compact

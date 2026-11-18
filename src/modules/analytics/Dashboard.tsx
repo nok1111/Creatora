@@ -98,6 +98,7 @@ export function Dashboard() {
       {posts.length === 0 && !q.isFetching && (
         <EmptyState
           icon={BarChart3}
+          art="stats"
           title={t("ana.noStatsTitle")}
           body={t("ana.noStatsBody")}
         />

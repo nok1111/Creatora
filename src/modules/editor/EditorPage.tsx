@@ -180,6 +180,7 @@ export function EditorPage() {
     return (
       <EmptyState
         icon={Clapperboard}
+        art="media"
         title={t("editor.emptyTitle")}
         body={t("editor.emptyBody")}
         action={{ label: t("editor.emptyAction"), onClick: () => nav("/create") }}
