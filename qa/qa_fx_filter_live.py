@@ -25,6 +25,10 @@ if not fp or "QA flow" not in fp:
     time.sleep(2)
 print("doc:", c.eval("(window.__qa.useProject.getState().filePath||'none')"))
 
+# openFromPath can land wherever the SPA route persisted — force the editor.
+c.eval("location.hash = '#/editor'")
+time.sleep(3)
+
 # Pick the cleanest video clip, add the filter, disable pre-existing
 # effects for a clean visual (restored at the end).
 r = c.eval(f"""(() => {{
