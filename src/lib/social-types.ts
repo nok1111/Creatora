@@ -15,6 +15,17 @@ export const PLATFORM_LABEL: Record<SocialPlatform, string> = {
   facebook: "Facebook",
 };
 
+/** Loopback redirect URIs the OAuth listener prefers — mirrors
+ *  PREFERRED_PORTS in src-tauri/src/social/oauth.rs. Providers that
+ *  require exact redirect-URI registration (TikTok, Meta strict mode)
+ *  only need these whitelisted once; a random port is used if all are
+ *  busy and the connect toast shows the URI actually bound. */
+export const OAUTH_REDIRECT_URIS = [
+  "http://127.0.0.1:45812/oauth/callback",
+  "http://127.0.0.1:45813/oauth/callback",
+  "http://127.0.0.1:45814/oauth/callback",
+];
+
 export type PostStatus =
   | "draft"
   | "ready"

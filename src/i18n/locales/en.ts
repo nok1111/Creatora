@@ -1,6 +1,7 @@
 export const en = {
   common: {
     appName: "Creatora",
+    copied: "Copied",
     save: "Save",
     cancel: "Cancel",
     close: "Close",
@@ -462,7 +463,9 @@ export const en = {
     acct_secretPh: "Client secret (stored in OS vault)",
     acct_saveCreds: "Save credentials",
     acct_credsHelp:
-      "Create a free developer app in the platform's console, whitelist the loopback redirect URI shown on connect, and paste the credentials here. The app never ships its own.",
+      "Create a free developer app in the platform's console, whitelist the redirect URIs below once, and paste the credentials here. The app never ships its own.",
+    acct_redirectUris: "Redirect URIs to whitelist in your app console (one-time):",
+    acct_copyUri: "Copy redirect URI",
     acct_connect: "Connect {{platform}}",
     acct_needClient:
       "Configure a {{platform}} developer-app client id first (below). Create one in the {{platform}} developer console — the app ships no credentials.",

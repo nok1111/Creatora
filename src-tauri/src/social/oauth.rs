@@ -37,6 +37,11 @@ fn b64_state() -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes())
 }
 
+/// Preferred loopback ports for the OAuth callback — keep in sync with
+/// OAUTH_REDIRECT_URIS in src/lib/social-types.ts (frontend shows these
+/// exact URIs for one-time registration in each dev console).
+const PREFERRED_PORTS: &[u16] = &[45812, 45813, 45814];
+
 /// What the frontend needs to render the "connect" flow.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,9 +85,17 @@ pub fn social_oauth_begin(
     }
     let oauth = rules.oauth.clone();
 
-    // Bind FIRST so we know the port before building the URL.
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .map_err(|e| AppError::Internal(format!("loopback bind: {e}")))?;
+    // Bind FIRST so we know the port before building the URL. Prefer a
+    // deterministic loopback port set (mirrors OAUTH_REDIRECT_URIS in
+    // social-types.ts): providers that require exact redirect-URI
+    // registration (TikTok, Meta strict mode) then only need a one-time
+    // whitelist of a known URI instead of a different one per connect.
+    // Falls back to an ephemeral port if all preferred ports are busy.
+    let listener = PREFERRED_PORTS
+        .iter()
+        .find_map(|p| TcpListener::bind(("127.0.0.1", *p)).ok())
+        .or_else(|| TcpListener::bind("127.0.0.1:0").ok())
+        .ok_or_else(|| AppError::Internal("loopback bind failed".into()))?;
     let port = listener
         .local_addr()
         .map_err(|e| AppError::Internal(format!("loopback addr: {e}")))?

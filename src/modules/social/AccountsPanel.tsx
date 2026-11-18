@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   CheckCircle2,
+  Copy,
   KeyRound,
   Loader2,
   Plug,
@@ -13,6 +14,7 @@ import {
 import { api } from "@/lib/ipc";
 import { useSocial } from "@/stores/social";
 import {
+  OAUTH_REDIRECT_URIS,
   PLATFORM_LABEL,
   SOCIAL_PLATFORMS,
   type SocialAccount,
@@ -233,6 +235,24 @@ export function AccountsPanel() {
                 <p className="text-[9px] leading-snug text-muted-foreground">
                   {t("social.acct_credsHelp")}
                 </p>
+                <p className="text-[9px] leading-snug text-muted-foreground">
+                  {t("social.acct_redirectUris")}
+                </p>
+                {OAUTH_REDIRECT_URIS.map((uri) => (
+                  <button
+                    key={uri}
+                    type="button"
+                    title={t("social.acct_copyUri")}
+                    className="flex w-full items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-left font-mono text-[9px] text-muted-foreground hover:bg-accent/40"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(uri);
+                      toast.success(t("common.copied"));
+                    }}
+                  >
+                    <span className="truncate">{uri}</span>
+                    <Copy className="ml-auto size-2.5 shrink-0" />
+                  </button>
+                ))}
               </div>
             </details>
 

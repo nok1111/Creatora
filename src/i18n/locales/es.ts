@@ -4,6 +4,7 @@ import type { en } from "./en";
 export const es: typeof en = {
   common: {
     appName: "Creatora",
+    copied: "Copiado",
     save: "Guardar",
     cancel: "Cancelar",
     close: "Cerrar",
@@ -465,7 +466,9 @@ export const es: typeof en = {
     acct_secretPh: "Client secret (se guarda en el almacén del sistema)",
     acct_saveCreds: "Guardar credenciales",
     acct_credsHelp:
-      "Crea una app de desarrollador gratuita en la consola de la plataforma, autoriza el URI de redirección loopback que se muestra al conectar y pega aquí las credenciales. La app nunca incluye las suyas.",
+      "Crea una app de desarrollador gratuita en la consola de la plataforma, autoriza una sola vez los URIs de redirección de abajo y pega aquí las credenciales. La app nunca incluye las suyas.",
+    acct_redirectUris: "URIs de redirección para autorizar en tu consola (una sola vez):",
+    acct_copyUri: "Copiar URI de redirección",
     acct_connect: "Conectar {{platform}}",
     acct_needClient:
       "Configura primero el client id de la app de desarrollador de {{platform}} (abajo). Créala en la consola de {{platform}}: la app no incluye credenciales.",
