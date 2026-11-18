@@ -48,7 +48,8 @@ export function AccountsPanel() {
 
   const connect = async (p: SocialPlatform) => {
     const platform = PLATFORM_LABEL[p];
-    if (!oauthClients[p]) {
+    const cap = capabilities.find((c) => c.platform === p);
+    if (!oauthClients[p] && !cap?.officialClient) {
       toast.error(t("social.acct_needClient", { platform }));
       return;
     }
@@ -119,6 +120,11 @@ export function AccountsPanel() {
                 {PLATFORM_LABEL[p]}
               </h3>
               <div className="flex gap-1">
+                {cap?.officialClient && (
+                  <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">
+                    {t("social.acct_officialApp")}
+                  </span>
+                )}
                 {cap?.publish ? (
                   <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">
                     {t("social.acct_publish")}
@@ -206,7 +212,10 @@ export function AccountsPanel() {
             {/* oauth client config */}
             <details className="text-xs">
               <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground">
-                <KeyRound className="size-3" /> {t("social.acct_devCreds")}{" "}
+                <KeyRound className="size-3" />{" "}
+                {cap?.officialClient
+                  ? t("social.acct_devCredsOptional")
+                  : t("social.acct_devCreds")}{" "}
                 {oauthClients[p] && (
                   <span className="text-success">{t("social.acct_configured")}</span>
                 )}

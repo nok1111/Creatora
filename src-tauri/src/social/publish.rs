@@ -471,6 +471,7 @@ pub fn platform_capabilities(
             requires_app_review: r.capabilities.requires_app_review,
             requires_hosted_media: r.capabilities.requires_hosted_media,
             status_note: r.capabilities.status_note.clone(),
+            official_client: r.oauth.client_id.is_some(),
         })
         .collect())
 }

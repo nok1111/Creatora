@@ -64,11 +64,6 @@ pub fn social_oauth_begin(
     platform: String,
     client_id: String,
 ) -> Result<OAuthStart, AppError> {
-    if client_id.trim().is_empty() {
-        return Err(AppError::InvalidInput(
-            "OAuth client id required — configure your developer app in Settings".into(),
-        ));
-    }
     let app_data = app
         .path()
         .app_data_dir()
@@ -78,6 +73,21 @@ pub fn social_oauth_begin(
         .platforms
         .get(&platform)
         .ok_or_else(|| AppError::InvalidInput(format!("unknown platform {platform}")))?;
+    // User-configured app wins; otherwise fall back to the official app
+    // shipped in the ruleset so end users just click Connect.
+    let client_id = if client_id.trim().is_empty() {
+        rules
+            .oauth
+            .client_id
+            .clone()
+            .ok_or_else(|| {
+                AppError::InvalidInput(
+                    "OAuth client id required — configure your developer app in Settings".into(),
+                )
+            })?
+    } else {
+        client_id
+    };
     if !rules.capabilities.oauth_loopback {
         return Err(AppError::InvalidInput(format!(
             "{platform} does not support loopback OAuth"
@@ -259,7 +269,9 @@ fn exchange_code(
     verifier: &str,
     platform: &str,
 ) -> Result<FinishedAccount, String> {
-    let client_secret = vault::load_client_secret(platform).ok();
+    let client_secret = vault::load_client_secret(platform)
+        .ok()
+        .or_else(|| oauth.client_secret.clone());
     let mut form: Vec<(&str, String)> = vec![
         ("grant_type", "authorization_code".into()),
         ("code", code.into()),
@@ -419,7 +431,10 @@ pub fn refresh_if_needed(
         "client_key" => form.push(("client_key", client_id.into())),
         _ => form.push(("client_id", client_id.into())),
     }
-    if let Ok(secret) = vault::load_client_secret(platform) {
+    let refresh_secret = vault::load_client_secret(platform)
+        .ok()
+        .or_else(|| oauth.client_secret.clone());
+    if let Some(secret) = refresh_secret {
         form.push(("client_secret", secret));
     }
     let resp = ureq::post(&oauth.token_url)

@@ -461,6 +461,8 @@ export const es: typeof en = {
       "Las credenciales se borran del almacén del sistema. Los posts programados con esta cuenta pierden su vínculo.",
     acct_disconnected: "Cuenta desconectada",
     acct_devCreds: "Credenciales de la app de desarrollador",
+    acct_devCredsOptional: "Usar tu propia app de desarrollador (opcional)",
+    acct_officialApp: "App oficial",
     acct_configured: "(configurado)",
     acct_clientIdPh: "Client ID / App ID",
     acct_secretPh: "Client secret (se guarda en el almacén del sistema)",

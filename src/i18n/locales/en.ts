@@ -458,6 +458,8 @@ export const en = {
       "Stored credentials are deleted from the OS vault. Scheduled posts using this account lose their account link.",
     acct_disconnected: "Account disconnected",
     acct_devCreds: "Developer app credentials",
+    acct_devCredsOptional: "Use your own developer app (optional)",
+    acct_officialApp: "Official app",
     acct_configured: "(configured)",
     acct_clientIdPh: "Client ID / App ID",
     acct_secretPh: "Client secret (stored in OS vault)",

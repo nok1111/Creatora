@@ -125,6 +125,9 @@ export interface PlatformCapability {
   requiresAppReview: boolean;
   requiresHostedMedia: boolean;
   statusNote: string;
+  /** An official app credential is shipped — users can Connect without
+   *  configuring their own developer app. */
+  officialClient?: boolean;
 }
 
 export interface ScheduledItem {

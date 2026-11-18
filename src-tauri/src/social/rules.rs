@@ -92,6 +92,17 @@ pub struct OauthRules {
     /// Field name carrying the app id ("client_id" vs TikTok "client_key").
     #[serde(default = "default_client_param")]
     pub client_id_param: String,
+    /// Optional OFFICIAL app credentials shipped with the product — when
+    /// present, end users just click Connect (no developer console). The
+    /// user's own saved app still wins if they configured one. Note: any
+    /// secret baked into a desktop binary is extractable — acceptable for
+    /// "public client" apps (Google Desktop type, Meta device flows) per
+    /// RFC 8252, but for TikTok's client_secret a hosted token proxy is
+    /// the clean option.
+    #[serde(default)]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub client_secret: Option<String>,
 }
 
 fn default_client_param() -> String {
@@ -330,5 +341,25 @@ mod tests {
         assert_eq!(yt.metadata.title_max_chars, 100);
         assert_eq!(yt.video.short_max_ms, 180_000);
         assert!(yt.capabilities.publish);
+    }
+
+    #[test]
+    fn official_client_fields_deserialize_when_present() {
+        // An override ruleset carrying official creds must parse — older
+        // rulesets without the fields default to None (no official app).
+        let mut rs = serde_json::to_value(builtin()).unwrap();
+        rs["version"] = serde_json::json!(999);
+        rs["platforms"]["youtube"]["oauth"]["clientId"] =
+            serde_json::json!("x.apps.googleusercontent.com");
+        rs["platforms"]["youtube"]["oauth"]["clientSecret"] = serde_json::json!("sec");
+        let parsed: Ruleset = serde_json::from_value(rs).unwrap();
+        let yt = &parsed.platforms["youtube"];
+        assert_eq!(
+            yt.oauth.client_id.as_deref(),
+            Some("x.apps.googleusercontent.com")
+        );
+        assert_eq!(yt.oauth.client_secret.as_deref(), Some("sec"));
+        // Untouched platforms keep no official client.
+        assert!(parsed.platforms["tiktok"].oauth.client_id.is_none());
     }
 }

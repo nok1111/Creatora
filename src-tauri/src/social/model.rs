@@ -140,6 +140,10 @@ pub struct PlatformCapability {
     pub requires_app_review: bool,
     pub requires_hosted_media: bool,
     pub status_note: String,
+    /// An official app credential is shipped — users can Connect without
+    /// configuring their own developer app.
+    #[serde(default)]
+    pub official_client: bool,
 }
 
 pub fn valid_platform(p: &str) -> bool {
