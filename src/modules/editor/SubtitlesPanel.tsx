@@ -35,6 +35,7 @@ import {
   mergeCueWithNext,
   removeCue,
   removeSubtitleStyle,
+  resizeCue,
   saveSubtitleStyle,
   scaleCueTimes,
   setVersionSubtitleStyle,
@@ -480,54 +481,125 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         </div>
         )}
 
-        {/* Timing tools */}
+        {/* Timing tools — grouped: cue at playhead / shift / speed / fix */}
         {toolsTab === "timing" && (
-        <div className="rounded border border-border/60 p-2">
-          <p className="mb-1.5 flex items-center gap-1 font-medium"><Clock className="size-3" />{t("subs.timing")}</p>
-          <div className="flex items-center gap-1">
-            <input value={shift} onChange={(e) => setShift(e.target.value)}
-              className="h-6 w-14 rounded border border-border bg-transparent px-1 text-[10px]" placeholder="±ms" />
-            <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
-              onClick={() => { const d = parseInt(shift); if (d) mutate((doc) => shiftAllCues(doc, d)); }}>
-              Shift all
-            </Button>
-            <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
-              onClick={() => mutate((d) => fixOverlaps(d))}>
-              Fix overlaps
-            </Button>
-          </div>
-          <div className="mt-1 flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
-              onClick={() => mutate((d) => scaleCueTimes(d, 1.1))}>{t("subs.slower")}</Button>
-            <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
-              onClick={() => mutate((d) => scaleCueTimes(d, 0.9))}>{t("subs.faster")}</Button>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
-              onClick={() => setIssues(diagnoseCues(doc))}>
-              <ListChecks className="mr-1 size-3" />Check
-            </Button>
-          </div>
-          <div className="mt-1">
-            <Button variant="ghost" size="sm" className="h-6 w-full text-[10px]"
-              title={t("subs.autoTimeTip")}
-              onClick={() => mutate((d) => autoTimeAllCues(d))}>
-              <Wand2 className="mr-1 size-3" />{t("subs.autoTime")}
-            </Button>
-          </div>
-          {issues && (
-            <div className="mt-1 max-h-16 space-y-0.5 overflow-y-auto">
-              {issues.length === 0 && <p className="text-[9px] text-emerald-400">{t("subs.noTimingIssues")}</p>}
-              {issues.map((i) => (
-                <button key={i.cueId + i.kind}
-                  className="block w-full truncate text-left text-[9px] text-amber-300 hover:underline"
-                  onClick={() => {
-                    const c = cues.find((x) => x.id === i.cueId);
-                    if (c) setPlayhead(c.startMs);
-                  }}>
-                  {i.kind}: {i.detail}
-                </button>
-              ))}
+        <div className="space-y-2">
+          {/* Cue at playhead — direct start/end editing for fine alignment. */}
+          {(() => {
+            const sel = cues.find((x) => x.id === selected) ?? activeCueAt(doc, playheadMs);
+            if (!sel)
+              return (
+                <div className="rounded border border-dashed border-border/60 p-2 text-[10px] text-muted-foreground">
+                  {t("subs.noCueAtPlayhead")}
+                </div>
+              );
+            return (
+              <div className="rounded border border-border/60 p-2">
+                <p className="mb-1.5 flex items-center gap-1 font-medium">
+                  <Captions className="size-3" />
+                  {t("subs.cueAtPlayhead")}
+                  <span className="ml-auto truncate text-[9px] font-normal text-muted-foreground">
+                    {sel.text.slice(0, 18)}{sel.text.length > 18 ? "…" : ""}
+                  </span>
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <label className="text-[9px] text-muted-foreground">
+                    {t("subs.startMs")}
+                    <input
+                      key={`s${sel.id}${sel.startMs}`}
+                      defaultValue={fmtMs(sel.startMs)}
+                      className="mt-0.5 h-6 w-full rounded border border-border bg-transparent px-1 font-mono text-[10px]"
+                      onBlur={(e) => {
+                        const v = parseTc(e.target.value);
+                        if (v != null && v < sel.endMs) mutate((d) => resizeCue(d, sel.id, { startMs: v }));
+                        else e.target.value = fmtMs(sel.startMs);
+                      }}
+                    />
+                  </label>
+                  <label className="text-[9px] text-muted-foreground">
+                    {t("subs.endMs")}
+                    <input
+                      key={`e${sel.id}${sel.endMs}`}
+                      defaultValue={fmtMs(sel.endMs)}
+                      className="mt-0.5 h-6 w-full rounded border border-border bg-transparent px-1 font-mono text-[10px]"
+                      onBlur={(e) => {
+                        const v = parseTc(e.target.value);
+                        if (v != null && v > sel.startMs) mutate((d) => resizeCue(d, sel.id, { endMs: v }));
+                        else e.target.value = fmtMs(sel.endMs);
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="mt-1 flex gap-1">
+                  <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                    title={t("subs.snapStartTip")}
+                    onClick={() => mutate((d) => resizeCue(d, sel.id, { startMs: playheadMs }))}>
+                    ⤓ {t("subs.startHere")}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                    title={t("subs.snapEndTip")}
+                    onClick={() => mutate((d) => resizeCue(d, sel.id, { endMs: Math.max(sel.startMs + 200, playheadMs) }))}>
+                    {t("subs.endHere")} ⤓
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Shift / speed */}
+          <div className="rounded border border-border/60 p-2">
+            <p className="mb-1.5 flex items-center gap-1 font-medium"><Clock className="size-3" />{t("subs.shiftAllTitle")}</p>
+            <div className="flex items-center gap-1">
+              <input value={shift} onChange={(e) => setShift(e.target.value)}
+                className="h-6 w-16 rounded border border-border bg-transparent px-1 text-[10px]" placeholder="±ms" />
+              <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                onClick={() => { const d = parseInt(shift); if (d) mutate((doc) => shiftAllCues(doc, d)); }}>
+                {t("subs.shiftAllApply")}
+              </Button>
             </div>
-          )}
+            <p className="mb-1 mt-2 text-[9px] text-muted-foreground">{t("subs.readingSpeed")}</p>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                onClick={() => mutate((d) => scaleCueTimes(d, 1.1))}>{t("subs.slower")}</Button>
+              <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                onClick={() => mutate((d) => scaleCueTimes(d, 0.9))}>{t("subs.faster")}</Button>
+            </div>
+          </div>
+
+          {/* Fix & check */}
+          <div className="rounded border border-border/60 p-2">
+            <p className="mb-1.5 flex items-center gap-1 font-medium"><ListChecks className="size-3" />{t("subs.fixCheck")}</p>
+            <div className="grid grid-cols-2 gap-1">
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]"
+                title={t("subs.autoTimeTip")}
+                onClick={() => mutate((d) => autoTimeAllCues(d))}>
+                <Wand2 className="mr-1 size-3" />{t("subs.autoTime")}
+              </Button>
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]"
+                onClick={() => mutate((d) => fixOverlaps(d))}>
+                {t("subs.fixOverlaps")}
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" className="mt-1 h-6 w-full text-[10px]"
+              onClick={() => setIssues(diagnoseCues(doc))}>
+              <ListChecks className="mr-1 size-3" />{t("subs.checkTiming")}
+            </Button>
+            {issues && (
+              <div className="mt-1 max-h-24 space-y-0.5 overflow-y-auto">
+                {issues.length === 0 && <p className="text-[9px] text-emerald-400">{t("subs.noTimingIssues")}</p>}
+                {issues.map((i) => (
+                  <button key={i.cueId + i.kind}
+                    className="block w-full truncate text-left text-[9px] text-amber-300 hover:underline"
+                    onClick={() => {
+                      const c = cues.find((x) => x.id === i.cueId);
+                      if (c) setPlayhead(c.startMs);
+                    }}>
+                    {i.kind}: {i.detail}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         )}
 
