@@ -305,6 +305,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
 
   const onClipPointerDown = (e: React.PointerEvent, track: Track, clip: Clip, mode: "move" | "left" | "right") => {
     e.stopPropagation();
+    e.preventDefault();
     if (track.locked && mode !== "move") return;
     // Selection: ctrl toggles; plain click selects this clip only.
     const sel = e.ctrlKey || e.metaKey
@@ -643,6 +644,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   };
 
   const onRulerPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
     const el = e.currentTarget as HTMLElement;
     const rect = el.getBoundingClientRect();
     const seek = (ev: { clientX: number }) =>
@@ -1136,7 +1138,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       {/* Headers + lanes share one scroll container so they stay aligned. */}
       <div
         ref={scrollRef}
-        className="relative flex-1 overflow-auto"
+        className="relative flex-1 select-none overflow-auto"
         onDragLeave={(e) => {
           // Leaving the scroll region entirely → clear the ghost.
           if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node))
@@ -1280,6 +1282,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               className="sticky top-6 z-20 border-b border-emerald-500/25 bg-card"
               style={{ height: SUB_LANE_H, width: lanesW }}
               onPointerDown={(e) => {
+                e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
                 setSelCueId(null);
                 setPlayhead(
