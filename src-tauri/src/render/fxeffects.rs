@@ -489,35 +489,43 @@ fn floating_dust_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collec
             let px = format!("({cx}+0.15+0.7*{h3}+{orb_x})*{cs}");
             let py = format!("({cy}+0.15+0.7*{h5}+{orb_y})*{cs}");
             let r2 = format!("(({u}-({px}))*({u}-({px}))+({v}-({py}))*({v}-({py})))");
-            let depth = format!("(0.25+0.75*pow({h4},2.5))"); // mostly distant, rare bokeh
-            let sr = format!("((0.0022+0.011*{depth}*{depth})*{sz})", sz = fxlib::fmt_num(size));
+            // bimodal depth: ~20% near floaters (big/soft), rest are small
+            // bright motes that read as dust catching light, not bokeh
+            let near = format!("gte({h4},0.8)");
+            let sr = format!("((0.008+0.014*{near}*(0.35+0.65*{h3}))*{sz})", sz = fxlib::fmt_num(size));
             let tw = format!(
                 "(1-{tk}*0.6*(0.5+0.5*sin(6.2832*{tt}*(0.09+0.2*{h3})+{h4}*6.2832)))",
                 tk = fxlib::fmt_num(twk)
             );
             let patch = ghash(&format!("floor(({cx})/3)"), &format!("floor(({cy})/3)"), 53.7, 141.3);
-            let bri = format!("((0.3+0.7*{depth})*{tw}*(0.35+0.65*{patch})*0.75)");
+            let bri = format!(
+                "(((0.65+0.55*{h2})*(1-{near})+0.5*{near})*{tw}*(0.5+0.5*{patch}))"
+            );
             let sr2 = format!("({sr}*{sr})");
             terms.push(format!(
-                "lt({h1},{d})*({bri})*(exp(-{r2}/(2*{sr2}))+0.45*exp(-{r2}/(10*{sr2})))",
+                "lt({h1},{d})*({bri})*(exp(-{r2}/(2*{sr2}))+{near}*0.5*exp(-{r2}/(10*{sr2})))",
                 d = fxlib::fmt_num(density)
             ));
         }
     }
     let field = terms.join("+");
-    let (mm, gs, go) = (attr_name(e, "dm"), attr_name(e, "ds"), attr_name(e, "do"));
-    let expr = |c: f64| format!("255*min(1,{}*({field})*{})", fxlib::fmt_num(c), fxlib::fmt_num(i));
+    // Dust only lives where the scene is lit: the geq runs ON the
+    // quarter-res input and dims the field by local luma (GLSL twin
+    // smoothsteps src() identically).
+    let luma = "(0.299*r(X,Y)+0.587*g(X,Y)+0.114*b(X,Y))/255";
+    let lt = format!("clip(({luma}-0.12)/0.58,0,1)");
+    let lumw = format!("(0.3+0.7*{lt}*{lt}*(3-2*{lt}))");
+    let (mm, mq, gs, go) = (attr_name(e, "dm"), attr_name(e, "dq"), attr_name(e, "ds"), attr_name(e, "do"));
+    let expr = |c: f64| format!("255*min(1,{}*({field})*{lumw}*{})", fxlib::fmt_num(c), fxlib::fmt_num(i * 1.35));
     vec![
-        format!("null[{mm}]"),
+        format!("split[{mm}][{mq}]"),
         format!(
-            "color=c=black:s={gw}x{gh_}:r={fps}:d={dur},format=rgb24,geq=r='{}':g='{}':b='{}'[{gs}]",
+            "[{mq}]scale={gw}:{gh_},format=rgb24,geq=r='{}':g='{}':b='{}'[{gs}]",
             expr(p["cr"]),
             expr(p["cg"]),
             expr(p["cb"]),
-            fps = ctx.fps_str(),
-            dur = ctx.clip_ms as f64 / 1000.0
         ),
-        format!("[{gs}]scale={w}:{h},gblur=sigma=3[{go}]", w = ctx.w, h = ctx.h),
+        format!("[{gs}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h),
         format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
 }

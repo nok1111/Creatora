@@ -226,16 +226,18 @@ void main(){
       0.09 * sin(6.2832 * (tt * (0.045 + 0.08 * h4) + h5)));
     vec2 p = (c + vec2(0.15 + 0.7 * h3, 0.15 + 0.7 * h5) + orb) * cs;
     float r2 = dot(d - p, d - p);
-    float depth = 0.25 + 0.75 * pow(h4, 2.5);      // mostly distant, rare bokeh
-    float sr = (0.0022 + 0.011 * depth * depth) * uP0.y;
+    float near = step(0.80, h4);                  // ~20% near floaters
+    float sr = (0.008 + 0.014 * near * (0.35 + 0.65 * h3)) * uP0.y;
     float tw = 1. - uP2.y * 0.6 *
       (0.5 + 0.5 * sin(6.2832 * tt * (0.09 + 0.2 * h3) + h4 * 6.2832));
-    float patch = 0.35 + 0.65 * dh(floor(c / 3.), vec2(53.7, 141.3));
-    float bri = (0.3 + 0.7 * depth) * tw * patch * 0.75;
+    float patch = 0.5 + 0.5 * dh(floor(c / 3.), vec2(53.7, 141.3));
+    float bri = mix(0.65 + 0.55 * h2, 0.5, near) * tw * patch;
     f += bri * exp(-r2 / (2. * sr * sr))
-       + 0.45 * bri * exp(-r2 / (10. * sr * sr));
+       + near * 0.5 * bri * exp(-r2 / (10. * sr * sr));
   }
-  frag = screen(uP1.rgb * f * uP1.w);
+  float lw = 0.3 + 0.7 * smoothstep(0.12, 0.7,
+    dot(src(vUv).rgb, vec3(0.299, 0.587, 0.114)));
+  frag = screen(uP1.rgb * f * lw * uP1.w * 1.35);
 }`,
     pack: (c, { t, w, h }) => [
       c.density, c.size, t, 0,
