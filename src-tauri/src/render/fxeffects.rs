@@ -453,6 +453,27 @@ fn prism_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::B
 
 // ── batch 2: dust / glint / trails / golden ───────────────────────────
 
+/// Balanced-tree sum: `a+b+c+…` nests linearly in ffmpeg's recursive
+/// expression parser and blows its stack (silent ENOMEM / empty output)
+/// past ~30 terms. Pairwise reduction keeps depth at log2(n).
+fn sum_tree(mut ts: Vec<String>) -> String {
+    if ts.is_empty() {
+        return "0".into();
+    }
+    while ts.len() > 1 {
+        let mut next = Vec::with_capacity(ts.len() / 2 + 1);
+        for c in ts.chunks(2) {
+            next.push(if c.len() == 2 {
+                format!("({}+{})", c[0], c[1])
+            } else {
+                c[0].clone()
+            });
+        }
+        ts = next;
+    }
+    ts.pop().unwrap()
+}
+
 /// `fract(sin(cx*a + cy*b)*43758.5453)` — same sin-hash polynomial the
 /// GLSL `dh/sh` helpers use, so preview and export lay particles out
 /// identically.
@@ -508,7 +529,7 @@ fn floating_dust_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collec
             ));
         }
     }
-    let field = terms.join("+");
+    let field = sum_tree(terms);
     // Dust only lives where the scene is lit: the geq runs ON the
     // quarter-res input and dims the field by local luma (GLSL twin
     // smoothsteps src() identically).
@@ -606,9 +627,9 @@ fn star_glint_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collectio
     vec![
         format!("split[{mm}][{mq}]"),
         format!("[{mq}]scale={gw}:{gh_},format=rgb24,geq=r='{}':g='{}':b='{}'[{gf}]",
-            tint(p["cr"], &terms_r.join("+")),
-            tint(p["cg"], &terms_g.join("+")),
-            tint(p["cb"], &terms_b.join("+"))),
+            tint(p["cr"], &sum_tree(terms_r)),
+            tint(p["cg"], &sum_tree(terms_g)),
+            tint(p["cb"], &sum_tree(terms_b))),
         format!("[{gf}]scale={w}:{h},gblur=sigma=2[{go}]", w = ctx.w, h = ctx.h),
         format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
@@ -698,9 +719,9 @@ fn neon_trails_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collecti
         // one static bake (geq init-eval only — the huge field costs once)
         format!(
             "color=c=black:s={gw}x{gh_}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}',loop=loop=-1:size=1,fps={fps}[{nb}]",
-            tint(p["cr"], &terms_r.join("+")),
-            tint(p["cg"], &terms_g.join("+")),
-            tint(p["cb"], &terms_b.join("+")),
+            tint(p["cr"], &sum_tree(terms_r)),
+            tint(p["cg"], &sum_tree(terms_g)),
+            tint(p["cb"], &sum_tree(terms_b)),
             fps = ctx.fps_str(),
         ),
         // rotate the baked field: head arc travels around the loops
@@ -759,6 +780,452 @@ fn golden_rays_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collecti
         format!("[{gv}]scale={w}:{h}[{ov}]", w = ctx.w, h = ctx.h),
         format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
+}
+
+// ── batch 3: embers / fog / fireflies / snow ─────────────────────────
+
+/// smoothstep(a,b,x) in geq dialect: clip + hermite (x*x*(3-2x)).
+fn ssq(a: f64, b: f64, x: &str) -> String {
+    let t = format!("clip(({x}-{})/{},0,1)", fxlib::fmt_num(a), fxlib::fmt_num(b - a));
+    format!("({t}*{t}*(3-2*{t}))")
+}
+
+/// Bilinear value noise at lattice coords (px,py) — same sin-hash the
+/// GLSL `vn` uses, so the fog field matches preview.
+fn vnoise(px: &str, py: &str) -> String {
+    let ix = format!("floor({px})");
+    let iy = format!("floor({py})");
+    let fxx = format!("({px}-{ix})");
+    let fyy = format!("({py}-{iy})");
+    let ux = format!("({fxx}*{fxx}*(3-2*{fxx}))");
+    let uy = format!("({fyy}*{fyy}*(3-2*{fyy}))");
+    let a = ghash(&ix, &iy, 127.1, 311.7);
+    let b = ghash(&format!("({ix}+1)"), &iy, 127.1, 311.7);
+    let c = ghash(&ix, &format!("({iy}+1)"), 127.1, 311.7);
+    let d = ghash(&format!("({ix}+1)"), &format!("({iy}+1)"), 127.1, 311.7);
+    format!("(({a}+({b}-{a})*{ux})*(1-{uy})+({c}+({d}-{c})*{ux})*{uy})")
+}
+
+/// Per-frame weight envelope (0.5∓0.5·cos) baked as a 1×1 geq and
+/// scaled to the scroll-window size — the seamless-scroll crossfade.
+fn scroll_env(tag: &str, gw: u32, gh: u32, rate_px: f64, period_px: f64, plus: bool, fps: &str, dur: f64) -> Vec<String> {
+    let sgn = if plus { "+" } else { "-" };
+    let w = format!(
+        "255*(0.5{sgn}0.5*cos(6.2832*mod({rp}*T,{pp})/{pp}))",
+        rp = fxlib::fmt_num(rate_px),
+        pp = fxlib::fmt_num(period_px)
+    );
+    vec![
+        format!(
+            "color=c=black:s=1x1:r={fps}:d={dur},format=rgb24,geq=r='{w}':g='{w}':b='{w}'[{tag}1]"
+        ),
+        format!("[{tag}1]scale={gw}:{gh}[{tag}]"),
+    ]
+}
+
+/// Floating Embers — bake+scroll (neonTrails machinery): a tall static
+/// ember strip is baked ONCE, a window scrolls it upward; two copies
+/// offset half a period crossfade at weight-0 wraps → infinite seamless
+/// rise. Per-ember lifecycle baked in via a low-freq noise multiplier
+/// (embers dim/brighten along their path); gust wobble via crop x.
+/// Live per-pixel geq of this complexity measured ~60 s/frame — this
+/// model is ~2 crops + 2 multiplies + 1 add per frame.
+fn floating_embers_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh_ as f64;
+    let (u, v) = (format!("X/{ghf}"), format!("Y/{ghf}"));
+    let (csx, csy) = (0.055f64, 0.34f64);
+    let density = p["density"];
+    let size = p["size"];
+    let flk = p["flicker"];
+    let sway = p["sway"];
+    let rv = 4.0 * csy;                                   // scroll period (v-units)
+    let rpx = (rv * ghf).round().max(1.0);                // scroll period (px)
+    let rate_v = 0.06 + 0.14 * p["speed"];                // rise, v-units/s
+    let rpy = rate_v * ghf;                               // px/s
+    let mx_v = sway * 0.06;                               // gust margin (v-units)
+    let mx = (mx_v * ghf).ceil() as u32 + 1;
+    let gw_t = gw + 2 * mx;
+    let gh_t = gh_ + rpx as u32;
+    let htf = gh_t as f64 / ghf;                          // strip height, v-units
+    // static ember field (no T) over the strip
+    let mut terms = Vec::new();
+    for ix in -1..=1 {
+        for iy in -1..=1 {
+            let cx = format!("floor({u}/{csx}){}{ix}", if ix >= 0 { "+" } else { "" });
+            let cy = format!("floor({v}/{csy}){}{iy}", if iy >= 0 { "+" } else { "" });
+            let h1 = ghash(&cx, &cy, 127.1, 311.7);
+            let h2 = ghash(&cx, &cy, 269.5, 183.3);
+            let h3 = ghash(&cx, &cy, 419.2, 371.9);
+            let h4 = ghash(&cx, &cy, 113.5, 271.9);
+            let h5 = ghash(&cx, &cy, 213.9, 117.3);
+            let px = format!("(({cx}+0.15+0.7*{h3})*{csx})");
+            let yw = format!("(({cy}+{h5})*{csy})");
+            let ddx = format!("({u}-({px}))");
+            let ddy = format!("({v}-({yw}))");
+            // embers fade near strip edges (window reaches both ends)
+            let eedge = format!(
+                "clip(min({yw},({ht}-{yw}))/0.08,0,1)",
+                ht = fxlib::fmt_num(htf)
+            );
+            let bri = format!("({edge}*(0.45+0.75*{h2}))", edge = eedge);
+            let sx = format!("((0.0035+0.006*{h4})*{sz})", sz = fxlib::fmt_num(size));
+            let trl = format!("(1+gte({h3},0.72)*(0.5+1.5*{h5}))");
+            let vy = format!("(0.04+0.10*{h2})");
+            let sy = format!("({sx}*{trl}*(1+6*{vy}))");
+            let rc = format!("(0.45*{sx})");
+            let r2 = format!("({ddx}*{ddx}+{ddy}*{ddy})");
+            let g = format!("exp(-{ddx}*{ddx}/(2*{sx}*{sx})-{ddy}*{ddy}/(2*{sy}*{sy}))+0.4*exp(-{r2}/(2*{rc}*{rc}))");
+            terms.push(format!(
+                "if(lt({h1},{d}),({bri})*{g},0)",
+                d = fxlib::fmt_num(density)
+            ));
+        }
+    }
+    // lifecycle baked in: low-freq noise multiplier (flicker param)
+    let nz = vnoise(&format!("({u}*6)"), &format!("({v}*4)"));
+    let mult = format!(
+        "(1-{fk}+{fk}*(0.35+0.95*{nz}))",
+        fk = fxlib::fmt_num(flk)
+    );
+    let field = format!("({})*{mult}", sum_tree(terms));
+    let expr = |c: f64| format!("255*min(1,{}*({field})*{})", fxlib::fmt_num(c), fxlib::fmt_num(i * 1.25));
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    let n = |t: &str| attr_name(e, t);
+    let (mm, eb, sa, sb, ea, eb2, wa, wb, aw, bw, sm, go) = (
+        n("em"), n("eb"), n("es"), n("et"), n("ea"), n("e2"), n("ew"),
+        n("ev"), n("ek"), n("el"), n("en"), n("eo"),
+    );
+    let gust = format!("{mx}+{amp}*sin(6.2832*0.07*t)", amp = fxlib::fmt_num(mx_v * ghf));
+    let mut out = vec![
+        format!("null[{mm}]"),
+        format!(
+            "color=c=black:s={gw_t}x{gh_t}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}',loop=loop=-1:size=1,fps={fps}[{eb}]",
+            expr(p["cr"]),
+            expr(p["cg"]),
+            expr(p["cb"]),
+        ),
+        format!("[{eb}]split[{sa}][{sb}]"),
+        format!(
+            "[{sa}]crop=w={gw}:h={gh_}:x='{gust}':y='mod({rpy}*t,{rpx})'[{ea}]",
+            rpy = fxlib::fmt_num(rpy), rpx = fxlib::fmt_num(rpx)
+        ),
+        format!(
+            "[{sb}]crop=w={gw}:h={gh_}:x='{gust}':y='mod({rpy}*t+{rh},{rpx})'[{eb2}]",
+            rpy = fxlib::fmt_num(rpy), rh = fxlib::fmt_num(rpx / 2.0), rpx = fxlib::fmt_num(rpx)
+        ),
+    ];
+    out.extend(scroll_env(&wa, gw, gh_, rpy, rpx, false, &fps, dur));
+    out.extend(scroll_env(&wb, gw, gh_, rpy, rpx, true, &fps, dur));
+    out.extend(vec![
+        format!("[{ea}][{wa}]blend=all_mode=multiply[{aw}]"),
+        format!("[{eb2}][{wb}]blend=all_mode=multiply[{bw}]"),
+        format!("[{aw}][{bw}]blend=all_mode=addition[{sm}]"),
+        format!("[{sm}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h),
+        format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]);
+    out
+}
+
+/// Cinematic Fog — bake+scroll: each FBM layer is baked once as a wide
+/// strip, a window drifts across it horizontally; two copies offset
+/// half a lattice period crossfade at weight-0 wraps → infinite drift.
+/// Coverage/power/pooling applied per-frame in a SMALL geq (~cheap);
+/// luma gating via a gray+curves mask of the input (fog lives in light).
+fn cinematic_fog_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 8).max(16), (ctx.h / 8).max(16));
+    let ghf = gh_ as f64;
+    let (sc, ani, plw, mix2, drv) = match p["pattern"].round() as i64 {
+        1 => (2.2, 1.4, 0.55, 0.45, 2.1),   // Rolling Fog
+        2 => (1.9, 1.0, 0.15, 0.35, 0.7),   // Cinematic Haze
+        _ => (2.6, 2.4, 1.00, 0.30, 1.0),   // Ground Fog
+    };
+    let asp = ctx.w as f64 / ctx.h as f64;
+    let lwf = asp * sc / ani;                             // lattice width across frame
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    // one scrolling layer: bake wide strip + 2 crops + env crossfade + add
+    let mut out = vec![format!("split[{m}][{q}]", m = attr_name(e, "fm"), q = attr_name(e, "fq"))];
+    let mut layer_labels = Vec::new();
+    // each layer: own lattice space (mult 1 / 1.7), own drift rate, own gain
+    for (li, (mult, lrate, lgain)) in [
+        (1.0f64, 0.55 * p["speed"] * drv, 1.0 - mix2),
+        (1.7,     1.30 * p["speed"] * drv, mix2),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let ll = lwf * mult;                               // lattice width across frame
+        let rx = (gw as f64 / ll).ceil().max(2.0);         // scroll period px (1 lattice unit)
+        let rate_px = lrate * rx;                          // px/s window advance
+        let gw_t = gw + rx as u32;
+        // strip lattice coords: qx spans [0, LL+1] over gw+rx px
+        let qx = format!("X*{l}", l = fxlib::fmt_num(ll / gw as f64));
+        let qy = format!("Y*{l}", l = fxlib::fmt_num(sc * mult / ghf));
+        // same fbm both layers (GLSL: fbm(p) / fbm(p*1.7))
+        let fbm = format!(
+            "({}+0.5*{})",
+            vnoise(&qx, &qy),
+            vnoise(&format!("({qx}*2.3+17.3)"), &format!("({qy}*2.3+17.3)"))
+        );
+        // fbm/1.5 normalised, layer gain folded into the bake
+        let gv = fxlib::fmt_num(lgain * 255.0 / 1.5);
+        let fb = attr_name(e, &format!("f{li}b"));
+        let (sa, sb, ca, cb, wa, wb, aw, bw, sm) = (
+            attr_name(e, &format!("f{li}s")),
+            attr_name(e, &format!("f{li}t")),
+            attr_name(e, &format!("f{li}a")),
+            attr_name(e, &format!("f{li}c")),
+            attr_name(e, &format!("f{li}w")),
+            attr_name(e, &format!("f{li}v")),
+            attr_name(e, &format!("f{li}k")),
+            attr_name(e, &format!("f{li}l")),
+            attr_name(e, &format!("f{li}n")),
+        );
+        out.push(format!(
+            "color=c=black:s={gw_t}x{gh_}:r=1:d=1,format=rgb24,geq=r='{gv}*{fbm}':g='{gv}*{fbm}':b='{gv}*{fbm}',loop=loop=-1:size=1,fps={fps}[{fb}]"
+        ));
+        out.push(format!("[{fb}]split[{sa}][{sb}]"));
+        // layer 2 drifts opposite to layer 1 (GLSL: -fract(d2))
+        let (xa, xb) = if li == 0 {
+            (
+                format!("mod({rp}*t,{rx})", rp = fxlib::fmt_num(rate_px), rx = fxlib::fmt_num(rx)),
+                format!("mod({rp}*t+{rh},{rx})", rp = fxlib::fmt_num(rate_px), rh = fxlib::fmt_num(rx / 2.0), rx = fxlib::fmt_num(rx)),
+            )
+        } else {
+            (
+                format!("{rx}-mod({rp}*t,{rx})", rp = fxlib::fmt_num(rate_px), rx = fxlib::fmt_num(rx)),
+                format!("{rx}-mod({rp}*t+{rh},{rx})", rp = fxlib::fmt_num(rate_px), rh = fxlib::fmt_num(rx / 2.0), rx = fxlib::fmt_num(rx)),
+            )
+        };
+        out.push(format!("[{sa}]crop=w={gw}:h={gh_}:x='{xa}':y=0[{ca}]"));
+        out.push(format!("[{sb}]crop=w={gw}:h={gh_}:x='{xb}':y=0[{cb}]"));
+        out.extend(scroll_env(&wa, gw, gh_, rate_px, rx, false, &fps, dur));
+        out.extend(scroll_env(&wb, gw, gh_, rate_px, rx, true, &fps, dur));
+        out.push(format!("[{ca}][{wa}]blend=all_mode=multiply[{aw}]"));
+        out.push(format!("[{cb}][{wb}]blend=all_mode=multiply[{bw}]"));
+        out.push(format!("[{aw}][{bw}]blend=all_mode=addition[{sm}]"));
+        layer_labels.push(sm);
+    }
+    // combine layers, then coverage/pow/pool in a small per-frame geq
+    let fs = attr_name(e, "fs");
+    let fsh = attr_name(e, "fh");
+    let fmk = attr_name(e, "fk");
+    let fm2 = attr_name(e, "f2");
+    let fo = attr_name(e, "fo");
+    let fq = attr_name(e, "fq");
+    let mm = attr_name(e, "fm");
+    out.push(format!("[{l0}][{l1}]blend=all_mode=addition[{fs}]", l0 = layer_labels[0], l1 = layer_labels[1]));
+    let flv = "(r(X,Y)/255)";
+    let cov = format!(
+        "clip(({flv}-{c0})/{c1},0,1)",
+        c0 = fxlib::fmt_num((1.0 - p["coverage"]) * 0.75),
+        c1 = fxlib::fmt_num((p["coverage"] * 0.38).max(0.05))
+    );
+    let v_ = format!("Y/{ghf}");
+    let shaped = format!(
+        "pow({cov},{kk})*(1-{pl}+{pl}*{pool})*{ig}",
+        kk = fxlib::fmt_num(1.0 + 1.0 * p["thickness"]),
+        pl = fxlib::fmt_num(plw * p["pool"]),
+        ig = fxlib::fmt_num(i * 1.8),
+        pool = ssq(-0.15, 1.05, &v_)
+    );
+    out.push(format!(
+        "[{fs}]geq=r='255*min(1,{cr}*{sh})':g='255*min(1,{cg}*{sh})':b='255*min(1,{cb_}*{sh})'[{fsh}]",
+        cr = fxlib::fmt_num(p["cr"]),
+        cg = fxlib::fmt_num(p["cg"]),
+        cb_ = fxlib::fmt_num(p["cb"]),
+        sh = shaped
+    ));
+    // luma mask: fog lives where the scene is lit (0.25+0.75·ss(0.1,0.7))
+    let luma = "(0.299*r(X,Y)+0.587*g(X,Y)+0.114*b(X,Y))/255";
+    let lumw = format!("255*(0.25+0.75*{})", ssq(0.1, 0.7, luma));
+    out.push(format!("[{fq}]scale={gw}:{gh_},format=rgb24,geq=r='{lumw}':g='{lumw}':b='{lumw}'[{fmk}]"));
+    out.push(format!("[{fsh}][{fmk}]blend=all_mode=multiply[{fm2}]"));
+    out.push(format!("[{fm2}]scale={w}:{h},gblur=sigma=4[{fo}]", w = ctx.w, h = ctx.h));
+    out.push(format!("[{mm}][{fo}]blend=all_mode=screen:all_opacity=1{en}"));
+    let _ = i;
+    out
+}
+
+/// Fireflies — N unrolled wanderers (NOT cell-bound): each rides a
+/// sum of incommensurate sines per axis (turns + pauses fall out),
+/// flashing with a soft-attack blink. Small core, wide halo. The
+/// geq bakes `count` particles per-export; the GLSL loops 16 and
+/// gates by the same uniform.
+fn fireflies_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh_ as f64;
+    let asp = ctx.w as f64 / ctx.h as f64;
+    let (u, v) = (format!("X/{ghf}"), format!("Y/{ghf}"));
+    let fr = |x: f64| x - x.floor(); // GLSL fract (always ≥0)
+    let hsh = |i: f64, k: f64| fr((i * 127.1 + k * 311.7).sin() * 43758.5453);
+    let count = (p["count"].round() as usize).clamp(1, 16);
+    let tt = format!("(T*{})", fxlib::fmt_num(p["speed"]));
+    let tb = format!("(T*{})", fxlib::fmt_num(0.25 + 1.1 * p["blink"]));
+    let sig = 0.006 * p["size"];
+    let mut terms = Vec::new();
+    for i in 0..count {
+        let fi = i as f64;
+        let (h1, h2, h3, h4) = (hsh(fi, 1.0), hsh(fi, 2.0), hsh(fi, 3.0), hsh(fi, 4.0));
+        let wx = format!(
+            "({ax}+{a1}*sin(6.2832*({tt}*{f1}+{p1}))+{a2}*sin(6.2832*({tt}*{f2}+{p2}))+{a3}*sin(6.2832*({tt}*{f3}+{p3})))",
+            ax = fxlib::fmt_num(0.5 * asp),
+            a1 = fxlib::fmt_num(0.28 + 0.20 * h1), f1 = fxlib::fmt_num(0.021 + 0.035 * h1), p1 = fxlib::fmt_num(h2),
+            a2 = fxlib::fmt_num(0.12),             f2 = fxlib::fmt_num(0.075 + 0.06 * h3),  p2 = fxlib::fmt_num(h4),
+            a3 = fxlib::fmt_num(0.04),             f3 = fxlib::fmt_num(0.21 + 0.12 * h2),   p3 = fxlib::fmt_num(h1),
+        );
+        let wy = format!(
+            "(0.55+{a1}*sin(6.2832*({tt}*{f1}+{p1}))+{a2}*sin(6.2832*({tt}*{f2}+{p2}))+{a3}*sin(6.2832*({tt}*{f3}+{p3})))",
+            a1 = fxlib::fmt_num(0.22 + 0.18 * h3), f1 = fxlib::fmt_num(0.017 + 0.03 * h2), p1 = fxlib::fmt_num(h1),
+            a2 = fxlib::fmt_num(0.10),             f2 = fxlib::fmt_num(0.06 + 0.05 * h4),  p2 = fxlib::fmt_num(h3),
+            a3 = fxlib::fmt_num(0.035),            f3 = fxlib::fmt_num(0.18 + 0.10 * h1),  p3 = fxlib::fmt_num(h2),
+        );
+        let ddx = format!("({u}-({wx}))");
+        let ddy = format!("({v}-({wy}))");
+        let r2 = format!("({ddx}*{ddx}+{ddy}*{ddy})");
+        let bl = format!("(0.5+0.5*sin(6.2832*({tb}*{fq}+{ph})))",
+            fq = fxlib::fmt_num(0.35 + 0.4 * h4), ph = fxlib::fmt_num(h2));
+        let gate = ssq(0.35, 0.8, &bl);
+        let bri = format!("((0.18+0.82*{gate})*{})", fxlib::fmt_num(0.6 + 0.5 * h1));
+        let s2 = fxlib::fmt_num(2.0 * sig * sig);
+        let sh = fxlib::fmt_num(2.0 * sig * sig * (14.0 + 30.0 * p["glow"]));
+        terms.push(format!("({bri})*(1.6*exp(-{r2}/{s2})+0.7*exp(-{r2}/{sh}))"));
+    }
+    let field = sum_tree(terms);
+    let expr = |c: f64| format!("255*min(1,{}*({field})*{})", fxlib::fmt_num(c), fxlib::fmt_num(i * 1.5));
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    let (mm, gs, go) = (attr_name(e, "fm"), attr_name(e, "fs"), attr_name(e, "fo"));
+    vec![
+        format!("null[{mm}]"),
+        format!(
+            "color=c=black:s={gw}x{gh_}:r={fps}:d={dur},format=rgb24,geq=r='{}':g='{}':b='{}'[{gs}]",
+            expr(p["cr"]),
+            expr(p["cg"]),
+            expr(p["cb"]),
+        ),
+        format!("[{gs}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h),
+        format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Falling Snow — bake+scroll, two independent strips (far/near).
+/// Each layer's flake field is static in strip space; its window
+/// scrolls DOWN (flakes fall) at layer speed → real parallax. Double
+/// copies crossfade at weight-0 wraps. Gust sway via crop x.
+fn falling_snow_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh_ as f64;
+    let (u, v) = (format!("X/{ghf}"), format!("Y/{ghf}"));
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    let mm = attr_name(e, "sm");
+    let mut out = vec![format!("null[{mm}]")];
+    let mut layer_labels = Vec::new();
+    for lay in 0..2 {
+        let is_n = lay == 1;
+        let (csx, csy) = if is_n { (0.13f64, 0.52f64) } else { (0.05, 0.30) };
+        let wgt = if is_n { 0.45 + 0.55 * p["depth"] } else { 0.72 - 0.30 * p["depth"] };
+        let dens = if is_n { p["density"] * 0.55 } else { p["density"] };
+        let rv = 4.0 * csy;                                   // scroll period (v-units)
+        let rpx = (rv * ghf).round().max(1.0);
+        let rate_v = (0.05 + 0.09 * p["speed"]) * if is_n { 1.35 } else { 0.7 };
+        let rpy = rate_v * ghf;                               // px/s
+        let (gust_f, gust_ph) = if is_n { (0.08f64, 1.9f64) } else { (0.05, 0.0) };
+        let mx_v = p["sway"] * 0.04;
+        let mx = (mx_v * ghf).ceil() as u32 + 1;
+        let gw_t = gw + 2 * mx;
+        let gh_t = gh_ + rpx as u32;
+        let htf = gh_t as f64 / ghf;
+        // static flake field over the strip (same math as GLSL laySnow)
+        let mut terms = Vec::new();
+        for ix in -1..=1 {
+            for iy in -1..=1 {
+                let cx = format!("floor({u}/{csx}){}{ix}", if ix >= 0 { "+" } else { "" });
+                let cy = format!("floor({v}/{csy}){}{iy}", if iy >= 0 { "+" } else { "" });
+                let off = lay as f64 * 37.7;
+                let cxo = format!("({cx}+{off})");
+                let h1 = ghash(&cxo, &cy, 127.1, 311.7);
+                let h2 = ghash(&cxo, &cy, 269.5, 183.3);
+                let h3 = ghash(&cxo, &cy, 419.2, 371.9);
+                let h4 = ghash(&cxo, &cy, 113.5, 271.9);
+                let h5 = ghash(&cxo, &cy, 213.9, 117.3);
+                let px = format!("(({cx}+0.1+0.8*{h3})*{csx})");
+                let yw = format!("(({cy}+{h5})*{csy})");
+                let ddx = format!("({u}-({px}))");
+                let ddy = format!("({v}-({yw}))");
+                let r2 = format!("({ddx}*{ddx}+{ddy}*{ddy})");
+                let sr = format!(
+                    "(({s0}+{s1}*{h4})*{sz})",
+                    s0 = fxlib::fmt_num(if is_n { 0.008 } else { 0.0026 }),
+                    s1 = fxlib::fmt_num(if is_n { 0.010 } else { 0.0022 }),
+                    sz = fxlib::fmt_num(p["size"])
+                );
+                let eedge = format!(
+                    "clip(min({yw},({ht}-{yw}))/0.08,0,1)",
+                    ht = fxlib::fmt_num(htf)
+                );
+                let bri = format!("({edge}*{wg}*(0.55+0.45*{h2}))", edge = eedge, wg = fxlib::fmt_num(wgt));
+                terms.push(format!(
+                    "if(lt({h1},{d}),({bri})*exp(-{r2}/(2*{sr}*{sr})),0)",
+                    d = fxlib::fmt_num(dens)
+                ));
+            }
+        }
+        let field = sum_tree(terms);
+        let fb = attr_name(e, &format!("s{lay}b"));
+        let (sa, sb, ca, cb, wa, wb, aw, bw, sm) = (
+            attr_name(e, &format!("s{lay}s")),
+            attr_name(e, &format!("s{lay}t")),
+            attr_name(e, &format!("s{lay}a")),
+            attr_name(e, &format!("s{lay}c")),
+            attr_name(e, &format!("s{lay}w")),
+            attr_name(e, &format!("s{lay}v")),
+            attr_name(e, &format!("s{lay}k")),
+            attr_name(e, &format!("s{lay}l")),
+            attr_name(e, &format!("s{lay}n")),
+        );
+        let expr = |c: f64| format!("255*min(1,{}*({field})*{})", fxlib::fmt_num(c), fxlib::fmt_num(i * 1.3));
+        out.push(format!(
+            "color=c=black:s={gw_t}x{gh_t}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}',loop=loop=-1:size=1,fps={fps}[{fb}]",
+            expr(p["cr"]),
+            expr(p["cg"]),
+            expr(p["cb"]),
+        ));
+        out.push(format!("[{fb}]split[{sa}][{sb}]"));
+        // falling: window slides UP the strip (content moves down)
+        let gust = format!(
+            "{mx}+{amp}*sin(6.2832*{gf}*t+{gp})",
+            amp = fxlib::fmt_num(mx_v * ghf),
+            gf = fxlib::fmt_num(gust_f),
+            gp = fxlib::fmt_num(gust_ph)
+        );
+        out.push(format!(
+            "[{sa}]crop=w={gw}:h={gh_}:x='{gust}':y='{rpx}-mod({rpy}*t,{rpx})'[{ca}]",
+            rpx = fxlib::fmt_num(rpx),
+            rpy = fxlib::fmt_num(rpy)
+        ));
+        out.push(format!(
+            "[{sb}]crop=w={gw}:h={gh_}:x='{gust}':y='{rpx}-mod({rpy}*t+{rh},{rpx})'[{cb}]",
+            rpx = fxlib::fmt_num(rpx),
+            rpy = fxlib::fmt_num(rpy),
+            rh = fxlib::fmt_num(rpx / 2.0)
+        ));
+        out.extend(scroll_env(&wa, gw, gh_, rpy, rpx, false, &fps, dur));
+        out.extend(scroll_env(&wb, gw, gh_, rpy, rpx, true, &fps, dur));
+        out.push(format!("[{ca}][{wa}]blend=all_mode=multiply[{aw}]"));
+        out.push(format!("[{cb}][{wb}]blend=all_mode=multiply[{bw}]"));
+        out.push(format!("[{aw}][{bw}]blend=all_mode=addition[{sm}]"));
+        layer_labels.push(sm);
+    }
+    let ss2 = attr_name(e, "ss");
+    let go = attr_name(e, "so");
+    out.push(format!("[{l0}][{l1}]blend=all_mode=addition[{ss2}]", l0 = layer_labels[0], l1 = layer_labels[1]));
+    out.push(format!("[{ss2}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h));
+    out.push(format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"));
+    out
 }
 
 // ── helpers ───────────────────────────────────────────────────────────
@@ -1013,6 +1480,7 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
         e.kind.as_str(),
         "lensFlare" | "lightLeak" | "godRays" | "prismRefraction"
             | "floatingDust" | "starGlint" | "neonTrails" | "goldenRays"
+            | "floatingEmbers" | "cinematicFog" | "fireflies" | "fallingSnow"
     ) {
         let i = (p.get("intensity").copied().unwrap_or(100.0) / 100.0).clamp(0.0, 1.0);
         if i <= 0.0 || ctx.clip_ms <= 0 {
@@ -1034,7 +1502,11 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
             "floatingDust" => floating_dust_frag(e, ctx, i, &en, &p),
             "starGlint" => star_glint_frag(e, ctx, i, &en, &p),
             "neonTrails" => neon_trails_frag(e, ctx, i, &en, &p),
-            _ => golden_rays_frag(e, ctx, i, &en, &p),
+            "goldenRays" => golden_rays_frag(e, ctx, i, &en, &p),
+            "floatingEmbers" => floating_embers_frag(e, ctx, i, &en, &p),
+            "cinematicFog" => cinematic_fog_frag(e, ctx, i, &en, &p),
+            "fireflies" => fireflies_frag(e, ctx, i, &en, &p),
+            _ => falling_snow_frag(e, ctx, i, &en, &p),
         });
     }
     match e.kind.as_str() {

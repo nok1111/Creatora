@@ -392,4 +392,236 @@ void main(){
       ];
     },
   },
+
+  // ── Floating Embers ─────────────────────────────────────────────
+  // uP0 = (density, size, t, yoff)     scroll offset precomputed
+  // uP1 = (cr, cg, cb, gain)           ember tint + intensity
+  // uP2 = (aspect, flicker, sway, gust)
+  // SCROLL model (mirrors the export bake+scroll): the ember field is
+  // STATIC in field-coords; the window scrolls up. Two copies offset
+  // by R/2 crossfade → infinite seamless rise. A low-freq noise band
+  // scrolled identically gives organic flicker/lifecycle.
+  floatingEmbers: {
+    frag: `${HEADER}
+float eh(vec2 c, vec2 s){ return fract(sin(dot(c, s)) * 43758.5453); }
+float evn(vec2 p){
+  vec2 i = floor(p), fr = fract(p);
+  vec2 u = fr * fr * (3. - 2. * fr);
+  return mix(mix(eh(i, vec2(127.1, 311.7)), eh(i + vec2(1., 0.), vec2(127.1, 311.7)), u.x),
+             mix(eh(i + vec2(0., 1.), vec2(127.1, 311.7)), eh(i + vec2(1., 1.), vec2(127.1, 311.7)), u.x), u.y);
+}
+float emb(vec2 d){
+  vec2 cs = vec2(0.055, 0.34);         // narrow column, tall band
+  vec2 cell = floor(d / cs);
+  float f = 0.;
+  for (int ix = -1; ix <= 1; ix++)
+  for (int iy = -1; iy <= 1; iy++) {
+    vec2 c = cell + vec2(float(ix), float(iy));
+    float h1 = eh(c, vec2(127.1, 311.7));
+    if (h1 >= uP0.x) continue;
+    float h2 = eh(c, vec2(269.5, 183.3));
+    float h3 = eh(c, vec2(419.2, 371.9));
+    float h4 = eh(c, vec2(113.5, 271.9));
+    float h5 = eh(c, vec2(213.9, 117.3));
+    vec2 p = vec2((c.x + 0.15 + 0.7 * h3) * cs.x, (c.y + h5) * cs.y);
+    vec2 dd = d - p;
+    float bri = 0.45 + 0.75 * h2;
+    float sx = (0.0035 + 0.006 * h4) * uP0.y;
+    float trl = 1. + step(0.72, h3) * (0.5 + 1.5 * h5);   // few get trails
+    float sy = sx * trl * (1. + 6. * (0.04 + 0.10 * h2));
+    float rc = 0.45 * sx;                               // hot inner core
+    f += bri * (exp(-dd.x * dd.x / (2. * sx * sx) - dd.y * dd.y / (2. * sy * sy))
+        + 0.4 * exp(-dot(dd, dd) / (2. * rc * rc)));
+  }
+  return f;
+}
+void main(){
+  float R = 4. * 0.34;
+  float yoff = mod(uP0.w, R);
+  float xoff = uP2.z * uP2.w * 0.06;    // gust wobble, whole window
+  // weight 0 at each copy's wrap → seamless infinite scroll
+  float wA = 0.5 - 0.5 * cos(6.2832 * uP0.w / R);
+  vec2 dA = vec2(vUv.x * uP2.x + xoff, vUv.y + yoff);
+  vec2 dB = vec2(vUv.x * uP2.x + xoff, vUv.y + mod(yoff + R * 0.5, R));
+  // organic flicker baked per-copy: noise rides with the field
+  float nA = 0.35 + 0.95 * evn(dA * vec2(6., 4.));
+  float nB = 0.35 + 0.95 * evn(dB * vec2(6., 4.));
+  float f = wA * emb(dA) * mix(1., nA, uP2.y)
+          + (1. - wA) * emb(dB) * mix(1., nB, uP2.y);
+  frag = screen(uP1.rgb * f * uP1.w * 1.25);
+}`,
+    pack: (c, { t, w, h }) => [
+      c.density, c.size, t, (0.06 + 0.14 * c.speed) * t,
+      c.cr, c.cg, c.cb, c.intensity / 100,
+      w / h, c.flicker, c.sway, Math.sin(6.2832 * 0.07 * t),
+    ],
+  },
+
+  // ── Cinematic Fog ───────────────────────────────────────────────
+  // uP0 = (coverage, thickness, t, -)
+  // uP1 = (cr, cg, cb, gain)           mist tint + intensity
+  // uP2 = (aspect, pool, speed, pattern)
+  // SCROLL model (mirrors export bake+scroll): the FBM field is static
+  // in lattice space; the sampling window drifts. Two copies offset
+  // half a period crossfade → seamless infinite drift.
+  cinematicFog: {
+    frag: `${HEADER}
+float fh(vec2 c, vec2 s){ return fract(sin(dot(c, s)) * 43758.5453); }
+float vn(vec2 p){
+  vec2 i = floor(p), fr = fract(p);
+  vec2 u = fr * fr * (3. - 2. * fr);
+  float a = fh(i, vec2(127.1, 311.7));
+  float b = fh(i + vec2(1., 0.), vec2(127.1, 311.7));
+  float cc = fh(i + vec2(0., 1.), vec2(127.1, 311.7));
+  float e = fh(i + vec2(1., 1.), vec2(127.1, 311.7));
+  return mix(mix(a, b, u.x), mix(cc, e, u.x), u.y);
+}
+float fbm(vec2 p){ return vn(p) + 0.5 * vn(p * 2.3 + 17.3); }
+void main(){
+  float pat = uP2.w;
+  // 0 Ground Fog · 1 Rolling Fog · 2 Cinematic Haze
+  float sc   = pat < .5 ? 2.6  : pat < 1.5 ? 2.2  : 1.9;
+  float ani  = pat < .5 ? 2.4  : pat < 1.5 ? 1.4  : 1.0;
+  float plw  = pat < .5 ? 1.0  : pat < 1.5 ? 0.55 : 0.15;
+  float mix2 = pat < .5 ? 0.30 : pat < 1.5 ? 0.45 : 0.35;
+  float drv  = pat < .5 ? 1.0  : pat < 1.5 ? 2.1  : 0.7;
+  // two parallax layers drifting at different speeds; weight 0 at each
+  // copy's lattice wrap → seamless infinite drift (mirrors export crop)
+  float d1 = uP0.z * uP2.z * drv * 0.55;
+  float d2 = uP0.z * uP2.z * drv * 1.30 + 7.7;
+  float w1 = 0.5 - 0.5 * cos(6.2832 * d1);
+  float w2 = 0.5 - 0.5 * cos(6.2832 * d2);
+  vec2 p = vec2(vUv.x * uP2.x / ani, vUv.y) * sc;
+  float f1 = (w1 * fbm(p + vec2(fract(d1), 0.))
+           + (1. - w1) * fbm(p + vec2(fract(d1 + 0.5), 0.))) / 1.5;
+  float f2 = (w2 * fbm(p * 1.7 + vec2(-fract(d2), 0.))
+           + (1. - w2) * fbm(p * 1.7 + vec2(-fract(d2 + 0.5), 0.))) / 1.5;
+  float fog = (1. - mix2) * f1 + mix2 * f2;
+  // coverage threshold → real banks with clear air between them
+  float cov = clamp((fog - (1. - uP0.x) * 0.75) / max(uP0.x * 0.38, 0.05), 0., 1.);
+  fog = pow(cov, 1. + 1.0 * uP0.y);
+  // fog pools low in the frame
+  float pool = mix(1., smoothstep(-0.15, 1.05, vUv.y), plw * uP2.y);
+  // and lives where the scene is lit
+  float lw = 0.25 + 0.75 * smoothstep(0.1, 0.7,
+    dot(src(vUv).rgb, vec3(0.299, 0.587, 0.114)));
+  frag = screen(uP1.rgb * fog * pool * lw * uP1.w * 1.8);
+}`,
+    pack: (c, { t, w, h }) => [
+      c.coverage, c.thickness, t, 0,
+      c.cr, c.cg, c.cb, c.intensity / 100,
+      w / h, c.pool, c.speed, c.pattern ?? 0,
+    ],
+  },
+
+  // ── Fireflies ───────────────────────────────────────────────────
+  // uP0 = (count, size, t, -)
+  // uP1 = (cr, cg, cb, gain)           tint + intensity
+  // uP2 = (aspect, blink, speed, glow)
+  // N discrete wanderers — not cell-bound: each rides a sum of three
+  // incommensurate sines per axis (direction changes and pauses fall
+  // out naturally), flashing with a soft-attack blink. Small core,
+  // wide halo.
+  fireflies: {
+    frag: `${HEADER}
+float ffh(float i, float k){ return fract(sin(i * 127.1 + k * 311.7) * 43758.5453); }
+void main(){
+  vec2 d = vec2(vUv.x * uP2.x, vUv.y);
+  float tt = uP0.z * uP2.z;              // t * wander speed
+  float tb = uP0.z * (0.25 + 1.1 * uP2.y); // t * blink rate
+  float f = 0.;
+  for (int i = 0; i < 16; i++) {
+    float fi = float(i);
+    if (fi >= uP0.x) break;
+    float h1 = ffh(fi, 1.);
+    float h2 = ffh(fi, 2.);
+    float h3 = ffh(fi, 3.);
+    float h4 = ffh(fi, 4.);
+    float wx = 0.5 * uP2.x
+      + (0.28 + 0.20 * h1) * sin(6.2832 * (tt * (0.021 + 0.035 * h1) + h2))
+      + 0.12 * sin(6.2832 * (tt * (0.075 + 0.06 * h3) + h4))
+      + 0.04 * sin(6.2832 * (tt * (0.21 + 0.12 * h2) + h1));
+    float wy = 0.55
+      + (0.22 + 0.18 * h3) * sin(6.2832 * (tt * (0.017 + 0.03 * h2) + h1))
+      + 0.10 * sin(6.2832 * (tt * (0.06 + 0.05 * h4) + h3))
+      + 0.035 * sin(6.2832 * (tt * (0.18 + 0.10 * h1) + h2));
+    vec2 dd = d - vec2(wx, wy);
+    // blink: soft-attack flash, but never fully dead (dim ember floor)
+    float bl = 0.5 + 0.5 * sin(6.2832 * (tb * (0.35 + 0.4 * h4) + h2));
+    float gate = smoothstep(0.35, 0.8, bl);
+    float bri = (0.18 + 0.82 * gate) * (0.6 + 0.5 * h1);
+    float sig = 0.006 * uP0.y;
+    float r2 = dot(dd, dd);
+    f += bri * (1.6 * exp(-r2 / (2. * sig * sig))
+              + 0.7 * exp(-r2 / (2. * sig * sig * (14. + 30. * uP2.w))));
+  }
+  frag = screen(uP1.rgb * f * uP1.w * 1.5);
+}`,
+    pack: (c, { t, w, h }) => [
+      c.count, c.size, t, 0,
+      c.cr, c.cg, c.cb, c.intensity / 100,
+      w / h, c.blink, c.speed, c.glow,
+    ],
+  },
+
+  // ── Falling Snow ────────────────────────────────────────────────
+  // uP0 = (density, size, t, depth)
+  // uP1 = (cr, cg, cb, gain)           flake tint + intensity
+  // uP2 = (aspect, sway, speed, gustA)
+  // uP3 = (yoffFar, yoffNear, gustB, -)  scroll offsets per layer
+  // SCROLL model (mirrors export bake+scroll): each layer's flake field
+  // is static in field-coords; the window scrolls DOWN (flakes fall).
+  // Two copies offset R/2 crossfade per layer → seamless infinite
+  // snowfall at real parallax speeds. Lateral gust drifts the window.
+  fallingSnow: {
+    frag: `${HEADER}
+float snh(vec2 c, vec2 s){ return fract(sin(dot(c, s)) * 43758.5453); }
+float laySnow(vec2 d, float L, vec2 cs, float wgt, float dens){
+  vec2 cell = floor(d / cs);
+  float f = 0.;
+  for (int ix = -1; ix <= 1; ix++)
+  for (int iy = -1; iy <= 1; iy++) {
+    vec2 c = cell + vec2(float(ix), float(iy));
+    float h1 = snh(c + L * 37.7, vec2(127.1, 311.7));
+    if (h1 >= dens) continue;
+    float h2 = snh(c + L * 37.7, vec2(269.5, 183.3));
+    float h3 = snh(c + L * 37.7, vec2(419.2, 371.9));
+    float h4 = snh(c + L * 37.7, vec2(113.5, 271.9));
+    float h5 = snh(c + L * 37.7, vec2(213.9, 117.3));
+    vec2 p = vec2((c.x + 0.1 + 0.8 * h3) * cs.x, (c.y + h5) * cs.y);
+    vec2 dd = d - p;
+    float sr = (L > .5 ? 0.008 + 0.010 * h4 : 0.0026 + 0.0022 * h4) * uP0.y;
+    f += wgt * (0.55 + 0.45 * h2) * exp(-dot(dd, dd) / (2. * sr * sr));
+  }
+  return f;
+}
+void main(){
+  float RF = 4. * 0.30;                // far scroll period (v-units)
+  float RN = 4. * 0.52;                // near scroll period
+  float wF = 0.5 - 0.5 * cos(6.2832 * uP3.x / RF);
+  float wN = 0.5 - 0.5 * cos(6.2832 * uP3.y / RN);
+  float gA = uP2.y * 0.04 * uP2.w;     // gust sway per layer
+  float gB = uP2.y * 0.04 * uP3.z;
+  float far = wF * laySnow(vec2(vUv.x * uP2.x + gA, vUv.y + uP3.x), 0.,
+              vec2(0.05, 0.30), 0.72 - 0.30 * uP0.w, uP0.x)
+            + (1. - wF) * laySnow(vec2(vUv.x * uP2.x + gA, vUv.y + mod(uP3.x + RF * .5, RF)), 0.,
+              vec2(0.05, 0.30), 0.72 - 0.30 * uP0.w, uP0.x);
+  float near = wN * laySnow(vec2(vUv.x * uP2.x + gB, vUv.y + uP3.y), 1.,
+               vec2(0.13, 0.52), 0.45 + 0.55 * uP0.w, uP0.x * 0.55)
+             + (1. - wN) * laySnow(vec2(vUv.x * uP2.x + gB, vUv.y + mod(uP3.y + RN * .5, RN)), 1.,
+               vec2(0.13, 0.52), 0.45 + 0.55 * uP0.w, uP0.x * 0.55);
+  frag = screen(uP1.rgb * (far + near) * uP1.w * 1.3);
+}`,
+    pack: (c, { t, w, h }) => {
+      const rF = (0.05 + 0.09 * c.speed) * 0.7;
+      const rN = (0.05 + 0.09 * c.speed) * 1.35;
+      return [
+        c.density, c.size, t, c.depth,
+        c.cr, c.cg, c.cb, c.intensity / 100,
+        w / h, c.sway, c.speed, Math.sin(6.2832 * 0.05 * t),
+        (4 * 0.30) - ((rF * t) % (4 * 0.30)), (4 * 0.52) - ((rN * t) % (4 * 0.52)),
+        Math.sin(6.2832 * 0.08 * t + 1.9), 0,
+      ];
+    },
+  },
 };

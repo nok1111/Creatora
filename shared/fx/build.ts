@@ -930,6 +930,154 @@ export const MANIFEST: FxManifest = {
       preview: "gl",
       thumb: "img:goldenRays",
     },
+    // ══ Batch 3 — atmospheric environment ═══════════════════════════
+    // ── Floating Embers ─────────────────────────────────────────────
+    // Warm sparks rising on convection: cell-hash particles fall through
+    // a wrapped vertical band (edge-faded, no pop), each with a
+    // life-cycle envelope (ignite → burn → die) and faster embers
+    // getting a directional vertical smear. Live quarter-res geq on the
+    // input; identical hash layout in preview.
+    {
+      id: "floatingEmbers",
+      kind: "effect",
+      category: "light",
+      name: "Floating Embers",
+      description:
+        "Warm embers drifting upward — glowing sparks with organic rise, flicker and natural lifecycles.",
+      params: [
+        num("intensity", "Intensity", 55, 0, 100, 1, "%"),
+        num("density", "Density", 0.5, 0.1, 1, 0.02),
+        num("size", "Size", 1, 0.4, 2.2, 0.05),
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 0,
+          options: ["Ember Orange", "Crimson", "Gold"],
+        },
+        num("flicker", "Flicker", 0.6, 0, 1, 0.02),
+        num("speed", "Rise speed", 0.5, 0, 1.5, 0.02),
+        num("sway", "Sway", 0.5, 0, 1, 0.02),
+      ],
+      derive: {
+        cr: { from: "tint", values: [1.0, 1.0, 1.0] },
+        cg: { from: "tint", values: [0.55, 0.32, 0.80] },
+        cb: { from: "tint", values: [0.20, 0.10, 0.38] },
+      },
+      preview: "gl",
+      thumb: "img:floatingEmbers",
+    },
+    // ── Cinematic Fog ───────────────────────────────────────────────
+    // Layered value-noise FBM mist at eighth res — two parallax layers
+    // drifting at different speeds, height pooling and internal density
+    // contrast so it reads as air, not a white veil. Three patterns:
+    // Ground Fog / Rolling Fog / Cinematic Haze.
+    {
+      id: "cinematicFog",
+      kind: "effect",
+      category: "light",
+      name: "Cinematic Fog",
+      description:
+        "Layered volumetric mist — drifting density banks with parallax depth and soft low pooling.",
+      params: [
+        num("intensity", "Intensity", 50, 0, 100, 1, "%"),
+        num("coverage", "Coverage", 0.55, 0.1, 1, 0.02),
+        num("thickness", "Texture", 0.5, 0.2, 1, 0.02),
+        {
+          key: "pattern",
+          label: "Pattern",
+          type: "enum",
+          def: 0,
+          options: ["Ground Fog", "Rolling Fog", "Cinematic Haze"],
+        },
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 0,
+          options: ["Cold Mist", "Warm Haze", "Moonlight"],
+        },
+        num("pool", "Low pooling", 0.6, 0, 1, 0.02),
+        num("speed", "Drift speed", 0.06, 0, 0.3, 0.01, "Hz"),
+      ],
+      derive: {
+        cr: { from: "tint", values: [0.82, 0.95, 0.75] },
+        cg: { from: "tint", values: [0.88, 0.85, 0.82] },
+        cb: { from: "tint", values: [0.95, 0.72, 1.00] },
+      },
+      preview: "gl",
+      thumb: "img:cinematicFog",
+    },
+    // ── Fireflies ───────────────────────────────────────────────────
+    // A handful of discrete wanderers: N unrolled particles on smooth
+    // pseudo-random walks (summed incommensurate sines → direction
+    // changes and pauses), each flashing with a soft-attack blink
+    // cycle. Small core, wide halo, warm green glow.
+    {
+      id: "fireflies",
+      kind: "effect",
+      category: "light",
+      name: "Fireflies",
+      description:
+        "Drifting fireflies — wandering luminous insects with organic paths and gentle blinking.",
+      params: [
+        num("intensity", "Intensity", 60, 0, 100, 1, "%"),
+        num("count", "Count", 8, 4, 16, 1),
+        num("size", "Size", 1, 0.4, 2, 0.05),
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 0,
+          options: ["Green", "Amber", "Cyan"],
+        },
+        num("blink", "Blink rate", 0.5, 0, 1, 0.02),
+        num("speed", "Wander speed", 0.5, 0, 1.5, 0.02),
+        num("glow", "Halo", 0.6, 0, 1, 0.02),
+      ],
+      derive: {
+        cr: { from: "tint", values: [0.62, 1.0, 0.45] },
+        cg: { from: "tint", values: [1.0, 0.72, 0.85] },
+        cb: { from: "tint", values: [0.30, 0.15, 1.00] },
+      },
+      preview: "gl",
+      thumb: "img:fireflies",
+    },
+    // ── Falling Snow ────────────────────────────────────────────────
+    // Two depth layers in one field: far flakes small/slow/dim/many,
+    // near flakes big/soft/fast/few. Each flake falls through a tall
+    // wrapped band with edge fade and per-flake lateral sway — no
+    // grid, no uniform distribution.
+    {
+      id: "fallingSnow",
+      kind: "effect",
+      category: "light",
+      name: "Falling Snow",
+      description:
+        "Depth-layered snowfall — near and far flakes drifting down at different speeds with lateral sway.",
+      params: [
+        num("intensity", "Intensity", 60, 0, 100, 1, "%"),
+        num("density", "Density", 0.5, 0.1, 1, 0.02),
+        num("size", "Size", 1, 0.4, 2, 0.05),
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 0,
+          options: ["White", "Cool Blue", "Warm"],
+        },
+        num("speed", "Fall speed", 0.5, 0.1, 1.5, 0.02),
+        num("sway", "Sway", 0.5, 0, 1, 0.02),
+        num("depth", "Depth contrast", 0.6, 0, 1, 0.02),
+      ],
+      derive: {
+        cr: { from: "tint", values: [0.95, 0.85, 1.0] },
+        cg: { from: "tint", values: [0.97, 0.90, 0.92] },
+        cb: { from: "tint", values: [1.00, 1.00, 0.80] },
+      },
+      preview: "gl",
+      thumb: "img:fallingSnow",
+    },
   ],
 };
 

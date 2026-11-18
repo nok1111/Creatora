@@ -1022,6 +1022,31 @@ fn light_dump() {
     }
 }
 
+/// Dumps cinematicFog chains for all three `pattern` values so the
+/// Ground/Rolling/Haze variants can be rendered and compared.
+///   cargo test --lib render::fxlib_parity::light_fog_patterns -- --ignored
+#[test]
+#[ignore]
+fn light_fog_patterns() {
+    use crate::project::document::Effect;
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let out_dir = root.join("qa/out");
+    let ctx = crate::render::fxeffects::FxCtx {
+        w: 1280, h: 720, fps_num: 30, fps_den: 1, clip_ms: 3000, source_in_ms: 0, speed: 1.0,
+    };
+    for pat in 0..3 {
+        let fx = Effect {
+            id: "v".into(), kind: "cinematicFog".into(), enabled: true,
+            in_ms: None, out_ms: None, file: None, times: None,
+            params: [("pattern".to_string(), pat as f64)].into_iter().collect(),
+        };
+        let frags = crate::render::fxeffects::fragments(&fx, &ctx).unwrap_or_default().join(";");
+        let chain = format!("scale=1280:720,setsar=1,{frags},select=eq(n\\,30)");
+        std::fs::write(out_dir.join(format!("frag_fog_p{pat}.txt")), &chain).unwrap();
+        eprintln!("dumped fog pattern {pat}");
+    }
+}
+
 /// Full-res (1280×720) production frames for visual QA of the light
 /// collection — one PNG per effect at t=1 s on the photographic sample.
 ///   cargo test --lib render::fxlib_parity::light_frames -- --ignored

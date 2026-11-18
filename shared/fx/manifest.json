@@ -2335,6 +2335,421 @@
       ],
       "preview": "gl",
       "thumb": "img:goldenRays"
+    },
+    {
+      "id": "floatingEmbers",
+      "kind": "effect",
+      "category": "light",
+      "name": "Floating Embers",
+      "description": "Warm embers drifting upward — glowing sparks with organic rise, flicker and natural lifecycles.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 55,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "density",
+          "label": "Density",
+          "type": "number",
+          "def": 0.5,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "type": "number",
+          "def": 1,
+          "min": 0.4,
+          "max": 2.2,
+          "step": 0.05
+        },
+        {
+          "key": "tint",
+          "label": "Color",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Ember Orange",
+            "Crimson",
+            "Gold"
+          ]
+        },
+        {
+          "key": "flicker",
+          "label": "Flicker",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "speed",
+          "label": "Rise speed",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1.5,
+          "step": 0.02
+        },
+        {
+          "key": "sway",
+          "label": "Sway",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            1,
+            1,
+            1
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            0.55,
+            0.32,
+            0.8
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            0.2,
+            0.1,
+            0.38
+          ]
+        }
+      },
+      "preview": "gl",
+      "thumb": "img:floatingEmbers"
+    },
+    {
+      "id": "cinematicFog",
+      "kind": "effect",
+      "category": "light",
+      "name": "Cinematic Fog",
+      "description": "Layered volumetric mist — drifting density banks with parallax depth and soft low pooling.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 50,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "coverage",
+          "label": "Coverage",
+          "type": "number",
+          "def": 0.55,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "thickness",
+          "label": "Texture",
+          "type": "number",
+          "def": 0.5,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Ground Fog",
+            "Rolling Fog",
+            "Cinematic Haze"
+          ]
+        },
+        {
+          "key": "tint",
+          "label": "Color",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Cold Mist",
+            "Warm Haze",
+            "Moonlight"
+          ]
+        },
+        {
+          "key": "pool",
+          "label": "Low pooling",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "speed",
+          "label": "Drift speed",
+          "type": "number",
+          "def": 0.06,
+          "min": 0,
+          "max": 0.3,
+          "step": 0.01,
+          "unit": "Hz"
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            0.82,
+            0.95,
+            0.75
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            0.88,
+            0.85,
+            0.82
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            0.95,
+            0.72,
+            1
+          ]
+        }
+      },
+      "preview": "gl",
+      "thumb": "img:cinematicFog"
+    },
+    {
+      "id": "fireflies",
+      "kind": "effect",
+      "category": "light",
+      "name": "Fireflies",
+      "description": "Drifting fireflies — wandering luminous insects with organic paths and gentle blinking.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 60,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "count",
+          "label": "Count",
+          "type": "number",
+          "def": 8,
+          "min": 4,
+          "max": 16,
+          "step": 1
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "type": "number",
+          "def": 1,
+          "min": 0.4,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "tint",
+          "label": "Color",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Green",
+            "Amber",
+            "Cyan"
+          ]
+        },
+        {
+          "key": "blink",
+          "label": "Blink rate",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "speed",
+          "label": "Wander speed",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1.5,
+          "step": 0.02
+        },
+        {
+          "key": "glow",
+          "label": "Halo",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            0.62,
+            1,
+            0.45
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            1,
+            0.72,
+            0.85
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            0.3,
+            0.15,
+            1
+          ]
+        }
+      },
+      "preview": "gl",
+      "thumb": "img:fireflies"
+    },
+    {
+      "id": "fallingSnow",
+      "kind": "effect",
+      "category": "light",
+      "name": "Falling Snow",
+      "description": "Depth-layered snowfall — near and far flakes drifting down at different speeds with lateral sway.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 60,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "density",
+          "label": "Density",
+          "type": "number",
+          "def": 0.5,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "type": "number",
+          "def": 1,
+          "min": 0.4,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "tint",
+          "label": "Color",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "White",
+            "Cool Blue",
+            "Warm"
+          ]
+        },
+        {
+          "key": "speed",
+          "label": "Fall speed",
+          "type": "number",
+          "def": 0.5,
+          "min": 0.1,
+          "max": 1.5,
+          "step": 0.02
+        },
+        {
+          "key": "sway",
+          "label": "Sway",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "depth",
+          "label": "Depth contrast",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            0.95,
+            0.85,
+            1
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            0.97,
+            0.9,
+            0.92
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            1,
+            1,
+            0.8
+          ]
+        }
+      },
+      "preview": "gl",
+      "thumb": "img:fallingSnow"
     }
   ]
 }
