@@ -24,6 +24,9 @@ export const FX_CATEGORY_LABELS: Record<string, string> = {
   light: "Light",
   vfx: "VFX",
   audio: "Audio Reactive",
+  combos: "Combos",
+  classic: "Classic",
+  adjust: "Adjust",
 };
 
 export const fxEntries = (): FxEntry[] => FX_MANIFEST.entries;

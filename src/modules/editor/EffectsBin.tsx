@@ -82,20 +82,35 @@ const OVERLAY_ICONS: Record<string, LucideIcon> = {
   blur: Droplets,
 };
 
-const tr = (id: string, label: string, icon: LucideIcon): FxItem => ({ id, label, icon });
+/** Basic per-clip color controls — legacy effectDef types that belong in
+    the Grade tab next to the looks, not under VFX. */
+const ADJUST_IDS = new Set(["brightness", "contrast", "saturation", "blur"]);
+
+const tr = (id: string, label: string, icon: LucideIcon): FxItem => ({
+  id,
+  label,
+  icon,
+  stripImg: thumbUrl(id),
+});
 
 /** Phase E signature picks — the tiles a creator would choose Creatora
     for. Marked in the bin; kept honest by the catalog audit. */
 const SIGNATURE = new Set(["signalOff", "disintegrate", "inkBleed", "velocitySwipe"]);
 
+/** Top-level bin tabs — one axis per tab so the 15-way chip soup becomes
+    three focused shelves. Groups keep `id` for drop routing; `tab` only
+    controls presentation. */
+export type FxTab = "grade" | "animate" | "transitions";
+
 /** Exported so the fx-catalog audit test iterates the same tiles the UI
     renders — a tile that maps to nothing is a test failure, not a silent
     no-op. */
-export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; items: FxItem[] }[] = [
+export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIcon; tab: FxTab; items: FxItem[] }[] = [
   {
     id: "overlay",
     labelKey: "editor.fxCatFilters",
     icon: Sparkles,
+    tab: "grade",
     items: fxEntries()
       .filter((e) => e.kind === "filter")
       .map((e) => ({
@@ -108,8 +123,21 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
   },
   {
     id: "overlay",
+    labelKey: "editor.fxCatAdjust",
+    icon: Contrast,
+    tab: "grade",
+    items: EFFECTS.filter((e) => ADJUST_IDS.has(e.type)).map((e) => ({
+      id: e.type,
+      label: e.label,
+      icon: OVERLAY_ICONS[e.type] ?? Contrast,
+      description: fxEntry(e.type)?.description,
+    })),
+  },
+  {
+    id: "overlay",
     labelKey: "editor.fxCatLight",
     icon: Sun,
+    tab: "grade",
     items: fxEntries()
       .filter((e) => e.kind === "effect" && e.category === "light")
       .map((e) => ({
@@ -124,10 +152,11 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     id: "start",
     labelKey: "editor.fxCatStart",
     icon: LogIn,
+    tab: "animate",
     items: [
       ...fxEntries()
         .filter((e) => e.kind === "effect" && e.category === "intro")
-        .map((e) => ({ id: e.id, label: e.name, icon: LogIn, description: e.description, thumb: e.thumb })),
+        .map((e) => ({ id: e.id, label: e.name, icon: LogIn, description: e.description, thumb: e.thumb, stripImg: thumbUrl(e.id) })),
       preset("fadeIn", Eye),
       preset("scaleIn", Expand),
       preset("bounceIn", Activity),
@@ -141,10 +170,11 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     id: "end",
     labelKey: "editor.fxCatEnd",
     icon: LogOut,
+    tab: "animate",
     items: [
       ...fxEntries()
         .filter((e) => e.kind === "effect" && e.category === "outro")
-        .map((e) => ({ id: e.id, label: e.name, icon: LogOut, description: e.description, thumb: e.thumb })),
+        .map((e) => ({ id: e.id, label: e.name, icon: LogOut, description: e.description, thumb: e.thumb, stripImg: thumbUrl(e.id) })),
       preset("fadeOut", Eye),
       preset("typewriterOut", Type),
       preset("wipeOut", Eraser),
@@ -154,10 +184,11 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     id: "merge",
     labelKey: "editor.fxCatMerge",
     icon: Blend,
+    tab: "transitions",
     items: [
       ...fxEntries()
         .filter((e) => e.kind === "transition")
-        .map((e) => ({ id: e.id, label: e.name, icon: Zap, description: e.description, thumb: e.thumb })),
+        .map((e) => ({ id: e.id, label: e.name, icon: Zap, description: e.description, thumb: e.thumb, stripImg: thumbUrl(e.id) })),
       // Curated legacy set — one tile per distinct gesture. The rest
       // still render in old projects (plan.rs maps every xfade); they
       // are simply no longer offered as new tiles.
@@ -179,6 +210,7 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     id: "overlay",
     labelKey: "editor.fxCatCombos",
     icon: Layers,
+    tab: "animate",
     items: COMBO_PRESETS.map((c) => ({
       id: c.id,
       label: c.label,
@@ -191,8 +223,13 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     id: "overlay",
     labelKey: "editor.fxCatOverlay",
     icon: Wand2,
+    tab: "animate",
     items: [
-      ...EFFECTS.filter((e) => !["light", "intro", "outro"].includes(fxEntry(e.type)?.category ?? "")).map((e) => ({
+      ...EFFECTS.filter(
+        (e) =>
+          !ADJUST_IDS.has(e.type) &&
+          !["light", "intro", "outro"].includes(fxEntry(e.type)?.category ?? ""),
+      ).map((e) => ({
         id: e.type,
         label: e.label,
         icon: OVERLAY_ICONS[e.type] ?? Wand2,
@@ -211,21 +248,48 @@ function sectionOf(cat: EffectCategory, id: string): string {
   if (comboPreset(id)) return "combos";
   const e = fxEntry(id);
   if (e) return e.category;
-  if (cat === "merge") return "transitions";
+  if (cat === "merge") return "classic";
   if (cat === "start") return "intro";
   if (cat === "end") return "outro";
-  return ["pulse", "shake", "zoomPunch"].includes(id) ? "motion" : "cinematic";
+  if (ADJUST_IDS.has(id)) return "adjust";
+  return ["pulse", "shake", "zoomPunch"].includes(id) ? "motion" : "vfx";
 }
+
+const FX_TABS: { id: FxTab; labelKey: string }[] = [
+  { id: "grade", labelKey: "editor.fxTabGrade" },
+  { id: "animate", labelKey: "editor.fxTabAnimate" },
+  { id: "transitions", labelKey: "editor.fxTabTransitions" },
+];
 
 export function EffectsBin() {
   const { t } = useTranslation();
+  const [tab, setTab] = useState<FxTab>("grade");
   const [section, setSection] = useState<string>("all");
+  const groups = FX_CATALOG.filter((c) => c.tab === tab);
   const sections = Array.from(
-    new Set(FX_CATALOG.flatMap((c) => c.items.map((i) => sectionOf(c.id, i.id)))),
+    new Set(groups.flatMap((c) => c.items.map((i) => sectionOf(c.id, i.id)))),
   );
   const [showAll] = [section === "all"];
   return (
     <div className="flex h-full flex-col overflow-y-auto">
+      <div className="flex gap-1 border-b border-border/60 px-2 pt-1.5">
+        {FX_TABS.map((tb) => (
+          <button
+            key={tb.id}
+            onClick={() => {
+              setTab(tb.id);
+              setSection("all");
+            }}
+            className={`flex-1 rounded-t-md border-b-2 px-2 py-1 text-[11px] font-medium transition-colors ${
+              tab === tb.id
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}
+          >
+            {t(tb.labelKey)}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-1 border-b border-border/60 px-2 py-1.5">
         {["all", ...sections].map((s2) => (
           <button
@@ -240,8 +304,10 @@ export function EffectsBin() {
           </button>
         ))}
       </div>
-      {FX_CATALOG.map((cat) => {
-        const items = cat.items.filter((i) => showAll || sectionOf(cat.id, i.id) === section);
+      {groups.map((cat) => {
+        const items = cat.items
+          .filter((i) => showAll || sectionOf(cat.id, i.id) === section)
+          .sort((a, b) => Number(SIGNATURE.has(b.id)) - Number(SIGNATURE.has(a.id)));
         if (!items.length) return null;
         return (
           <div key={cat.labelKey} className="border-b border-border/60">
@@ -278,7 +344,9 @@ export function EffectsBin() {
                         aria-hidden
                       />
                     )}
-                    {item.thumb && !item.thumbImg && <div className={`fxt ${item.thumb}`} aria-hidden />}
+                    {item.thumb && !item.thumbImg && !item.stripImg && (
+                      <div className={`fxt ${item.thumb}`} aria-hidden />
+                    )}
                     {SIGNATURE.has(item.id) && (
                       <span
                         title="Signature"
