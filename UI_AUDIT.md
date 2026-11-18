@@ -125,10 +125,17 @@ blancas con hairline + sombra real, borders con más contraste).
 
 ## Iteraciones propuestas
 
-- **Iteración 1 — Fundamentos:** retune de escala de superficies + borders +
-  piso tipográfico 11px + slider/form accent coral. Riesgo bajo, impacto alto.
-- **Iteración 2 — Marca:** logomark + iconos de app + Inter bundled + tile del
-  topbar. (Regenerar `src-tauri/icons/`.)
+- **Iteración 1 — Fundamentos: ✅ commit `81fefad`.** Surfaces retuned
+  (card/bg 1.09→~1.3, border 1.44→~1.9), `accent-color: primary` global en
+  forms, cyan stray eliminado, piso micro-texto 9px→10px (65 archivos…
+  clase `text-[9px]` → `text-[10px]`).
+- **Iteración 2 — Marca: ✅ implementada.** Logomark propio (C grafito +
+  play crema en tile coral, `src/components/BrandMark.tsx`), set completo
+  de iconos regenerado desde la misma geometría (`qa/gen_icons.py` →
+  `src-tauri/icons/` PNG×15 + ICO multi-size + ICNS), Inter Variable
+  bundled vía `@fontsource-variable/inter` (verificado
+  `document.fonts.check` → true), topbar usa el mark real
+  (screenshot `qa/shots/brand/topbar_app.png`).
 - **Iteración 3 — Assets de contenido:** ilustraciones empty-state, artwork de
   formatos, audio tile, thumbnails de imagen.
 - **Iteración 4 — Densidad/detalles:** banners unificados, exports labels,

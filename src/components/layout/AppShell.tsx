@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Clapperboard } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { MODULES } from "@/app/nav";
 import { useProject } from "@/stores/project";
 import { ProjectSwitchDialog } from "@/components/ProjectSwitchDialog";
@@ -22,9 +23,7 @@ export function AppShell() {
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-topbar-border bg-topbar px-3">
         {/* Brand */}
         <div className="mr-2 flex items-center gap-2">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-            C
-          </div>
+          <BrandMark size={28} className="shrink-0 rounded-lg shadow-sm" />
           <span className="hidden text-sm font-semibold tracking-wide text-topbar-accent-foreground sm:inline">
             Creatora
           </span>

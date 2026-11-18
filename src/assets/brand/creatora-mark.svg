@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Master mark. Raster app icons are generated from this geometry via qa/gen_icons.py. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A70"/>
+      <stop offset="1" stop-color="#F0522F"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <path d="M 347.3 356.7 A 140 140 0 1 1 347.3 155.3"
+        fill="none" stroke="#241F1A" stroke-width="66"/>
+  <path d="M 310 214 L 310 298 L 392 256 Z" fill="#F4F0E8" stroke="#F4F0E8"
+        stroke-width="14" stroke-linejoin="round"/>
+</svg>
