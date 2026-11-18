@@ -1788,7 +1788,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               />
             )}
 
-            <PlayheadOverlay msToPx={msToPx} />
+            <PlayheadOverlay msToPx={msToPx} pxToMs={pxToMs} />
           </div>
         </div>
       </div>
@@ -2063,14 +2063,48 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
 
 /** Playhead line — the ONLY piece that subscribes to playheadMs, so the
  * 60 fps store updates re-render this ~10-line div, not the whole panel. */
-function PlayheadOverlay({ msToPx }: { msToPx: (ms: number) => number }) {
+function PlayheadOverlay({
+  msToPx,
+  pxToMs,
+}: {
+  msToPx: (ms: number) => number;
+  pxToMs: (px: number) => number;
+}) {
   const playheadMs = useEditor((s) => s.playheadMs);
+  // The line is draggable anywhere along its height — same scrub math as
+  // the ruler. The strip is ~9px wide centered on the 1px line.
+  const grab = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const col = (e.currentTarget.parentElement as HTMLElement).offsetParent as HTMLElement | null;
+    if (!col) return;
+    const rect = col.getBoundingClientRect();
+    const seek = (ev: { clientX: number }) => {
+      const d = useProject.getState().doc;
+      if (!d) return;
+      useEditor.getState().setPlayhead(
+        snapToFrame(Math.max(0, pxToMs(ev.clientX - rect.left)), d),
+      );
+    };
+    seek(e);
+    const onMove = (ev: PointerEvent) => seek(ev);
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
   return (
     <div
       className="pointer-events-none absolute top-0 bottom-0 z-40 w-px bg-destructive"
       style={{ left: msToPx(playheadMs) }}
     >
       <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-destructive" />
+      <div
+        className="pointer-events-auto absolute inset-y-0 -left-1 w-[9px] cursor-ew-resize"
+        onPointerDown={grab}
+      />
     </div>
   );
 }
