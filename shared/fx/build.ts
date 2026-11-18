@@ -439,7 +439,9 @@ const SHARD = (() => {
   // first third. k = this shard's own progress 0→1.
   const d = `(${h3}*{stagger}*0.7)`;
   const k = `clip((${T}-${d})/max(1-${d},0.05),0,1)`;
-  const e = `(1-pow(1-${k},3))`;
+  // backOut (s=1.70158): each shard overshoots its seat ~10% then
+  // snaps back — the landing reads as a lock, not a slide to a stop.
+  const e = `(1+2.70158*pow(${k}-1,3)+1.70158*pow(${k}-1,2))`;
   const offx = `(${h1}-0.5)*{spread}*W*0.7`;
   const offy = `(${h2}-0.5)*{spread}*H*0.7`;
   return {
@@ -783,7 +785,7 @@ export const MANIFEST: FxManifest = {
         "Rack-focus entrance: the clip arrives defocused and breathes into sharpness while the exposure settles.",
       params: [
         num("duration", "Duration", 1100, 300, 3000, 50, "ms"),
-        num("defocus", "Defocus", 0.7, 0, 1, 0.01),
+        num("defocus", "Defocus", 0.85, 0, 1, 0.01),
         num("settle", "Exposure settle", 0.35, 0, 1, 0.01),
         num("breathe", "Breathe", 0.4, 0, 1, 0.01),
       ],
