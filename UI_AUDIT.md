@@ -150,7 +150,12 @@ blancas con hairline + sombra real, borders con más contraste).
   hint en composer sin plataformas + hint de mes vacío en el calendario.
   Nota: `media.filmstrip` jobs fallan a veces en runtime (input inválido)
   — issue funcional del backend, no de UI; registrado, no arreglado aquí.
-- **Iteración 5 — Light theme + regresión:** retune paralelo y barrido
-  EN/ES a 1280/1366/1920.
+- **Iteración 5 — Light theme + regresión: ✅ implementada.** El tema
+  claro no definía `--surface-*` ni `--hairline` (causa real del look
+  lavado: `bg-surface-*` inválido + `shadow-raise` sin hairline). Añadida
+  la escala paralela (floor 89% / cards blancas / raised 97% / hover 92%,
+  hairline oscuro), border 84→78%, input 78→70%, muted-fg 42→40%.
+  Barrido: EN/ES a 1280×720/1366×768/1440×900, light+dark — sin overflow
+  horizontal en ninguna de las 8 rutas.
 
 **Deteniendo aquí — esperando aprobación para implementar por iteraciones.**

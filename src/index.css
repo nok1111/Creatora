@@ -10,7 +10,7 @@
 @layer base {
   :root {
     /* Creative Pop — light theme (management/publishing surfaces) */
-    --background: 30 30% 95%;
+    --background: 32 26% 93%;
     --foreground: 250 14% 11%;
     --card: 0 0% 100%;
     --card-foreground: 250 14% 11%;
@@ -21,13 +21,21 @@
     --secondary: 30 16% 90%;
     --secondary-foreground: 250 14% 14%;
     --muted: 30 14% 91%;
-    --muted-foreground: 260 6% 42%;
-    --accent: 258 60% 94%;
-    --accent-foreground: 258 45% 40%;
+    --muted-foreground: 260 7% 40%;
+    --accent: 258 45% 92%;
+    --accent-foreground: 258 45% 38%;
     --destructive: 5 75% 52%;
     --destructive-foreground: 30 35% 97%;
-    --border: 30 12% 84%;
-    --input: 30 10% 78%;
+    --border: 30 12% 78%;
+    --input: 30 10% 70%;
+    /* Depth scale — parallel to .dark: floor below cards, raised beds,
+       hover surfaces. On light themes elevation also comes from shadows,
+       so steps stay subtle. */
+    --surface-0: 33 24% 89%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 33 20% 97%;
+    --surface-3: 33 18% 92%;
+    --hairline: 250 15% 20%;
     --ring: 10 100% 62%;
     --success: 86 85% 62%;
     --success-foreground: 100 40% 12%;
