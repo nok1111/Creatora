@@ -347,6 +347,11 @@ export function EffectsBin() {
                     {item.thumb && !item.thumbImg && !item.stripImg && (
                       <div className={`fxt ${item.thumb}`} aria-hidden />
                     )}
+                    {!item.thumbImg && !item.stripImg && !item.thumb && (
+                      <div className="flex h-12 w-full items-center justify-center rounded-sm bg-accent/40">
+                        <item.icon className="size-5 text-muted-foreground/60" />
+                      </div>
+                    )}
                     {SIGNATURE.has(item.id) && (
                       <span
                         title="Signature"
@@ -359,11 +364,6 @@ export function EffectsBin() {
                       <item.icon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{item.label}</span>
                     </div>
-                    {item.description && (
-                      <span className="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
-                        {item.description}
-                      </span>
-                    )}
                     <button
                       disabled={!!lacks.length}
                       title={lacks.length ? `Needs: ${lacks.join(", ")}` : "Apply to the selected clip"}
