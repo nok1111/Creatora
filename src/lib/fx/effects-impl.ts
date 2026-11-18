@@ -93,6 +93,26 @@ const IMPL: Record<string, Partial<EffectDef>> = {
       );
     },
   },
+  focusPull: {
+    // Rack focus: feGaussianBlur collapses as (1-wt)³ — export uses the
+    // same envelope on a down/up scale pair. A small exposure settle and
+    // breathing zoom ride (1-wt)².
+    toScale: (ps: Params, ctx: FxCtx, fx: Effect) => {
+      const p = resolveConstantsFor("focusPull", ps);
+      const wt = winT(ctx, fx);
+      return 1 + p.breathe * 0.06 * Math.pow(1 - wt, 2);
+    },
+    toSvg: (ps: Params, ctx?: FxCtx, fx?: Effect) => {
+      if (!ctx) return "";
+      const p = resolveConstantsFor("focusPull", ps);
+      const wt = winT(ctx, fx);
+      const sd = p.defocus * 26 * Math.pow(1 - wt, 3);
+      return (
+        (sd > 0.05 ? `<feGaussianBlur stdDeviation="${sd.toFixed(2)}"/>` : "") +
+        brightnessSvg(p.settle * 0.35 * Math.pow(1 - wt, 2))
+      );
+    },
+  },
   beatImpact: {
     toScale: (ps: Params, ctx: FxCtx, fx: Effect) => {
       const p = resolveConstantsFor("beatImpact", ps);
@@ -112,6 +132,14 @@ const IMPL: Record<string, Partial<EffectDef>> = {
 
 const resolveConstantsFor = (id: string, ps: Params) =>
   resolveConstants(fxEntries().find((e) => e.id === id)!, ps);
+
+/** Window progress 0→1 for intro/outro effects (mirrors the export's
+ *  `(t-w0)/win` gate): eased curves live inside each envelope. */
+const winT = (ctx: FxCtx, fx?: Effect) => {
+  const inMs = fx?.inMs ?? 0;
+  const win = Math.max(1, (fx?.outMs ?? ctx.relMs + 1) - inMs);
+  return Math.min(1, Math.max(0, (tq(ctx) * 1000 - inMs) / win));
+};
 
 /** EffectDefs for every manifest `effect` entry (params from the manifest). */
 export function libraryEffectDefs(): EffectDef[] {

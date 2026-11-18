@@ -1460,6 +1460,138 @@ fn filter_fragments(entry: &fxlib::FxEntry, e: &Effect) -> Option<Vec<String>> {
     (!frags.is_empty()).then_some(frags)
 }
 
+/// Single-clip field effects (intro/outro): the declarative ax/ay/m/glow
+/// recipe animates across the effect window as reduced-res geq field
+/// videos — the same dialect the transition fields engine and the GLSL
+/// preview share. The clip is remapped by (ax,ay), merged to black by
+/// `m` (1 = clip shown), and the tinted `glow` field screen-blends on
+/// top. `u` clamps to the window so outside it the recipe is identity —
+/// no enable gating needed (remap/maskedmerge don't take `enable`).
+fn effect_fields_frag(
+    e: &Effect,
+    ctx: &FxCtx,
+    entry: &fxlib::FxEntry,
+    div: u32,
+    fields: &std::collections::BTreeMap<String, String>,
+) -> Option<String> {
+    let (w, h) = (ctx.w as f64, ctx.h as f64);
+    let dur_s = ctx.clip_ms as f64 / 1000.0;
+    let (w0, w1) = window_s(e);
+    let w1 = w1.min(dur_s);
+    if w1 <= w0 || dur_s <= 0.0 {
+        return None;
+    }
+    let win = w1 - w0;
+    let fps = format!("{}/{}", ctx.fps_num, ctx.fps_den);
+    // Window progress for field frame N (field videos run at project fps).
+    let u = format!(
+        "clip((((N+0.5)*{fd}/{fn_})-{w0})/{win},0,1)",
+        fd = ctx.fps_den,
+        fn_ = ctx.fps_num,
+        w0 = fxlib::fmt_num(w0),
+        win = fxlib::fmt_num(win)
+    );
+    let div = (h / 135.0).round().clamp(1.0, div.max(1) as f64);
+    let (lw, lh) = (((w / div).ceil() as u32).max(2), ((h / div).ceil() as u32).max(2));
+    let cx = format!("((X+0.5)*{}-0.5)", fxlib::fmt_num(div));
+    let cy = format!("((Y+0.5)*{}-0.5)", fxlib::fmt_num(div));
+    let mapped = |name: &str| -> Option<String> {
+        let raw = fields.get(name)?;
+        let t = fxlib::expand_text(entry, raw, &e.params, entry.default_ease.as_deref(), &u).ok()?;
+        let t = fxlib::ident_replace(&t, "X", "§X");
+        let t = fxlib::ident_replace(&t, "Y", "§Y");
+        let t = fxlib::ident_replace(&t, "W", &fxlib::fmt_num(w));
+        let t = fxlib::ident_replace(&t, "H", &fxlib::fmt_num(h));
+        Some(t.replace("§X", &cx).replace("§Y", &cy))
+    };
+    let field = |fmt: &str, gq: &str| {
+        format!(
+            "color=c=black:s={lw}x{lh}:r={fps}:d={d:.4},format={fmt},geq=lum='{gq}',scale={w}:{h}:flags=bilinear",
+            w = ctx.w,
+            h = ctx.h,
+            d = dur_s + 0.2
+        )
+    };
+    let (ax, ay, m) = (mapped("ax")?, mapped("ay")?, mapped("m")?);
+    let (fsp, fbk, fax, fay, fmm, fwp, fmg, fgl) = (
+        attr_name(e, "fs"), attr_name(e, "fb"), attr_name(e, "fx"), attr_name(e, "fy"),
+        attr_name(e, "fm"), attr_name(e, "fw"), attr_name(e, "fg"), attr_name(e, "fl"),
+    );
+    let mut s = String::new();
+    // Field recipes live in canvas pixels but the clip stream only fits
+    // inside the canvas (scale=decrease + optional crop/zoom). Normalise
+    // it to full canvas first so fields, mask, black and remap all agree
+    // — remap output takes the map size, so every input must be WxH.
+    s.push_str(&format!(
+        "scale=w={w}:h={h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,split[{fsp}][{fbk}];",
+        w = ctx.w, h = ctx.h
+    ));
+    s.push_str(&format!(
+        "[{fbk}]colorchannelmixer=rr=0:rg=0:rb=0:gr=0:gg=0:gb=0:br=0:bg=0:bb=0,format=gbrap[{fbk}];"
+    ));
+    s.push_str(&format!("{}[{fax}];", field("gray16le", &format!("clip({ax},0,{})", w - 1.0))));
+    s.push_str(&format!("{}[{fay}];", field("gray16le", &format!("clip({ay},0,{})", h - 1.0))));
+    // maskedmerge(first=warped, second=black, mask=1-m): m=1 → clip shown.
+    s.push_str(&format!("{}[{fmm}];", field("gray", &format!("255*clip(1-({m}),0,1)"))));
+    s.push_str(&format!("[{fsp}]format=gbrap[{fsp}];"));
+    s.push_str(&format!("[{fsp}][{fax}][{fay}]remap[{fwp}];"));
+    s.push_str(&format!("[{fwp}][{fbk}][{fmm}]maskedmerge[{fmg}]"));
+    if let Some(glow) = mapped("glow") {
+        let c = fxlib::resolve_constants(entry, &e.params);
+        let tint = |k: &str| fxlib::fmt_num(c.get(k).copied().unwrap_or(255.0).clamp(0.0, 255.0));
+        s.push_str(&format!(
+            ";color=c=black:s={lw}x{lh}:r={fps}:d={d:.4},format=gbrp,geq=r='min(({g})*{tr},255)':g='min(({g})*{tg},255)':b='min(({g})*{tb},255)',scale={w}:{h}:flags=bilinear[{fgl}]",
+            g = glow,
+            tr = tint("cr"),
+            tg = tint("cg"),
+            tb = tint("cb"),
+            w = ctx.w,
+            h = ctx.h,
+            d = dur_s + 0.2
+        ));
+        s.push_str(&format!(";[{fmg}][{fgl}]blend=all_mode='screen',format=rgba"));
+    } else {
+        s.push_str(&format!(";[{fmg}]format=rgba"));
+    }
+    Some(s)
+}
+
+/// Focus Pull — rack-focus entrance: heavy optical defocus collapsing to
+/// sharp, a gentle exposure settle and a slight breathing zoom. Blur is
+/// a down/up scale pair (per-frame `eval=frame`) plus a light gblur to
+/// kill blockiness; all envelopes run on window progress like the field
+/// effects, so outside the window every term is identity.
+fn focus_pull_frag(e: &Effect, ctx: &FxCtx, p: &std::collections::BTreeMap<String, f64>) -> Option<Vec<String>> {
+    let dur_s = ctx.clip_ms as f64 / 1000.0;
+    let (w0, w1) = window_s(e);
+    let w1 = w1.min(dur_s);
+    if w1 <= w0 {
+        return None;
+    }
+    let (def, set, br) = (p["defocus"], p["settle"], p["breathe"]);
+    // wt = window progress 0→1; blur/settle/zoom all decay as (1-wt)^k.
+    // scale/eq expose `t`; zoompan only knows `time` — two spellings.
+    let wt_t = format!("clip((t-{})/{},0,1)", fxlib::fmt_num(w0), fxlib::fmt_num(w1 - w0));
+    let wt_z = format!("clip((time-{})/{},0,1)", fxlib::fmt_num(w0), fxlib::fmt_num(w1 - w0));
+    let mut out = Vec::new();
+    if def > 0.0 {
+        let sf = format!("(1-{}*pow(1-{wt_t},3))", fxlib::fmt_num(def * 0.94));
+        out.push(format!(
+            "scale=w='max(8,iw*{sf})':h='max(8,ih*{sf})':eval=frame,scale={}:{}:flags=bicubic,gblur=sigma=1.4",
+            ctx.w, ctx.h
+        ));
+    }
+    if set > 0.0 {
+        let b = format!("{}*pow(1-{wt_t},2)", fxlib::fmt_num(set * 0.35));
+        out.push(format!("eq=brightness='{b}':eval=frame"));
+    }
+    if br > 0.0 {
+        let z = format!("1+{}*pow(1-{wt_z},2)", fxlib::fmt_num(br * 0.06));
+        out.push(zoom_frag(ctx, &z));
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 // ── effects ───────────────────────────────────────────────────────────
 
 /// Fragments for a library effect, or None when `e` isn't one (legacy
@@ -1509,7 +1641,14 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
             _ => falling_snow_frag(e, ctx, i, &en, &p),
         });
     }
+    // Field-driven intro/outro effects (manifest render.kind="fields"):
+    // declarative ax/ay/m/glow evaluated per frame — same recipe the
+    // GLSL preview and the transition fields engine share.
+    if let Some(fxlib::FxRender::Fields { div, fields }) = entry.render.as_ref() {
+        return effect_fields_frag(e, ctx, entry, *div, fields).map(|s| vec![s]);
+    }
     match e.kind.as_str() {
+        "focusPull" => focus_pull_frag(e, ctx, &p),
         "rgbDisplacement" => {
             let (amount, angle, mode, speed) = (p["amount"], p["angle"], p["mode"] as u8, p["speed"]);
             if amount <= 0.0 || ctx.clip_ms <= 0 {

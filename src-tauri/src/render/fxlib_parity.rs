@@ -208,9 +208,76 @@ fn two_clip_doc(
     (d, srcs)
 }
 
+/// One-clip doc for intro/outro effect QA: clip 0..2s with the effect
+/// windowed at `win_ms` — anchored at the start for intros, the end for
+/// outros (matching the bin drop wiring).
+fn effect_doc(
+    kind: &str,
+    params: &[(&str, f64)],
+    a: &Path,
+    win_ms: f64,
+    at_end: bool,
+) -> (ProjectDoc, HashMap<String, SourceInfo>) {
+    let mut d = ProjectDoc::new(
+        "fx",
+        Canvas { width: FW, height: FH, fps_num: 30, fps_den: 1, background: "#000000".into() },
+    );
+    d.media_refs.push(MediaRef { asset_id: "a".into(), path: a.to_string_lossy().into(), hash: None });
+    let mut srcs = HashMap::new();
+    srcs.insert("a".to_string(), SourceInfo { path: a.to_path_buf(), kind: "image".into(), has_audio: false });
+    d.timeline.tracks.push(Track {
+        id: "t1".into(),
+        kind: TrackKind::Video,
+        name: "V1".into(),
+        clips: vec![Clip {
+            id: "ca".into(),
+            media_ref: Some("a".into()),
+            start_ms: 0,
+            duration_ms: 2000,
+            source_in_ms: 0,
+            source_out_ms: None,
+            source_duration_ms: None,
+            transform: Transform::default(),
+            effects: vec![Effect {
+                id: "ef".into(),
+                kind: kind.into(),
+                enabled: true,
+                params: params.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+                in_ms: at_end.then_some(2000.0 - win_ms),
+                out_ms: (!at_end).then_some(win_ms),
+                file: None,
+                times: None,
+            }],
+            volume: 1.0,
+            pan: 0.0,
+            fade_in_ms: 0,
+            fade_out_ms: 0,
+            speed: 1.0,
+            text: None,
+            text_style: None,
+            keyframes: Default::default(),
+            shape: None,
+            text_fx: None,
+            hidden: false,
+            brand_bindings: None,
+        }],
+        transitions: vec![],
+        locked: false,
+        visible: true,
+        muted: false,
+        volume: 1.0,
+        solo: false,
+    });
+    (d, srcs)
+}
+
 /// Render the plan and pull frame `n` as an RGB PNG.
 fn native_frame(doc: &ProjectDoc, srcs: &HashMap<String, SourceInfo>, n: u32, out: &Path) {
     let p = plan::build_plan(doc, srcs).expect("plan");
+    if std::env::var("FX_DUMP").is_ok() {
+        eprintln!("GRAPH {}", p.filter_complex);
+        eprintln!("ARGS {:?}", p.ffmpeg_args(out));
+    }
     let args = p.ffmpeg_args(out);
     // Keep the plan's inputs + graph; replace the encoder tail with a
     // single-frame PNG tap on [vout].
@@ -444,6 +511,40 @@ fn lume_debug() {
     ]);
     let refs: Vec<&str> = a2.iter().map(String::as_str).collect();
     run(&refs).unwrap_or_else(|e| panic!("mrg tap failed:\n{fc2}\n{e}"));
+}
+
+/// Intro/outro effect strip: 6 frames across the window on a real image,
+/// tiled for visual QA.
+/// `FX_KIND=lightCurtain FX_A=../qa/kodim15.png FX_OUT=../qa/out/ef.png
+///  cargo test --lib effect_frames -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn effect_frames() {
+    let dir = PathBuf::from("../qa/out");
+    std::fs::create_dir_all(&dir).unwrap();
+    let kind = std::env::var("FX_KIND").unwrap_or("lightCurtain".into());
+    let a = PathBuf::from(std::env::var("FX_A").unwrap_or("../qa/kodim15.png".into()));
+    let at_end = entry(&kind).map(|e| e.category == "outro").unwrap_or(false);
+    let win: f64 = std::env::var("FX_WIN").ok().and_then(|s| s.parse().ok()).unwrap_or(900.0);
+    let (doc, srcs) = effect_doc(&kind, &[], &a, win, at_end);
+    // Intro window 0–win ms; outro window (2 s−win)–2 s (win ≈ 900 ms:
+    // intro u ≈ .07/.33/.59/.85/1.1/1.7 — outro u ≈ 0/.33/.7/.93/1/1).
+    let frames: [u32; 6] = if at_end { [5, 35, 42, 48, 56, 59] } else { [2, 9, 16, 23, 30, 45] };
+    let mut tiles = Vec::new();
+    for (i, n) in frames.iter().enumerate() {
+        let f = dir.join(format!("ef_{kind}_{i}.png"));
+        native_frame(&doc, &srcs, *n, &f);
+        tiles.push(f);
+    }
+    let out = PathBuf::from(std::env::var("FX_OUT").unwrap_or(dir.join("ef_strip.png").to_string_lossy().into()));
+    let mut args: Vec<String> = Vec::new();
+    for f in &tiles {
+        args.extend(["-i".into(), f.to_string_lossy().into()]);
+    }
+    args.extend(["-lavfi".into(), format!("hstack=inputs={}", tiles.len()), out.to_string_lossy().into()]);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run(&refs).unwrap();
+    eprintln!("SHEET {}", out.display());
 }
 
 /// Frames outside the overlap are untouched, the total length is exact and

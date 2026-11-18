@@ -25,6 +25,7 @@ import { fxEntry } from "./manifest";
 import { bakeLutData, LUT_SIZE } from "./lut";
 import { resolveConstants } from "./manifest";
 import { LIGHT_EFFECTS } from "./gl-effects";
+import { buildFieldShader } from "./gl-shader";
 import type { Clip } from "@/lib/project-types";
 
 const VERT = `#version 300 es
@@ -134,6 +135,9 @@ export interface FilterPass {
   /** kind:"effect" with preview:"gl" (Light & Atmosphere) — 16 floats
    *  packed by gl-effects for uP0..uP3. */
   effect?: number[];
+  /** kind:"effect" with preview:"field" (intro/outro) — resolved consts
+   *  for u_<param> uniforms plus eased window progress u. */
+  field?: { consts: Record<string, number>; u: number };
 }
 
 /** Canonical spatial keys the shader/fragments share. */
@@ -151,6 +155,9 @@ class FilterGL {
   /** Light-effect programs: entryId → {prog, locs} or null (compile
    *  failed → that pass degrades to identity, GL stays healthy). */
   progs = new Map<string, { prog: WebGLProgram; locs: Map<string, WebGLUniformLocation | null> } | null>();
+  /** Field-effect programs (intro/outro): same cache contract, uniform
+   *  names come from the recipe's free variables. */
+  fieldProgs = new Map<string, { prog: WebGLProgram; locs: Map<string, WebGLUniformLocation | null>; uniforms: string[] } | null>();
   lost = false;
   onStatus: ((st: "ok" | "lost") => void) | null = null;
 
@@ -180,6 +187,7 @@ class FilterGL {
       this.fboTex = null;
       this.luts.clear();
       this.progs.clear();
+      this.fieldProgs.clear();
       this.onStatus?.("ok");
     });
     this.cv = cv;
@@ -295,6 +303,51 @@ class FilterGL {
     return r;
   }
 
+  /** Compile+cache a field-effect program (intro/outro) from the manifest
+   *  recipe — the declarative ax/ay/m/glow fields transpiled to GLSL. */
+  private ensureField(id: string) {
+    let r = this.fieldProgs.get(id);
+    if (r !== undefined) return r;
+    r = null;
+    const gl = this.gl;
+    const entry = fxEntry(id);
+    const spec = entry ? buildFieldShader(entry) : null;
+    if (gl && spec) {
+      const sh = (type: number, src: string) => {
+        const s = gl.createShader(type)!;
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          console.error(`[filterGL:${id}]`, gl.getShaderInfoLog(s));
+          gl.deleteShader(s);
+          return null;
+        }
+        return s;
+      };
+      const vs = sh(gl.VERTEX_SHADER, VERT);
+      const fs = sh(gl.FRAGMENT_SHADER, spec.source);
+      const prog = gl.createProgram();
+      if (vs && fs && prog) {
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          const locs = new Map<string, WebGLUniformLocation | null>();
+          for (const u of ["uSrc", "uRes", "uU", "uTint", ...spec.uniforms.map((n) => `u_${n}`)])
+            locs.set(u, gl.getUniformLocation(prog, u));
+          r = { prog, locs, uniforms: spec.uniforms };
+        } else {
+          console.error(`[filterGL:${id}]`, gl.getProgramInfoLog(prog));
+        }
+      }
+      if (vs) gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
+      if (!r && prog) gl.deleteProgram(prog);
+    }
+    this.fieldProgs.set(id, r);
+    return r;
+  }
+
   /** Bake+upload the LUT texture for `key` once (idempotent). */
   private ensureLut(pass: FilterPass): WebGLTexture | null {
     if (!pass.lutKey || !this.gl) return null;
@@ -383,6 +436,29 @@ class FilterGL {
           continue;
         }
       }
+      if (pass.field) {
+        const fp = this.ensureField(pass.entryId);
+        if (fp) {
+          gl.useProgram(fp.prog);
+          gl.uniform1i(fp.locs.get("uSrc")!, 0);
+          gl.uniform2f(fp.locs.get("uRes")!, w, h);
+          gl.uniform1f(fp.locs.get("uU")!, pass.field.u);
+          const c = pass.field.consts;
+          gl.uniform3f(
+            fp.locs.get("uTint")!,
+            (c.cr ?? 255) / 255,
+            (c.cg ?? 255) / 255,
+            (c.cb ?? 255) / 255,
+          );
+          for (const n of fp.uniforms) {
+            const loc = fp.locs.get(`u_${n}`);
+            if (loc) gl.uniform1f(loc, c[n] ?? 0);
+          }
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          input = this.fboTex![i % 2];
+          continue;
+        }
+      }
       gl.useProgram(this.prog);
       const lut = this.ensureLut(pass);
       gl.activeTexture(gl.TEXTURE1);
@@ -417,6 +493,8 @@ class FilterGL {
     if (this.prog) gl.deleteProgram(this.prog);
     for (const [, r] of this.progs) if (r) gl.deleteProgram(r.prog);
     this.progs.clear();
+    for (const [, r] of this.fieldProgs) if (r) gl.deleteProgram(r.prog);
+    this.fieldProgs.clear();
     gl.getExtension("WEBGL_lose_context")?.loseContext();
     this.gl = null;
     this.cv = null;
@@ -465,6 +543,13 @@ export function filterPassesFor(clip: Clip, relMs: number, view?: PassView): Fil
         uniforms: {},
         effect: LIGHT_EFFECTS[entry.id].pack(consts, { t, w, h: 1 }),
       });
+    } else if (entry?.kind === "effect" && entry.preview === "field" && entry.render?.kind === "fields") {
+      // Frame-quantised window progress (mirrors the export's geq u).
+      const inMs = e.inMs ?? 0;
+      const winMs = Math.max(1, (e.outMs ?? clip.durationMs) - inMs);
+      const uMs = t * 1000;
+      const u = Math.min(1, Math.max(0, (uMs - inMs) / winMs));
+      out.push({ entryId: entry.id, lutKey: "", uniforms: {}, field: { consts, u } });
     } else if (entry?.kind === "filter") {
       if (filters >= 3) continue;
       filters++;

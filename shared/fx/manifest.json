@@ -538,6 +538,355 @@
       "thumb": "fxt-lume"
     },
     {
+      "id": "focusPull",
+      "kind": "effect",
+      "category": "intro",
+      "name": "Focus Pull",
+      "description": "Rack-focus entrance: the clip arrives defocused and breathes into sharpness while the exposure settles.",
+      "params": [
+        {
+          "key": "duration",
+          "label": "Duration",
+          "type": "number",
+          "def": 1100,
+          "min": 300,
+          "max": 3000,
+          "step": 50,
+          "unit": "ms"
+        },
+        {
+          "key": "defocus",
+          "label": "Defocus",
+          "type": "number",
+          "def": 0.7,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "settle",
+          "label": "Exposure settle",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "breathe",
+          "label": "Breathe",
+          "type": "number",
+          "def": 0.4,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      ],
+      "preview": "svg",
+      "thumb": "fxt-focus"
+    },
+    {
+      "id": "lightCurtain",
+      "kind": "effect",
+      "category": "intro",
+      "name": "Light Curtain",
+      "description": "A luminous blade sweeps the frame and reveals the clip behind a feathered, light-bent edge.",
+      "params": [
+        {
+          "key": "duration",
+          "label": "Duration",
+          "type": "number",
+          "def": 900,
+          "min": 300,
+          "max": 2500,
+          "step": 50,
+          "unit": "ms"
+        },
+        {
+          "key": "direction",
+          "label": "Direction",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Left to right",
+            "Right to left",
+            "Top to bottom",
+            "Bottom to top"
+          ]
+        },
+        {
+          "key": "tint",
+          "label": "Light",
+          "type": "enum",
+          "def": 1,
+          "options": [
+            "White",
+            "Gold",
+            "Cyan",
+            "Rose"
+          ]
+        },
+        {
+          "key": "corei",
+          "label": "Light",
+          "type": "number",
+          "def": 0.9,
+          "min": 0,
+          "max": 1.5,
+          "step": 0.05
+        },
+        {
+          "key": "width",
+          "label": "Blade",
+          "type": "number",
+          "def": 0.5,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "trail",
+          "label": "Trail",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "push",
+          "label": "Edge bend",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "soft",
+          "label": "Edge softness",
+          "type": "number",
+          "def": 0.04,
+          "min": 0.01,
+          "max": 0.12,
+          "step": 0.005
+        }
+      ],
+      "derive": {
+        "ca": {
+          "from": "direction",
+          "values": [
+            1,
+            1,
+            0,
+            0
+          ]
+        },
+        "sa": {
+          "from": "direction",
+          "values": [
+            0,
+            0,
+            1,
+            1
+          ]
+        },
+        "flip": {
+          "from": "direction",
+          "values": [
+            0,
+            1,
+            0,
+            1
+          ]
+        },
+        "pdx": {
+          "from": "direction",
+          "values": [
+            1,
+            -1,
+            0,
+            0
+          ]
+        },
+        "pdy": {
+          "from": "direction",
+          "values": [
+            0,
+            0,
+            1,
+            -1
+          ]
+        },
+        "cr": {
+          "from": "tint",
+          "values": [
+            255,
+            255,
+            160,
+            255
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            255,
+            200,
+            235,
+            150
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            255,
+            130,
+            255,
+            210
+          ]
+        }
+      },
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X-({push}*0.05*W*exp(0-(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))*(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))/(2*{width}*{width}*0.0018)))*{pdx}",
+          "ay": "Y-({push}*0.05*W*exp(0-(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))*(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))/(2*{width}*{width}*0.0018)))*{pdy}",
+          "m": "clip((({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))/{soft}+0.5,0,1)",
+          "glow": "({corei}*(1.15*exp(0-(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))*(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))/(2*{width}*{width}*0.0018))+0.4*gte((({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa}))),0)*exp(0-(({T}*1.45-0.25)-if(eq({flip},1),1-((X/W)*{ca}+(Y/H)*{sa}),((X/W)*{ca}+(Y/H)*{sa})))*(6+{trail}*14))))"
+        }
+      },
+      "defaultEase": "easeInOutCubic",
+      "preview": "field",
+      "thumb": "fxt-curtain"
+    },
+    {
+      "id": "glitchBoot",
+      "kind": "effect",
+      "category": "intro",
+      "name": "Glitch Boot",
+      "description": "The picture stutters into lock: sliced bands, dropouts and dark flicker settle into a clean frame.",
+      "params": [
+        {
+          "key": "duration",
+          "label": "Duration",
+          "type": "number",
+          "def": 800,
+          "min": 250,
+          "max": 2000,
+          "step": 50,
+          "unit": "ms"
+        },
+        {
+          "key": "bands",
+          "label": "Bands",
+          "type": "number",
+          "def": 22,
+          "min": 12,
+          "max": 36,
+          "step": 1
+        },
+        {
+          "key": "amount",
+          "label": "Shift",
+          "type": "number",
+          "def": 0.8,
+          "min": 0.2,
+          "max": 1.5,
+          "step": 0.05
+        },
+        {
+          "key": "flicker",
+          "label": "Flicker",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "stutters",
+          "label": "Stutters",
+          "type": "number",
+          "def": 4,
+          "min": 2,
+          "max": 8,
+          "step": 1
+        }
+      ],
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "(X+(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1)-0.5)*2*{amount}*W*0.14*((1-{T})*(0.35+0.65*gt(mod({T}*{stutters},1),0.55)))+(mod(sin(floor(Y/((H/{bands})/2.7))*39.3463+3.1)*24634.6345,1)-0.5)*{amount}*W*0.05*((1-{T})*(0.35+0.65*gt(mod({T}*{stutters},1),0.55))))",
+          "ay": "(Y+(gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),0.86)*(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1)-0.86)*14*(H/{bands})*((1-{T})*(0.35+0.65*gt(mod({T}*{stutters},1),0.55)))))",
+          "m": "clip(1-{flicker}*(gte(mod(sin(floor(Y/((H/{bands})/2.7))*39.3463+3.1)*24634.6345,1),0.9)*((1-{T})*(0.35+0.65*gt(mod({T}*{stutters},1),0.55)))*0.6+0.14*((1-{T})*(0.35+0.65*gt(mod({T}*{stutters},1),0.55)))*(1-(0.75+0.25*sin(Y*0.55)))),0,1)"
+        }
+      },
+      "defaultEase": "linear",
+      "preview": "field",
+      "thumb": "fxt-boot"
+    },
+    {
+      "id": "shardAssemble",
+      "kind": "effect",
+      "category": "intro",
+      "name": "Shard Assemble",
+      "description": "The frame snaps together from displaced shards that fly in from different directions and lock into place.",
+      "params": [
+        {
+          "key": "duration",
+          "label": "Duration",
+          "type": "number",
+          "def": 950,
+          "min": 300,
+          "max": 2500,
+          "step": 50,
+          "unit": "ms"
+        },
+        {
+          "key": "tile",
+          "label": "Shard size",
+          "type": "number",
+          "def": 96,
+          "min": 48,
+          "max": 180,
+          "step": 8,
+          "unit": "px"
+        },
+        {
+          "key": "spread",
+          "label": "Scatter",
+          "type": "number",
+          "def": 0.5,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "stagger",
+          "label": "Stagger",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        }
+      ],
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "(X+(mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)-0.5)*{spread}*W*0.7*(1-(1-pow(1-clip(({T}-(mod(sin(floor(X/({tile}*H/540))*11.31+floor(Y/({tile}*H/540))*5.77+8.9)*12734.2345,1)*{stagger}*0.7))/max(1-(mod(sin(floor(X/({tile}*H/540))*11.31+floor(Y/({tile}*H/540))*5.77+8.9)*12734.2345,1)*{stagger}*0.7),0.05),0,1),3))))",
+          "ay": "(Y+(mod(sin(floor(X/({tile}*H/540))*3.97+floor(Y/({tile}*H/540))*9.31+5.3)*24634.6345,1)-0.5)*{spread}*H*0.7*(1-(1-pow(1-clip(({T}-(mod(sin(floor(X/({tile}*H/540))*11.31+floor(Y/({tile}*H/540))*5.77+8.9)*12734.2345,1)*{stagger}*0.7))/max(1-(mod(sin(floor(X/({tile}*H/540))*11.31+floor(Y/({tile}*H/540))*5.77+8.9)*12734.2345,1)*{stagger}*0.7),0.05),0,1),3))))",
+          "m": "clip(0.4+0.6*min({T}*3,1)+0.45*(1-(1-pow(1-clip(({T}-(mod(sin(floor(X/({tile}*H/540))*11.31+floor(Y/({tile}*H/540))*5.77+8.9)*12734.2345,1)*{stagger}*0.7))/max(1-(mod(sin(floor(X/({tile}*H/540))*11.31+floor(Y/({tile}*H/540))*5.77+8.9)*12734.2345,1)*{stagger}*0.7),0.05),0,1),3))),0,1)"
+        }
+      },
+      "defaultEase": "easeInOutCubic",
+      "preview": "field",
+      "thumb": "fxt-shard"
+    },
+    {
       "id": "rgbDisplacement",
       "kind": "effect",
       "category": "vfx",

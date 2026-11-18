@@ -219,7 +219,7 @@ pub fn library_transition(kind: &str) -> Option<&'static FxEntry> {
     entry(kind).filter(|e| e.kind == "transition" && e.render.is_some())
 }
 
-fn ident_replace(s: &str, ident: &str, with: &str) -> String {
+pub fn ident_replace(s: &str, ident: &str, with: &str) -> String {
     let b = s.as_bytes();
     let mut out = String::with_capacity(s.len());
     let mut i = 0;

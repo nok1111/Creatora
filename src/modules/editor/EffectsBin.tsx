@@ -137,6 +137,9 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     labelKey: "editor.fxCatStart",
     icon: LogIn,
     items: [
+      ...fxEntries()
+        .filter((e) => e.kind === "effect" && e.category === "intro")
+        .map((e) => ({ id: e.id, label: e.name, icon: LogIn, description: e.description, thumb: e.thumb })),
       preset("fadeIn", Eye),
       preset("scaleIn", Expand),
       preset("bounceIn", Activity),
@@ -153,6 +156,9 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     labelKey: "editor.fxCatEnd",
     icon: LogOut,
     items: [
+      ...fxEntries()
+        .filter((e) => e.kind === "effect" && e.category === "outro")
+        .map((e) => ({ id: e.id, label: e.name, icon: LogOut, description: e.description, thumb: e.thumb })),
       preset("fadeOut", Eye),
       preset("scaleOut", Shrink),
       preset("slideOut", MoveLeft),
@@ -212,7 +218,7 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     labelKey: "editor.fxCatOverlay",
     icon: Wand2,
     items: [
-      ...EFFECTS.filter((e) => fxEntry(e.type)?.category !== "light").map((e) => ({
+      ...EFFECTS.filter((e) => !["light", "intro", "outro"].includes(fxEntry(e.type)?.category ?? "")).map((e) => ({
         id: e.type,
         label: e.label,
         icon: OVERLAY_ICONS[e.type] ?? Wand2,

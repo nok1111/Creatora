@@ -742,6 +742,29 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       toast.error(t("editor.fxDropOnClip"));
       return;
     }
+    // Manifest intro/outro effects (start/end bins) apply as windowed
+    // clip effects: the window is the `duration` param at the clip edge.
+    const libStartEnd = fxEntry(itemId);
+    if (
+      libStartEnd?.kind === "effect" &&
+      ((category === "start" && libStartEnd.category === "intro") ||
+        (category === "end" && libStartEnd.category === "outro"))
+    ) {
+      const dur = libStartEnd.params.find((p) => p.key === "duration")?.def ?? 800;
+      const wMs = Math.min(dur, target.durationMs);
+      mutate((d) =>
+        addEffect(d, target.id, {
+          id: crypto.randomUUID(),
+          type: libStartEnd.id,
+          enabled: true,
+          params: Object.fromEntries(libStartEnd.params.map((p) => [p.key, p.def])),
+          inMs: category === "end" ? Math.max(0, target.durationMs - wMs) : 0,
+          outMs: category === "start" ? wMs : undefined,
+        }),
+      );
+      toast.success(t("editor.fxApplied", { name: libStartEnd.name }));
+      return;
+    }
     // Animation presets — start/end tiles plus the combo/emphasis/loop
     // tiles under overlay — route to the keyframe path by id.
     const preset = ANIM_PRESETS.find((p) => p.id === itemId);

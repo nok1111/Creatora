@@ -121,7 +121,7 @@ export interface FxEntry {
   /** Color ops baked into the filter's 33³ LUT (kind:"filter" only). */
   lut?: LutOp[];
   /** How the editor preview renders it. */
-  preview: "gl" | "svg" | "css" | "none";
+  preview: "gl" | "svg" | "css" | "none" | "field";
   /** CSS class of the animated thumbnail (index.css) — or `img:` filename
    *  for baked thumbnails under shared/fx/thumbs/ (filters). */
   thumb: string;
@@ -374,6 +374,81 @@ const num = (
   unit?: string,
 ): FxParam => ({ key, label, type: "number", def, min, max, step, ...(unit ? { unit } : {}) });
 
+// ── Light Curtain ──────────────────────────────────────────────────
+// A luminous blade sweeps across the frame (direction derives an axis
+// plus a travel vector) revealing the clip behind a feathered front;
+// the image edge bulges where the blade passes and a light trail decays
+// behind it. m=1 once the front has passed.
+const CURTAIN = (() => {
+  const u = "(X/W)", v = "(Y/H)";
+  const raw = `(${u}*{ca}+${v}*{sa})`;
+  const axis = `if(eq({flip},1),1-${raw},${raw})`;
+  const front = `(${T}*1.45-0.25)`;
+  const dd = `(${front}-${axis})`;
+  const blade = `exp(0-${dd}*${dd}/(2*{width}*{width}*0.0018))`;
+  // Trail lives only on the revealed side (dd>=0) — an ungated exp(-dd*k)
+  // explodes behind the front and floods the hidden region with light.
+  const trail = `gte(${dd},0)*exp(0-${dd}*(6+{trail}*14))`;
+  const push = `({push}*0.05*W*${blade})`;
+  return {
+    ax: `X-${push}*{pdx}`,
+    ay: `Y-${push}*{pdy}`,
+    m: `clip(${dd}/{soft}+0.5,0,1)`,
+    glow: `({corei}*(1.15*${blade}+0.4*${trail}))`,
+  };
+})();
+
+// ── Glitch Boot ────────────────────────────────────────────────────
+// The picture stutters into lock: horizontal bands yank sideways in
+// quantized bursts that decay to identity, some slices get duplicated
+// vertically, and a dark flicker rides the same envelope.
+const BOOT = (() => {
+  const bh = `(H/{bands})`;
+  const bi = `floor(Y/${bh})`;
+  const h1 = `mod(sin(${bi}*12.9898+7.7)*43758.5453,1)`;
+  const bi2 = `floor(Y/(${bh}/2.7))`;
+  const h2 = `mod(sin(${bi2}*39.3463+3.1)*24634.6345,1)`;
+  // Quantized pulse train: each stutter is glitchy for ~45% of its slot.
+  const sq = `gt(mod(${T}*{stutters},1),0.55)`;
+  const env = `((1-${T})*(0.35+0.65*${sq}))`;
+  const off = `(${h1}-0.5)*2*{amount}*W*0.14*${env}+(${h2}-0.5)*{amount}*W*0.05*${env}`;
+  // Some bands duplicate vertically during a stutter (slice tear).
+  const dup = `(gte(${h1},0.86)*(${h1}-0.86)*14*${bh}*${env})`;
+  const scan = `(0.75+0.25*sin(Y*0.55))`;
+  const drop = `gte(${h2},0.9)*${env}*0.6`;
+  return {
+    ax: `(X+${off})`,
+    ay: `(Y+${dup})`,
+    m: `clip(1-{flicker}*(${drop}+0.14*${env}*(1-${scan})),0,1)`,
+  };
+})();
+
+// ── Shard Assemble ─────────────────────────────────────────────────
+// The frame starts as displaced tiles — each shard samples from a
+// hash-scattered source — and converges to identity with per-tile
+// stagger, dim until it lands.
+const SHARD = (() => {
+  const ts = `({tile}*H/540)`;
+  const tx = `floor(X/${ts})`;
+  const ty = `floor(Y/${ts})`;
+  const h1 = `mod(sin(${tx}*7.13+${ty}*13.71+2.9)*43758.5453,1)`;
+  const h2 = `mod(sin(${tx}*3.97+${ty}*9.31+5.3)*24634.6345,1)`;
+  const h3 = `mod(sin(${tx}*11.31+${ty}*5.77+8.9)*12734.2345,1)`;
+  // Per-shard landing window: stagger pushes some shards to land near
+  // u≈0.85 so the assemble reads through the whole intro, not just the
+  // first third. k = this shard's own progress 0→1.
+  const d = `(${h3}*{stagger}*0.7)`;
+  const k = `clip((${T}-${d})/max(1-${d},0.05),0,1)`;
+  const e = `(1-pow(1-${k},3))`;
+  const offx = `(${h1}-0.5)*{spread}*W*0.7`;
+  const offy = `(${h2}-0.5)*{spread}*H*0.7`;
+  return {
+    ax: `(X+${offx}*(1-${e}))`,
+    ay: `(Y+${offy}*(1-${e}))`,
+    m: `clip(0.4+0.6*min(${T}*3,1)+0.45*(1-${e}),0,1)`,
+  };
+})();
+
 export const MANIFEST: FxManifest = {
   version: 1,
   eases,
@@ -564,6 +639,111 @@ export const MANIFEST: FxManifest = {
       defaultEase: "easeInOutCubic",
       preview: "gl",
       thumb: "fxt-lume",
+    },
+    // ── Intro / outro field effects (kind:"effect", preview:"field") ──
+    // Single-clip effects driven by the same declarative field dialect as
+    // transitions: ax/ay warp the clip, `m` mixes it to black (1 = clip
+    // shown), `glow` is an additive light field screen-blended on top and
+    // tinted by the cr/cg/cb derived constants. `u` is window progress
+    // 0→1 and {T} its eased form — intros end at identity (u=1), outros
+    // start at it (u=0). Export builds one animated geq field video per
+    // field at reduced resolution + remap/maskedmerge/blend.
+    {
+      id: "focusPull",
+      kind: "effect",
+      category: "intro",
+      name: "Focus Pull",
+      description:
+        "Rack-focus entrance: the clip arrives defocused and breathes into sharpness while the exposure settles.",
+      params: [
+        num("duration", "Duration", 1100, 300, 3000, 50, "ms"),
+        num("defocus", "Defocus", 0.7, 0, 1, 0.01),
+        num("settle", "Exposure settle", 0.35, 0, 1, 0.01),
+        num("breathe", "Breathe", 0.4, 0, 1, 0.01),
+      ],
+      preview: "svg",
+      thumb: "fxt-focus",
+    },
+    {
+      id: "lightCurtain",
+      kind: "effect",
+      category: "intro",
+      name: "Light Curtain",
+      description:
+        "A luminous blade sweeps the frame and reveals the clip behind a feathered, light-bent edge.",
+      params: [
+        num("duration", "Duration", 900, 300, 2500, 50, "ms"),
+        {
+          key: "direction",
+          label: "Direction",
+          type: "enum",
+          def: 0,
+          options: ["Left to right", "Right to left", "Top to bottom", "Bottom to top"],
+        },
+        {
+          key: "tint",
+          label: "Light",
+          type: "enum",
+          def: 1,
+          options: ["White", "Gold", "Cyan", "Rose"],
+        },
+        num("corei", "Light", 0.9, 0, 1.5, 0.05),
+        num("width", "Blade", 0.5, 0.1, 1, 0.01),
+        num("trail", "Trail", 0.35, 0, 1, 0.01),
+        num("push", "Edge bend", 0.5, 0, 1, 0.05),
+        num("soft", "Edge softness", 0.04, 0.01, 0.12, 0.005),
+      ],
+      derive: {
+        ca: { from: "direction", values: [1, 1, 0, 0] },
+        sa: { from: "direction", values: [0, 0, 1, 1] },
+        flip: { from: "direction", values: [0, 1, 0, 1] },
+        pdx: { from: "direction", values: [1, -1, 0, 0] },
+        pdy: { from: "direction", values: [0, 0, 1, -1] },
+        cr: { from: "tint", values: [255, 255, 160, 255] },
+        cg: { from: "tint", values: [255, 200, 235, 150] },
+        cb: { from: "tint", values: [255, 130, 255, 210] },
+      },
+      render: { kind: "fields", div: 8, fields: CURTAIN },
+      defaultEase: "easeInOutCubic",
+      preview: "field",
+      thumb: "fxt-curtain",
+    },
+    {
+      id: "glitchBoot",
+      kind: "effect",
+      category: "intro",
+      name: "Glitch Boot",
+      description:
+        "The picture stutters into lock: sliced bands, dropouts and dark flicker settle into a clean frame.",
+      params: [
+        num("duration", "Duration", 800, 250, 2000, 50, "ms"),
+        num("bands", "Bands", 22, 12, 36, 1),
+        num("amount", "Shift", 0.8, 0.2, 1.5, 0.05),
+        num("flicker", "Flicker", 0.6, 0, 1, 0.05),
+        num("stutters", "Stutters", 4, 2, 8, 1),
+      ],
+      render: { kind: "fields", div: 8, fields: BOOT },
+      defaultEase: "linear",
+      preview: "field",
+      thumb: "fxt-boot",
+    },
+    {
+      id: "shardAssemble",
+      kind: "effect",
+      category: "intro",
+      name: "Shard Assemble",
+      description:
+        "The frame snaps together from displaced shards that fly in from different directions and lock into place.",
+      params: [
+        num("duration", "Duration", 950, 300, 2500, 50, "ms"),
+        num("tile", "Shard size", 96, 48, 180, 8, "px"),
+        num("spread", "Scatter", 0.5, 0.1, 1, 0.02),
+        num("stagger", "Stagger", 0.5, 0, 1, 0.02),
+      ],
+      render: { kind: "fields", div: 8, fields: SHARD },
+      defaultEase: "easeInOutCubic",
+      preview: "field",
+      thumb: "fxt-shard",
     },
     {
       id: "rgbDisplacement",
