@@ -166,6 +166,7 @@ export const es: typeof en = {
     addAudio: "+ Audio",
     snapToggle: "Imantado",
     zoomFit: "Ajustar zoom",
+    toStart: "Volver al inicio",
     selected: "{{count}} seleccionado(s)",
     copied: "{{count}} clip(s) copiado(s)",
     copy: "Copiar (Ctrl+C)",

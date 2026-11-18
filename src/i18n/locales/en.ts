@@ -163,6 +163,7 @@ export const en = {
     addAudio: "+ Audio",
     snapToggle: "Snapping",
     zoomFit: "Zoom to fit",
+    toStart: "Back to start",
     selected: "{{count}} selected",
     copied: "Copied {{count}} clip(s)",
     copy: "Copy (Ctrl+C)",

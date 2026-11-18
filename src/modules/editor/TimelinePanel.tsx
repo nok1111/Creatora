@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   Scissors,
+  SkipBack,
   Sparkles,
   Trash2,
   Wand2,
@@ -1104,6 +1105,18 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       <div className="flex items-center gap-1 border-b border-border px-2 py-1">
         <PlayheadTimecode doc={doc} durationMs={durationMs} />
         <div className="mx-2 h-4 w-px bg-border" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          title={t("editor.toStart")}
+          onClick={() => {
+            setPlayhead(0);
+            if (scrollRef.current) scrollRef.current.scrollLeft = 0;
+          }}
+        >
+          <SkipBack className="size-4" />
+        </Button>
         <Button variant="ghost" size="icon" className="size-7" onClick={splitAtPlayhead} title={t("editor.split")}>
           <Scissors className="size-4" />
         </Button>
