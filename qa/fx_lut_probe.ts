@@ -42,15 +42,15 @@ const mk = (pts: [number, number][], dl: number, range = 42): LutOp[] => [
 const cands: Record<string, LutOp[]> = {
   // C: moderate mid lift, small skin dl (achromatic floor ≈ dl·0.64)
   candC: mk([[0, 0], [0.1, 0.04], [0.25, 0.2], [0.5, 0.51], [0.8, 0.88], [1, 1]], 0.03),
-  // D: stronger face band — SHIPPED as v2
+  // D: stronger face band (rejected — user picked E)
   candD: mk([[0, 0], [0.1, 0.04], [0.25, 0.22], [0.5, 0.53], [0.8, 0.88], [1, 1]], 0.04),
-  // E: like D but toe pushed deeper to keep blacks despite dl
+  // E: SHIPPED as v2 — like D but toe pushed deeper to keep blacks despite dl
   candE: mk([[0, 0], [0.08, 0.028], [0.2, 0.16], [0.45, 0.45], [0.65, 0.72], [0.85, 0.92], [1, 1]], 0.04),
 };
 
 const variants: [string, LutOp[]][] = [
   ["v1 (before)", shippedV1],
-  ...Object.entries(cands).map(([k, v]) => [k === "candD" ? "candD = v2" : k, v] as [string, LutOp[]]),
+  ...Object.entries(cands).map(([k, v]) => [k === "candE" ? "candE = shipped" : k, v] as [string, LutOp[]]),
 ];
 
 const luma = (c: number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];

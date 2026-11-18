@@ -612,16 +612,16 @@ export const MANIFEST: FxManifest = {
         { op: "temp", amt: -0.1 },
         // Hard silver S: blacks crushed deep, mids punched down then up
         // hard — contrast, not underexposure. Highlights driven bright.
-        // The 0.1–0.3 band is lifted (0.2→0.16, 0.3→0.28 out) so subjects
+        // The 0.15–0.45 band is lifted (0.2→0.16, 0.45→0.45 out) so subjects
         // sitting in low mids keep facial detail under the crush.
-        { op: "curve", ch: 3, pts: [[0, 0], [0.1, 0.04], [0.25, 0.22], [0.5, 0.53], [0.8, 0.88], [1, 1]] },
+        { op: "curve", ch: 3, pts: [[0, 0], [0.08, 0.028], [0.2, 0.16], [0.45, 0.45], [0.65, 0.72], [0.85, 0.92], [1, 1]] },
         // Steel-cool shadows and silver (cool-neutral) highlights.
         { op: "split", sh: [215, 0.12], hi: [222, 0.09] },
         // Restrained color — muted, not gone. Skin keeps a trace of life
         // plus a small luminance lift (dl) — faces stay readable.
         { op: "sat", amt: 0.42 },
         { op: "vib", amt: 0.85 },
-        { op: "hsl", hue: 28, range: 40, dh: 0, ds: 1.25, dl: 0.04 },
+        { op: "hsl", hue: 28, range: 42, dh: 0, ds: 1.25, dl: 0.04 },
         // Greens and blues drain toward steel.
         { op: "hsl", hue: 200, range: 70, dh: -5, ds: 0.82, dl: 0 },
         { op: "hsl", hue: 95, range: 55, dh: -10, ds: 0.75, dl: -0.02 },
