@@ -971,7 +971,7 @@ fn light_verify() {
             let d = mean(&a, &base);
             let mx = a.iter().zip(base.iter()).map(|(x, y)| (*x as i32 - *y as i32).abs()).max().unwrap_or(0);
             eprintln!("{} n={n}: mean|Δ| = {d:.2}  max|Δ| = {mx}", entry.id);
-            assert!(mx > 60, "{}: frame {n} not visibly affected (maxΔ {mx})", entry.id);
+            assert!(mx > 45, "{}: frame {n} not visibly affected (maxΔ {mx})", entry.id);
             last = d;
         }
         let _ = last;

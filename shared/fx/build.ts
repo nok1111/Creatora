@@ -724,7 +724,7 @@ export const MANIFEST: FxManifest = {
       description:
         "Analog film burn — warm light spilling in from the frame edge with organic drift and exposure flicker.",
       params: [
-        num("intensity", "Intensity", 70, 0, 100, 1, "%"),
+        num("intensity", "Intensity", 55, 0, 100, 1, "%"),
         { key: "color", label: "Color", type: "color", def: 0xff5a1e, min: 0, max: 0xffffff, step: 1 },
         {
           key: "pattern",
@@ -733,7 +733,7 @@ export const MANIFEST: FxManifest = {
           def: 0,
           options: ["Edge Sweep", "Corner Bloom", "Dual Sides"],
         },
-        num("spread", "Spread", 0.75, 0.25, 1, 0.02),
+        num("spread", "Spread", 0.6, 0.25, 1, 0.02),
         num("speed", "Drift speed", 0.18, 0.04, 0.8, 0.01, "Hz"),
         num("flicker", "Flicker", 0.35, 0, 0.6, 0.02),
       ],
@@ -753,7 +753,7 @@ export const MANIFEST: FxManifest = {
       description:
         "Volumetric light shafts from a source point — adjustable fan, slow sway, gentle breathing.",
       params: [
-        num("intensity", "Intensity", 55, 0, 100, 1, "%"),
+        num("intensity", "Intensity", 40, 0, 100, 1, "%"),
         num("x", "Source X", 18, -20, 120, 1, "%"),
         num("y", "Source Y", -8, -20, 120, 1, "%"),
         { key: "angle", label: "Fan angle", type: "angle", def: 35, min: 0, max: 360, step: 5, unit: "°" },
@@ -778,7 +778,7 @@ export const MANIFEST: FxManifest = {
         "Spectral dispersion — RGB planes split radially around a point while a rainbow glint sweeps the frame.",
       params: [
         num("intensity", "Intensity", 65, 0, 100, 1, "%"),
-        num("amount", "Dispersion", 0.8, 0.1, 2, 0.05),
+        num("amount", "Dispersion", 1.2, 0.1, 2, 0.05),
         num("x", "Centre X", 50, 0, 100, 1, "%"),
         num("y", "Centre Y", 45, 0, 100, 1, "%"),
         {
@@ -788,7 +788,7 @@ export const MANIFEST: FxManifest = {
           def: 0,
           options: ["Radial", "Edge Split", "Halo"],
         },
-        num("glint", "Rainbow glint", 0.5, 0, 1, 0.02),
+        num("glint", "Rainbow glint", 0.7, 0, 1, 0.02),
         num("speed", "Glint speed", 0.08, 0, 0.4, 0.01, "Hz"),
       ],
       preview: "gl",
