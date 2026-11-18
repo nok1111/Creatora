@@ -212,9 +212,14 @@ import {
   beatEnv,
   beatTimes,
   expoDecay,
+  flareDrift,
+  flickerEnv,
+  glintSweep,
   heroFlash,
   heroScale,
   heroSplitPx,
+  leakDrift,
+  raysSwayRad,
   rgbEnv,
   rgbShift,
 } from "./envelopes";
@@ -231,6 +236,12 @@ describe("library effect curves", () => {
       out[`heroScale@${t}`] = heroScale(0.22, 0.9, t);
       out[`heroFlash@${t}`] = heroFlash(0.5, 0.9, t);
       out[`heroSplit@${t}`] = heroSplitPx(1, 1920, 0.9, t);
+      // light & atmosphere curves (fxeffects.rs pins these identically)
+      out[`flicker@${t}`] = flickerEnv(0.35, 0.9, t);
+      out[`flareDrift@${t}`] = flareDrift(0.12, t);
+      out[`leakDrift@${t}`] = leakDrift(0, 0.16, 0.18, t);
+      out[`raysSway@${t}`] = raysSwayRad(7, 0.06, t);
+      out[`glintSweep@${t}`] = glintSweep(0.08, t);
     }
     const beats = beatTimes([1000, 1500, 2100, 3000], 1, 50, { sourceInMs: 500, speed: 1, clipMs: 10000 });
     out["beats"] = beats;

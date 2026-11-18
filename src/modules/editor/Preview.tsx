@@ -325,12 +325,17 @@ export function Preview({
   // that the media stays visible, unfiltered (never black).
   const MAX_FILTERED = 4;
   const filterPasses = new Map<string, ReturnType<typeof filterPassesFor>>();
-  if (glFilterOk)
+  if (glFilterOk) {
+    const passView = {
+      fps: viewDoc.canvas.fpsNum / Math.max(1, viewDoc.canvas.fpsDen),
+      aspect: viewDoc.canvas.width / viewDoc.canvas.height,
+    };
     for (const { clip } of visual) {
       if (filterPasses.size >= MAX_FILTERED) break;
-      const p = filterPassesFor(clip, playheadMs - clip.startMs);
+      const p = filterPassesFor(clip, playheadMs - clip.startMs, passView);
       if (p.length) filterPasses.set(clip.id, p);
     }
+  }
   const layerFor = (clipId: string): LayerInfo | null => {
     const hit = findClip(viewDoc, clipId);
     const el = layerEls.current.get(clipId);

@@ -21,6 +21,7 @@ export const FX_CATEGORY_LABELS: Record<string, string> = {
   merge: "Merge",
   motion: "Motion",
   cinematic: "Cinematic",
+  light: "Light",
   vfx: "VFX",
   audio: "Audio Reactive",
 };

@@ -86,6 +86,371 @@ pub fn rgb_shift(amount_pct: f64, angle_deg: f64, env: f64, width: f64) -> (i32,
     (round_half_up(px * a.cos()) as i32, round_half_up(px * a.sin()) as i32)
 }
 
+// ── light & atmosphere curves (mirrored in envelopes.ts) ─────────────
+//
+// Overlay fields are BAKED once with `geq` (one frame, looped), then
+// animated by cheap native filters: `crop` on a padded sprite translates
+// it per frame, `rotate`/`overlay` sweep it, and a 1×1 `geq` envelope
+// scaled to canvas + `blend=multiply` applies global flicker. Field
+// functions are written once here (geq dialect) and once in
+// gl-effects.ts (GLSL) — the shared curves below make the animated parts
+// provably identical (curves.golden.json pins both).
+
+/// Two-sine flicker in [1−2a, 1] — additive light breathing.
+pub fn flicker_env(amt: f64, speed: f64, t: f64) -> f64 {
+    let w = 0.65 * (6.2832 * speed * t).sin() + 0.35 * (6.2832 * speed * 2.63 * t + 1.3).sin();
+    (1.0 - amt + amt * w).max(0.0)
+}
+
+/// geq/expression text of flicker_env over var `v` (frame seconds).
+fn flicker_expr(amt: f64, speed: f64, v: &str) -> String {
+    format!(
+        "max(0,1-{a}+{a}*(0.65*sin(6.2832*{s}*{v})+0.35*sin(6.2832*{s}*2.63*{v}+1.3)))",
+        a = fxlib::fmt_num(amt),
+        s = fxlib::fmt_num(speed),
+    )
+}
+
+/// Lens-flare drift around the anchor, frame fractions [dx·W, dy·H].
+pub fn flare_drift(speed: f64, t: f64) -> (f64, f64) {
+    (
+        0.022 * (6.2832 * speed * t + 0.7).sin(),
+        0.012 * (6.2832 * speed * 0.83 * t + 2.1).sin(),
+    )
+}
+
+/// Light-leak drift, frame fractions (see envelopes.ts).
+pub fn leak_drift(pattern: i64, travel: f64, speed: f64, t: f64) -> (f64, f64) {
+    let s = 0.5 + 0.5 * (6.2832 * speed * t - 1.5708).sin();
+    match pattern {
+        1 => (-0.5 * travel * s, 0.7 * travel * s),
+        2 => (0.6 * travel * s, 0.0),
+        _ => (travel * s, 0.0),
+    }
+}
+
+/// God-rays sway (radians) about the baked fan orientation.
+pub fn rays_sway_rad(deg: f64, speed: f64, t: f64) -> f64 {
+    deg.to_radians() * (6.2832 * speed * t).sin()
+}
+
+/// Prism glint sweep — x offset in frame fractions, −0.35 → 1.35 loop.
+pub fn glint_sweep(speed: f64, t: f64) -> f64 {
+    if speed <= 0.0 {
+        return 0.0;
+    }
+    let u = speed * t - (speed * t).floor();
+    -0.35 + 1.7 * u
+}
+
+// ── light & atmosphere fragment builders ─────────────────────────────
+
+/// geq field helpers — all fields are in H-fraction units:
+/// dx = (X − ax·W)/H, dy = (Y − ay·H)/H — identical to the GLSL in
+/// gl-effects.ts, which uses (uv − c)·(aspect, 1).
+mod geq {
+    use super::fxlib::fmt_num as n;
+
+    /// (dx, dy) in H-fraction units for a padded sprite: anchors are baked
+    /// at (m + a·canvas_dim) px inside a (W+2m)×(H+2m) canvas.
+    pub fn d(m: u32, ax: f64, ay: f64, w: u32, h: u32) -> (String, String) {
+        (
+            format!("(X-{})/{h}", n(m as f64 + ax * w as f64)),
+            format!("(Y-{})/{h}", n(m as f64 + ay * h as f64)),
+        )
+    }
+
+    /// Channel colour: tint mixed toward white by `hot`, scaled by `lum`
+    /// (field luminance exprs, unclamped) → 0..255.
+    pub fn chan(lum: &str, tint: f64, hot: &str) -> String {
+        format!("255*min(1,({}+(1-{})*{})*({}))", n(tint), n(tint), hot, lum)
+    }
+}
+
+/// Baked sprite (pad margin `m` px each side) → loop → per-frame crop
+/// translate → 1×1 flicker envelope → multiply → screen-blend onto the
+/// incoming stream. `geq_rgb` = r/g/b field exprs in sprite px.
+fn screen_overlay_frag(
+    e: &Effect,
+    ctx: &FxCtx,
+    i: f64,
+    en: &str,
+    geq_rgb: &(String, String, String),
+    m: u32,
+    crop_x: &str,
+    crop_y: &str,
+    env_amt: f64,
+    env_speed: f64,
+) -> Vec<String> {
+    let (w, h) = (ctx.w, ctx.h);
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    let (b, s, sv, ev, ov, mm) = (
+        attr_name(e, "la"),
+        attr_name(e, "lb"),
+        attr_name(e, "lc"),
+        attr_name(e, "ld"),
+        attr_name(e, "le"),
+        attr_name(e, "lm"),
+    );
+    // Intensity folds into the envelope: multiply gives s·i·env, then a
+    // full-opacity screen = the preview's screen(c, l·i·env) exactly.
+    // (blend:all_opacity would crossfade AFTER screening — different.)
+    let env = format!("255*{}*{}", fxlib::fmt_num(i), flicker_expr(env_amt, env_speed, "T"));
+    vec![
+        format!("null[{mm}]"),
+        format!(
+            "color=c=black:s={}x{}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}'[{b}]",
+            w + 2 * m,
+            h + 2 * m,
+            geq_rgb.0,
+            geq_rgb.1,
+            geq_rgb.2
+        ),
+        format!("[{b}]loop=loop=-1:size=1,fps={fps}[{s}]"),
+        format!("[{s}]crop=w={w}:h={h}:x='{m}+({crop_x})':y='{m}+({crop_y})'[{sv}]"),
+        format!("color=c=black:s=1x1:r={fps}:d={dur},format=rgb24,geq=r='{env}':g='{env}':b='{env}',scale={w}:{h}[{ev}]"),
+        format!("[{sv}][{ev}]blend=all_mode=multiply[{ov}]"),
+        format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Cinematic Lens Flare — baked anamorphic streak + core + ghosts.
+fn lens_flare_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (w, h) = (ctx.w as f64, ctx.h as f64);
+    let m = (0.06 * w).ceil() as u32; // margin ≥ |drift| (0.022W, 0.012H)
+    let (ax, ay) = (p["x"] / 100.0, p["y"] / 100.0);
+    let (dx, dy) = geq::d(m, ax, ay, ctx.w, ctx.h);
+    let asp = w / h;
+    let (sx, sy, cr) = (0.26 * p["spread"] * asp, 0.004, 0.045);
+    let field = |extra_ghosts: &str| {
+        format!(
+            "1.6*exp(-pow({dy}/{sy},2)-pow({dx}/{sx},2))+1.4*exp(-({dx}*{dx}+{dy}*{dy})/{cr2})+0.5*exp(-({dx}*{dx}+{dy}*{dy})/0.18){extra_ghosts}",
+            sy = fxlib::fmt_num(sy),
+            sx = fxlib::fmt_num(sx),
+            cr2 = fxlib::fmt_num(2.0 * cr * cr),
+        )
+    };
+    // ghost amps by `ghosts` const (0/2/4) — same table as gl-effects.ts
+    let amps = [[0.0; 4], [0.5, 0.6, 0.0, 0.0], [0.5, 0.6, 0.45, 0.35]][
+        (p["ghosts"].round() as usize / 2).min(2)
+    ];
+    let pos = [(-0.55, 0.07), (0.38, 0.045), (0.62, 0.03), (-0.30, 0.11)];
+    let ghosts = pos
+        .iter()
+        .zip(&amps)
+        .filter(|(_, a)| **a > 0.0)
+        .map(|((gx, gr), a)| {
+            format!(
+                "+{}*exp(-pow((hypot({dx}-({gx}),{dy}))/{gr},2))",
+                fxlib::fmt_num(*a),
+                gx = fxlib::fmt_num(*gx),
+                gr = fxlib::fmt_num(*gr)
+            )
+        })
+        .collect::<String>();
+    let lum = field(&ghosts);
+    let hot = format!("min(1,0.7*exp(-({dx}*{dx}+{dy}*{dy})/{cr2}))", cr2 = fxlib::fmt_num(2.0 * cr * cr));
+    let geq_rgb = (
+        geq::chan(&lum, p["cr"], &hot),
+        geq::chan(&lum, p["cg"], &hot),
+        geq::chan(&lum, p["cb"], &hot),
+    );
+    // crop x increases → content shifts LEFT; drift must be negated.
+    let cx = format!("0-{}*sin(6.2832*{}*t+0.7)", fxlib::fmt_num(0.022 * w), fxlib::fmt_num(p["speed"]));
+    let cy = format!("0-{}*sin(6.2832*{}*t+2.1)", fxlib::fmt_num(0.012 * h), fxlib::fmt_num(p["speed"] * 0.83));
+    screen_overlay_frag(e, ctx, i, en, &geq_rgb, m, &cx, &cy, p["flicker"], 0.7 + 5.0 * p["speed"])
+}
+
+/// Light Leak — baked organic blob field, drifting in from an edge.
+fn light_leak_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (w, h) = (ctx.w as f64, ctx.h as f64);
+    let pat = p["pattern"].round() as i64;
+    let (ax, ay) = match pat {
+        1 => (1.02, -0.04),
+        2 => (-0.06, 0.5),
+        _ => (-0.04, 0.45),
+    };
+    let m = (0.2 * w).ceil() as u32; // ≥ leak travel 0.16W
+    let (dx, dy) = geq::d(m, ax, ay, ctx.w, ctx.h);
+    let s = p["spread"] * 0.55;
+    let s2 = fxlib::fmt_num(2.0 * s * s);
+    // organic secondary lobe (offset 0.55σ, −0.35σ in H-units) + optional
+    // second anchor (dual sides)
+    let lobe = format!("({dx}-{})", fxlib::fmt_num(0.55 * s));
+    let lobe_y = format!("({dy}+{})", fxlib::fmt_num(0.35 * s));
+    let aux = format!("0.5*exp(-({lobe}*{lobe}+{ly}*{ly})/{s4})", ly = lobe_y, s4 = fxlib::fmt_num(2.0 * s * s * 0.25));
+    let dual = if pat == 2 {
+        let (d2x, d2y) = geq::d(m, 1.12, 0.5, ctx.w, ctx.h);
+        format!("+exp(-({d2x}*{d2x}+{d2y}*{d2y})/{s2})")
+    } else {
+        String::new()
+    };
+    let lum = format!("2.2*(exp(-({dx}*{dx}+{dy}*{dy})/{s2})+{aux}{dual})");
+    let dual_hot = if pat == 2 {
+        let (ddx, ddy) = geq::d(m, 1.12, 0.5, ctx.w, ctx.h);
+        format!("+0.5*exp(-({ddx}*{ddx}+{ddy}*{ddy})/{s2})")
+    } else {
+        String::new()
+    };
+    let hot = format!(
+        "min(1,1.2*exp(-({dx}*{dx}+{dy}*{dy})/{sc}){dual_hot})",
+        sc = fxlib::fmt_num(2.0 * s * s * 0.12),
+    );
+    let col = p["color"].round() as u32;
+    let (cr, cg, cb) = (
+        ((col >> 16) & 255) as f64 / 255.0,
+        ((col >> 8) & 255) as f64 / 255.0,
+        (col & 255) as f64 / 255.0,
+    );
+    let geq_rgb = (
+        geq::chan(&lum, cr, &hot),
+        geq::chan(&lum, cg, &hot),
+        geq::chan(&lum, cb, &hot),
+    );
+    // drift, negated (crop-window semantics) and converted to px
+    let (nx, ny) = {
+        let s_expr = format!("(0.5+0.5*sin(6.2832*{}*t-1.5708))", fxlib::fmt_num(p["speed"]));
+        match pat {
+            1 => (
+                format!("{}*{}", fxlib::fmt_num(0.5 * 0.11 * w), s_expr),
+                format!("0-{}*{}", fxlib::fmt_num(0.7 * 0.11 * h), s_expr),
+            ),
+            2 => (
+                format!("0-{}*{}", fxlib::fmt_num(0.6 * 0.11 * w), s_expr),
+                "0".into(),
+            ),
+            _ => (
+                format!("0-{}*{}", fxlib::fmt_num(0.11 * w), s_expr),
+                "0".into(),
+            ),
+        }
+    };
+    screen_overlay_frag(e, ctx, i, en, &geq_rgb, m, &nx, &ny, p["flicker"], 0.4 + 3.0 * p["speed"])
+}
+
+/// God Rays — per-frame quarter-res geq fan (sway+breathe inside T).
+fn god_rays_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (w, h) = (ctx.w, ctx.h);
+    let (gw, gh) = ((w / 4).max(16), (h / 4).max(16));
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    let (px, py) = (p["x"] / 100.0 * gw as f64, p["y"] / 100.0 * gh as f64);
+    let dx = format!("(X-{})/{gh}", fxlib::fmt_num(px), gh = gh);
+    let dy = format!("(Y-{})/{gh}", fxlib::fmt_num(py), gh = gh);
+    // fan angle + sway (same constants as preview pack: ±7° sway)
+    let ang = format!(
+        "atan2({dy},{dx})-({a0}+{sw}*sin(6.2832*{sp}*T))",
+        a0 = fxlib::fmt_num(p["angle"].to_radians()),
+        sw = fxlib::fmt_num(7f64.to_radians()),
+        sp = fxlib::fmt_num(p["speed"]),
+    );
+    let comb = format!(
+        "pow(max(0,0.5+0.5*sin({n}*({ang}))),{pe})",
+        n = fxlib::fmt_num(p["density"]),
+        pe = fxlib::fmt_num(2.0 + 10.0 * (1.0 - p["spread"]))
+    );
+    let rad = format!("exp(-sqrt({dx}*{dx}+{dy}*{dy})/{r0})", r0 = fxlib::fmt_num(p["length"] * 0.9));
+    let env = flicker_expr(0.25, 0.5 + 3.0 * p["speed"], "T");
+    let lum = format!("({comb})*({rad})*({env})*{g}", g = fxlib::fmt_num(i * 1.9));
+    let expr = |c: f64| format!("255*min(1,{}*{})", fxlib::fmt_num(c), lum);
+    let (mm, gv, ov) = (attr_name(e, "gm"), attr_name(e, "gs"), attr_name(e, "go"));
+    vec![
+        format!("null[{mm}]"),
+        format!(
+            "color=c=black:s={gw}x{gh}:r={fps}:d={dur},format=rgb24,geq=r='{}':g='{}':b='{}'[{gv}]",
+            expr(1.0),
+            expr(0.93),
+            expr(0.75),
+        ),
+        format!("[{gv}]scale={w}:{h}[{ov}]"),
+        format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Prism Refraction — plane-split dispersion + baked spectral glint.
+fn prism_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (w, h) = (ctx.w, ctx.h);
+    let (fw, fh) = (w as f64, h as f64);
+    let fps = ctx.fps_str();
+    let (cx, cy) = (p["x"] / 100.0 * fw, p["y"] / 100.0 * fh);
+    let k = p["amount"] * 0.008;
+    let pat = p["pattern"].round() as i64;
+    let (mm, wk) = (attr_name(e, "pm"), attr_name(e, "pw"));
+    let mut v = vec![format!("split[{mm}][{wk}]")];
+    let mut d_out;
+    if pat == 1 {
+        // Edge Split — uniform diagonal dispersion (mirrors preview's
+        // vec2(k*1.6, k*0.7) H-unit offset → px)
+        let dxs = (k * 1.6 * fh).round() as i32;
+        let dys = (k * 0.7 * fh).round() as i32;
+        d_out = attr_name(e, "pd");
+        v.push(format!("[{wk}]rgbashift=rh={dxs}:rv={dys}:bh={}:bv={}[{d_out}]", -dxs, -dys));
+    } else {
+        // Radial/Halo — scale the real channel planes about the pivot:
+        // crop offset (f−1)·P (see design: S(q)=R(q/f + P(1−1/f))).
+        let b0 = 1.06;
+        let (fr, fg, fb) = (b0 * (1.0 + k), b0, b0 * (1.0 - k));
+        let (pr, pg, pb) = (attr_name(e, "pr"), attr_name(e, "pg"), attr_name(e, "pb"));
+        let (rs, gs, bs) = (attr_name(e, "ps"), attr_name(e, "pt"), attr_name(e, "pu"));
+        let (rc, gc, bc) = (attr_name(e, "px"), attr_name(e, "py"), attr_name(e, "pz"));
+        d_out = attr_name(e, "pd");
+        v.extend([
+            format!("[{wk}]format=gbrp,split=3[{pr}][{pg}][{pb}]"),
+            format!("[{pr}]scale=w='iw*{}':h='ih*{}'[{rs}]", fxlib::fmt_num(fr), fxlib::fmt_num(fr)),
+            format!("[{pg}]scale=w='iw*{}':h='ih*{}'[{gs}]", fxlib::fmt_num(fg), fxlib::fmt_num(fg)),
+            format!("[{pb}]scale=w='iw*{}':h='ih*{}'[{bs}]", fxlib::fmt_num(fb), fxlib::fmt_num(fb)),
+            format!("[{rs}]crop=w={w}:h={h}:x={}:y={},setsar=1[{rc}]", fxlib::fmt_num((fr - 1.0) * cx), fxlib::fmt_num((fr - 1.0) * cy)),
+            format!("[{gs}]crop=w={w}:h={h}:x={}:y={},setsar=1[{gc}]", fxlib::fmt_num((fg - 1.0) * cx), fxlib::fmt_num((fg - 1.0) * cy)),
+            format!("[{bs}]crop=w={w}:h={h}:x={}:y={},setsar=1[{bc}]", fxlib::fmt_num((fb - 1.0) * cx), fxlib::fmt_num((fb - 1.0) * cy)),
+            // gbrp planes: G,B,R — inputs ordered [g][b][r]
+            format!("[{gc}][{bc}][{rc}]mergeplanes=format=gbrp:map0s=0:map0p=0:map1s=1:map1p=1:map2s=2:map2p=2[{d_out}]"),
+        ]);
+    }
+    // spectral glint — baked sprite composited inside the effect branch
+    let amp = p["glint"];
+    if amp > 0.0 {
+        let (gb, gl, go, dg) = (attr_name(e, "ga"), attr_name(e, "gb"), attr_name(e, "gc"), attr_name(e, "pf"));
+        if pat == 2 {
+            // Halo — static spectral ring around the pivot
+            let dx = format!("(X-{})/{fh}", fxlib::fmt_num(cx));
+            let dy = format!("(Y-{})/{fh}", fxlib::fmt_num(cy));
+            let rr = format!("sqrt({dx}*{dx}+{dy}*{dy})");
+            let ring = format!("exp(-pow({rr}-0.3,2)/0.005)");
+            let spec = |ph: f64| format!("255*min(1,{}*({ring})*(0.5+0.5*cos(atan2({dy},{dx})+{ph})))", fxlib::fmt_num(amp), ph = fxlib::fmt_num(ph));
+            v.extend([
+                format!("color=c=black:s={w}x{h}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}'[{gb}]", spec(0.0), spec(2.09), spec(4.19)),
+                format!("[{gb}]loop=loop=-1:size=1,fps={fps}[{gl}]"),
+                format!("[{d_out}][{gl}]blend=all_mode=screen[{dg}]"),
+            ]);
+        } else {
+            // Radial/Edge — diagonal band sweeping the frame. Sprite is
+            // padded by G=0.9W so the band can travel fully off-frame.
+            let g = (0.9 * fw).ceil() as u32;
+            let dgx = format!("(X-{})/{fh}", fxlib::fmt_num(g as f64 + 0.5 * fw));
+            let dgy = format!("(Y-{})/{fh}", fxlib::fmt_num(0.5 * fh));
+            // band normal/direction for angle −0.55 rad
+            // n = (−bd.y, bd.x) = (0.5227, 0.8525), bd = (0.8525, −0.5227)
+            let q = format!("{dgx}*0.5227+{dgy}*0.8525");
+            let coord = format!("{dgx}*0.8525-{dgy}*0.5227");
+            let band = format!("exp(-({q})*({q})/0.0162)");
+            let spec = |ph: f64| {
+                format!("255*min(1,{}*({band})*(0.5+0.5*cos(6.2832*(({coord})*1.4+{ph}))))", fxlib::fmt_num(amp), ph = fxlib::fmt_num(ph))
+            };
+            let sweep = format!("mod({}*t,1)", fxlib::fmt_num(p["speed"]));
+            v.extend([
+                format!("color=c=black:s={}x{h}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}'[{gb}]", w + 2 * g, spec(0.0), spec(0.33), spec(0.67)),
+                format!("[{gb}]loop=loop=-1:size=1,fps={fps}[{gl}]"),
+                format!("[{gl}]crop=w={w}:h={h}:x='{g}+{}-{}*({sweep})':y=0[{go}]", fxlib::fmt_num(0.85 * fw), fxlib::fmt_num(1.7 * fw)),
+                format!("[{d_out}][{go}]blend=all_mode=screen[{dg}]"),
+            ]);
+        }
+        d_out = dg;
+    }
+    v.push(format!("[{mm}][{d_out}]blend=all_mode=normal:all_opacity={}{en}", fxlib::fmt_num(i)));
+    v
+}
+
 // ── helpers ───────────────────────────────────────────────────────────
 
 fn attr_name(e: &Effect, tag: &str) -> String {
@@ -331,6 +696,29 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
         return None;
     }
     let p = fxlib::resolve_constants(entry, &e.params);
+    // Light & Atmosphere: baked geq sprites + native animation, all
+    // screen-blended (prism uses a bypass crossfade instead). Windowing
+    // lands on the trailing blend — disabled → first input passes.
+    if matches!(e.kind.as_str(), "lensFlare" | "lightLeak" | "godRays" | "prismRefraction") {
+        let i = (p.get("intensity").copied().unwrap_or(100.0) / 100.0).clamp(0.0, 1.0);
+        if i <= 0.0 || ctx.clip_ms <= 0 {
+            return None;
+        }
+        let en = match (e.in_ms, e.out_ms) {
+            (None, None) => String::new(),
+            (a, b) => format!(
+                ":enable='between(t,{},{})'",
+                fxlib::fmt_num(a.map_or(0.0, |v| v / 1000.0)),
+                fxlib::fmt_num(b.map_or(1.0e9, |v| v / 1000.0))
+            ),
+        };
+        return Some(match e.kind.as_str() {
+            "lensFlare" => lens_flare_frag(e, ctx, i, &en, &p),
+            "lightLeak" => light_leak_frag(e, ctx, i, &en, &p),
+            "godRays" => god_rays_frag(e, ctx, i, &en, &p),
+            _ => prism_frag(e, ctx, i, &en, &p),
+        });
+    }
     match e.kind.as_str() {
         "rgbDisplacement" => {
             let (amount, angle, mode, speed) = (p["amount"], p["angle"], p["mode"] as u8, p["speed"]);
@@ -390,7 +778,18 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
+    #[test]
+    fn dump_light_fragments() {
+        // cargo test dump_light_fragments -- --nocapture — prints the real
+        // fragment chains for manual ffmpeg validation.
+        let c = FxCtx { w: 640, h: 360, fps_num: 30, fps_den: 1, clip_ms: 2000, source_in_ms: 0, speed: 1.0 };
+        for kind in ["lensFlare", "lightLeak", "godRays", "prismRefraction"] {
+            let f = fragments(&fx(kind, &[], None), &c).unwrap();
+            eprintln!("── {kind}\n{}", f.join(";\n"));
+        }
+    }
+
     fn fx(kind: &str, params: &[(&str, f64)], times: Option<Vec<f64>>) -> Effect {
         Effect {
             id: "abc12345-xyz".into(),

@@ -24,6 +24,7 @@
 import { fxEntry } from "./manifest";
 import { bakeLutData, LUT_SIZE } from "./lut";
 import { resolveConstants } from "./manifest";
+import { LIGHT_EFFECTS } from "./gl-effects";
 import type { Clip } from "@/lib/project-types";
 
 const VERT = `#version 300 es
@@ -130,6 +131,9 @@ export interface FilterPass {
   /** Resolved consts for LUT baking (only read on first use of lutKey). */
   lutConsts?: Record<string, number>;
   uniforms: Record<string, number>;
+  /** kind:"effect" with preview:"gl" (Light & Atmosphere) — 16 floats
+   *  packed by gl-effects for uP0..uP3. */
+  effect?: number[];
 }
 
 /** Canonical spatial keys the shader/fragments share. */
@@ -144,6 +148,9 @@ class FilterGL {
   fbo: [WebGLFramebuffer, WebGLFramebuffer] | null = null;
   fboTex: [WebGLTexture, WebGLTexture] | null = null;
   luts = new Map<string, WebGLTexture>();
+  /** Light-effect programs: entryId → {prog, locs} or null (compile
+   *  failed → that pass degrades to identity, GL stays healthy). */
+  progs = new Map<string, { prog: WebGLProgram; locs: Map<string, WebGLUniformLocation | null> } | null>();
   lost = false;
   onStatus: ((st: "ok" | "lost") => void) | null = null;
 
@@ -172,6 +179,7 @@ class FilterGL {
       this.fbo = null;
       this.fboTex = null;
       this.luts.clear();
+      this.progs.clear();
       this.onStatus?.("ok");
     });
     this.cv = cv;
@@ -243,6 +251,50 @@ class FilterGL {
     return `${entryId}|${relevant.join(",")}`;
   }
 
+  /** Compile+cache a light-effect program (null = failed; cached so the
+   *  pass degrades to identity instead of spamming compiles). */
+  private ensureEffect(id: string) {
+    let r = this.progs.get(id);
+    if (r !== undefined) return r;
+    r = null;
+    const gl = this.gl;
+    const def = LIGHT_EFFECTS[id];
+    if (gl && def) {
+      const sh = (type: number, src: string) => {
+        const s = gl.createShader(type)!;
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          console.error(`[filterGL:${id}]`, gl.getShaderInfoLog(s));
+          gl.deleteShader(s);
+          return null;
+        }
+        return s;
+      };
+      const vs = sh(gl.VERTEX_SHADER, VERT);
+      const fs = sh(gl.FRAGMENT_SHADER, def.frag);
+      const prog = gl.createProgram();
+      if (vs && fs && prog) {
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          const locs = new Map<string, WebGLUniformLocation | null>();
+          for (const u of ["uSrc", "uRes", "uP0", "uP1", "uP2", "uP3"])
+            locs.set(u, gl.getUniformLocation(prog, u));
+          r = { prog, locs };
+        } else {
+          console.error(`[filterGL:${id}]`, gl.getProgramInfoLog(prog));
+        }
+      }
+      if (vs) gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
+      if (!r && prog) gl.deleteProgram(prog);
+    }
+    this.progs.set(id, r);
+    return r;
+  }
+
   /** Bake+upload the LUT texture for `key` once (idempotent). */
   private ensureLut(pass: FilterPass): WebGLTexture | null {
     if (!pass.lutKey || !this.gl) return null;
@@ -308,14 +360,34 @@ class FilterGL {
 
     let input: WebGLTexture = this.srcTex!;
     for (let i = 0; i < passes.length; i++) {
+      const pass = passes[i];
       const last = i === passes.length - 1;
       gl.bindFramebuffer(gl.FRAMEBUFFER, last ? null : this.fbo![i % 2]);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, input);
-      const lut = this.ensureLut(passes[i]);
+      // Light & Atmosphere effect pass — dedicated program, params packed
+      // into uP0..uP3 by gl-effects. Compile failure → identity draw.
+      if (pass.effect) {
+        const ep = this.ensureEffect(pass.entryId);
+        if (ep) {
+          gl.useProgram(ep.prog);
+          gl.uniform1i(ep.locs.get("uSrc")!, 0);
+          gl.uniform2f(ep.locs.get("uRes")!, w, h);
+          const p = pass.effect;
+          gl.uniform4f(ep.locs.get("uP0")!, p[0], p[1], p[2], p[3]);
+          gl.uniform4f(ep.locs.get("uP1")!, p[4], p[5], p[6], p[7]);
+          gl.uniform4f(ep.locs.get("uP2")!, p[8], p[9], p[10], p[11]);
+          gl.uniform4f(ep.locs.get("uP3")!, p[12], p[13], p[14], p[15]);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          input = this.fboTex![i % 2];
+          continue;
+        }
+      }
+      gl.useProgram(this.prog);
+      const lut = this.ensureLut(pass);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_3D, lut);
-      const u = passes[i].uniforms;
+      const u = pass.uniforms;
       const set = (k: string, v: number) => gl.uniform1f(this.uniforms.get(k)!, v);
       set("uHasLut", lut ? 1 : 0);
       set("uIntensity", (u.intensity ?? 100) / 100);
@@ -343,6 +415,8 @@ class FilterGL {
     this.fbo?.forEach((f) => gl.deleteFramebuffer(f));
     if (this.srcTex) gl.deleteTexture(this.srcTex);
     if (this.prog) gl.deleteProgram(this.prog);
+    for (const [, r] of this.progs) if (r) gl.deleteProgram(r.prog);
+    this.progs.clear();
     gl.getExtension("WEBGL_lose_context")?.loseContext();
     this.gl = null;
     this.cv = null;
@@ -357,27 +431,53 @@ export function filterGL(): FilterGL {
   return inst;
 }
 
-/** Filter passes for a clip's active filter effects (max 3, order kept). */
-export function filterPassesFor(clip: Clip, relMs: number): FilterPass[] {
+/** Render-view context for frame-quantised animation: fps for the shared
+ *  time quantisation (same formula export uses — floor(t·fps)/fps), and
+ *  the layer aspect for field uniforms. */
+export interface PassView {
+  fps: number;
+  aspect: number;
+}
+
+/** Filter passes for a clip's active filter effects (max 3, order kept),
+ *  plus GL light-effect passes (kind:"effect" preview:"gl"). Effects and
+ *  filters interleave in stack order — the export chains them the same way. */
+export function filterPassesFor(clip: Clip, relMs: number, view?: PassView): FilterPass[] {
   const out: FilterPass[] = [];
+  const fps = view?.fps ?? 30;
+  const t = Math.floor((relMs / 1000) * fps + 1e-9) / fps;
+  const w = view?.aspect ?? 16 / 9;
+  let filters = 0;
   for (const e of clip.effects ?? []) {
     if (!e.enabled) continue;
     if (e.inMs != null && relMs < e.inMs) continue;
     if (e.outMs != null && relMs >= e.outMs) continue;
     const entry = fxEntry(e.type);
-    if (entry?.kind !== "filter") continue;
-    const consts = resolveConstants(entry, e.params);
+    const consts = entry ? resolveConstants(entry, e.params) : {};
     const i = Math.min(1, Math.max(0, (consts.intensity ?? 100) / 100));
     if (i <= 0) continue;
-    const uniforms: Record<string, number> = { intensity: consts.intensity ?? 100 };
-    for (const k of SPATIAL) uniforms[k] = (consts[k] ?? 0) * i;
-    out.push({
-      entryId: entry.id,
-      lutKey: filterGL().lutKeyFor(entry.id, e.params),
-      lutConsts: consts,
-      uniforms,
-    });
-    if (out.length >= 3) break;
+    if (entry?.kind === "effect" && entry.preview === "gl" && LIGHT_EFFECTS[entry.id]) {
+      // pack ctx: t quantised, w/h normalised to aspect (the field math is
+      // in H-fraction units — only the aspect is real)
+      out.push({
+        entryId: entry.id,
+        lutKey: "",
+        uniforms: {},
+        effect: LIGHT_EFFECTS[entry.id].pack(consts, { t, w, h: 1 }),
+      });
+    } else if (entry?.kind === "filter") {
+      if (filters >= 3) continue;
+      filters++;
+      const uniforms: Record<string, number> = { intensity: consts.intensity ?? 100 };
+      for (const k of SPATIAL) uniforms[k] = (consts[k] ?? 0) * i;
+      out.push({
+        entryId: entry.id,
+        lutKey: filterGL().lutKeyFor(entry.id, e.params),
+        lutConsts: consts,
+        uniforms,
+      });
+    } else continue;
+    if (out.length >= 6) break; // GPU-cost bound on stacked passes
   }
   return out;
 }

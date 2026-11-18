@@ -56,6 +56,10 @@ export interface EffectDef {
   /** Effect is render-only (LUT import): preview can't express it cheaply,
    *  so the strip shows but the preview is untouched. Documented, not a bug. */
   noPreview?: boolean;
+  /** Preview runs in the shared WebGL2 filter compositor (Light &
+   *  Atmosphere kind:"effect" entries with preview:"gl") — the DOM/SVG
+   *  path intentionally produces nothing for these. */
+  glPreview?: boolean;
 }
 
 const p = (params: Record<string, number>, k: string, def = 0) => params[k] ?? def;

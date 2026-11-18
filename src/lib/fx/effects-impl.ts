@@ -121,6 +121,7 @@ export function libraryEffectDefs(): EffectDef[] {
       type: e.id,
       fxId: e.id,
       label: e.name,
+      glPreview: e.preview === "gl" && e.kind === "effect",
       params: Object.fromEntries(
         e.params.map((p) => [
           p.key,

@@ -173,6 +173,11 @@
 .fxt-beat::after{inset:25% 38%;border-radius:50%;background:#22d3ee;animation:fxt-beat .7s ease-out infinite}
 @keyframes fxt-beat{0%{transform:scale(1.6)}100%{transform:scale(1)}}
 
+/* Light & Atmosphere tiles — real 8-frame production strips (3072x216)
+   rendered by the ffmpeg chain; steps() plays them back as a sprite. */
+.fxstrip{background-size:800% 100%;background-position:0 0;background-repeat:no-repeat;animation:fxstrip 1.6s steps(8) infinite}
+@keyframes fxstrip{to{background-position:100% 0}}
+
 /* Impact subtitle: each word mounts oversized and slams down. */
 @keyframes sub-impact{0%{transform:scale(1.8);opacity:0}60%{transform:scale(.94);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes sub-letter{0%{transform:scale(1.35);opacity:0}100%{transform:scale(1);opacity:1}}

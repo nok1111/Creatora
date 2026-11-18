@@ -75,3 +75,53 @@ export function beatEnv(beats: number[], k: number, t: number): number {
 }
 
 export const BEAT_EVERY = [1, 2, 4];
+
+// ── Light & atmosphere curves ─────────────────────────────────────────
+// Mirrored 1:1 by fxeffects.rs; pinned in curves.golden.json.
+// t = clip-relative seconds. Offsets are fractions of frame width/height.
+
+/** Two-sine flicker in [1−2a, 1] (a ≤ 0.6) — additive light breathing. */
+export function flickerEnv(amt: number, speed: number, t: number): number {
+  const w =
+    0.65 * Math.sin(6.2832 * speed * t) + 0.35 * Math.sin(6.2832 * speed * 2.63 * t + 1.3);
+  return Math.max(0, 1 - amt + amt * w);
+}
+
+/** Lens-flare drift around the anchor, frame fractions [dx·W, dy·H]. */
+export function flareDrift(speed: number, t: number): [number, number] {
+  return [
+    0.022 * Math.sin(6.2832 * speed * t + 0.7),
+    0.012 * Math.sin(6.2832 * speed * 0.83 * t + 2.1),
+  ];
+}
+
+/** Light-leak drift, frame fractions. The blob slides in and eases back;
+ *  `travel` is the max excursion (fraction of width). Pattern picks the
+ *  direction of the sweep. */
+export function leakDrift(
+  pattern: number,
+  travel: number,
+  speed: number,
+  t: number,
+): [number, number] {
+  const s = 0.5 + 0.5 * Math.sin(6.2832 * speed * t - 1.5708);
+  switch (pattern) {
+    case 1:
+      return [-0.5 * travel * s, 0.7 * travel * s]; // corner bloom: diagonal
+    case 2:
+      return [0.6 * travel * s, 0]; // dual sides: lateral slide
+    default:
+      return [travel * s, 0]; // edge sweep: slide in from the left
+  }
+}
+
+/** God-rays sway (radians) about the baked fan orientation. */
+export const raysSwayRad = (deg: number, speed: number, t: number) =>
+  (deg * Math.PI) / 180 * Math.sin(6.2832 * speed * t);
+
+/** Prism glint sweep — x offset in frame fractions, −0.35 → 1.35 loop. */
+export function glintSweep(speed: number, t: number): number {
+  if (speed <= 0) return 0;
+  const u = speed * t - Math.floor(speed * t);
+  return -0.35 + 1.7 * u;
+}

@@ -1550,6 +1550,368 @@
       ],
       "preview": "gl",
       "thumb": "img:monochrome"
+    },
+    {
+      "id": "lensFlare",
+      "kind": "effect",
+      "category": "light",
+      "name": "Cinematic Lens Flare",
+      "description": "Anamorphic light streak with a hot core and ghost reflections that drifts slowly — cinema-grade flare, not a grade.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 70,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "x",
+          "label": "Position X",
+          "type": "number",
+          "def": 62,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "y",
+          "label": "Position Y",
+          "type": "number",
+          "def": 38,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "hue",
+          "label": "Tint",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Ice Blue",
+            "Warm",
+            "Magenta"
+          ]
+        },
+        {
+          "key": "elements",
+          "label": "Elements",
+          "type": "enum",
+          "def": 1,
+          "options": [
+            "Streak + Core",
+            "+ 2 Ghosts",
+            "+ 4 Ghosts"
+          ]
+        },
+        {
+          "key": "spread",
+          "label": "Streak width",
+          "type": "number",
+          "def": 1,
+          "min": 0.4,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "speed",
+          "label": "Drift speed",
+          "type": "number",
+          "def": 0.12,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.01,
+          "unit": "Hz"
+        },
+        {
+          "key": "flicker",
+          "label": "Flicker",
+          "type": "number",
+          "def": 0.3,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.02
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "hue",
+          "values": [
+            0.55,
+            1,
+            1
+          ]
+        },
+        "cg": {
+          "from": "hue",
+          "values": [
+            0.75,
+            0.82,
+            0.5
+          ]
+        },
+        "cb": {
+          "from": "hue",
+          "values": [
+            1,
+            0.55,
+            0.85
+          ]
+        },
+        "ghosts": {
+          "from": "elements",
+          "values": [
+            0,
+            2,
+            4
+          ]
+        }
+      },
+      "preview": "gl",
+      "thumb": "img:lensFlare"
+    },
+    {
+      "id": "lightLeak",
+      "kind": "effect",
+      "category": "light",
+      "name": "Light Leak",
+      "description": "Analog film burn — warm light spilling in from the frame edge with organic drift and exposure flicker.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 70,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "color",
+          "def": 16734750,
+          "min": 0,
+          "max": 16777215,
+          "step": 1
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Edge Sweep",
+            "Corner Bloom",
+            "Dual Sides"
+          ]
+        },
+        {
+          "key": "spread",
+          "label": "Spread",
+          "type": "number",
+          "def": 0.75,
+          "min": 0.25,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "speed",
+          "label": "Drift speed",
+          "type": "number",
+          "def": 0.18,
+          "min": 0.04,
+          "max": 0.8,
+          "step": 0.01,
+          "unit": "Hz"
+        },
+        {
+          "key": "flicker",
+          "label": "Flicker",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.02
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:lightLeak"
+    },
+    {
+      "id": "godRays",
+      "kind": "effect",
+      "category": "light",
+      "name": "God Rays",
+      "description": "Volumetric light shafts from a source point — adjustable fan, slow sway, gentle breathing.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 55,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "x",
+          "label": "Source X",
+          "type": "number",
+          "def": 18,
+          "min": -20,
+          "max": 120,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "y",
+          "label": "Source Y",
+          "type": "number",
+          "def": -8,
+          "min": -20,
+          "max": 120,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "angle",
+          "label": "Fan angle",
+          "type": "angle",
+          "def": 35,
+          "min": 0,
+          "max": 360,
+          "step": 5,
+          "unit": "°"
+        },
+        {
+          "key": "density",
+          "label": "Ray density",
+          "type": "number",
+          "def": 14,
+          "min": 4,
+          "max": 30,
+          "step": 0.5
+        },
+        {
+          "key": "spread",
+          "label": "Ray softness",
+          "type": "number",
+          "def": 0.7,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "length",
+          "label": "Reach",
+          "type": "number",
+          "def": 0.8,
+          "min": 0.3,
+          "max": 1.2,
+          "step": 0.02
+        },
+        {
+          "key": "speed",
+          "label": "Sway speed",
+          "type": "number",
+          "def": 0.06,
+          "min": 0,
+          "max": 0.4,
+          "step": 0.01,
+          "unit": "Hz"
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:godRays"
+    },
+    {
+      "id": "prismRefraction",
+      "kind": "effect",
+      "category": "light",
+      "name": "Prism Refraction",
+      "description": "Spectral dispersion — RGB planes split radially around a point while a rainbow glint sweeps the frame.",
+      "params": [
+        {
+          "key": "intensity",
+          "label": "Intensity",
+          "type": "number",
+          "def": 65,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "amount",
+          "label": "Dispersion",
+          "type": "number",
+          "def": 0.8,
+          "min": 0.1,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "x",
+          "label": "Centre X",
+          "type": "number",
+          "def": 50,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "y",
+          "label": "Centre Y",
+          "type": "number",
+          "def": 45,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Radial",
+            "Edge Split",
+            "Halo"
+          ]
+        },
+        {
+          "key": "glint",
+          "label": "Rainbow glint",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "speed",
+          "label": "Glint speed",
+          "type": "number",
+          "def": 0.08,
+          "min": 0,
+          "max": 0.4,
+          "step": 0.01,
+          "unit": "Hz"
+        }
+      ],
+      "preview": "gl",
+      "thumb": "img:prismRefraction"
     }
   ]
 }

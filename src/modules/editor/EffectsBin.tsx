@@ -81,6 +81,8 @@ interface FxItem {
   thumb?: string;
   /** Photographic thumbnail URL (production-pipeline render). */
   thumbImg?: string;
+  /** Animated 8-frame sprite strip (production-pipeline render). */
+  stripImg?: string;
 }
 
 const preset = (id: string, icon: LucideIcon): FxItem => ({
@@ -114,6 +116,20 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
         icon: Sparkles,
         description: e.description,
         thumbImg: thumbUrl(e.id),
+      })),
+  },
+  {
+    id: "overlay",
+    labelKey: "editor.fxCatLight",
+    icon: Sun,
+    items: fxEntries()
+      .filter((e) => e.kind === "effect" && e.category === "light")
+      .map((e) => ({
+        id: e.id,
+        label: e.name,
+        icon: Sun,
+        description: e.description,
+        stripImg: thumbUrl(e.id),
       })),
   },
   {
@@ -196,7 +212,7 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
     labelKey: "editor.fxCatOverlay",
     icon: Wand2,
     items: [
-      ...EFFECTS.map((e) => ({
+      ...EFFECTS.filter((e) => fxEntry(e.type)?.category !== "light").map((e) => ({
         id: e.type,
         label: e.label,
         icon: OVERLAY_ICONS[e.type] ?? Wand2,
@@ -247,7 +263,7 @@ export function EffectsBin() {
         const items = cat.items.filter((i) => showAll || sectionOf(cat.id, i.id) === section);
         if (!items.length) return null;
         return (
-          <div key={cat.id} className="border-b border-border/60">
+          <div key={cat.labelKey} className="border-b border-border/60">
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <cat.icon className="size-3" />
               {t(cat.labelKey)}
@@ -273,6 +289,13 @@ export function EffectsBin() {
                   >
                     {item.thumbImg && (
                       <img src={item.thumbImg} alt="" className="h-12 w-full rounded-sm object-cover" draggable={false} />
+                    )}
+                    {item.stripImg && !item.thumbImg && (
+                      <div
+                        className="fxstrip h-12 w-full rounded-sm"
+                        style={{ backgroundImage: `url(${item.stripImg})` }}
+                        aria-hidden
+                      />
                     )}
                     {item.thumb && !item.thumbImg && <div className={`fxt ${item.thumb}`} aria-hidden />}
                     <div className="flex items-center gap-1.5">

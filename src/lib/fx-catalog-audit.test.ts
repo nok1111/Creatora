@@ -34,6 +34,7 @@ import {
 import type { Effect, ProjectDoc } from "@/lib/project-types";
 import { DEFAULT_SUBTITLE_STYLE } from "@/lib/project-types";
 import { fxEntry } from "@/lib/fx/manifest";
+import { filterPassesFor } from "@/lib/fx/gl-filter";
 
 /** ffmpeg xfade transition names — mirror of plan.rs::XFADES plus the
     legacy aliases dipToBlack/dipToWhite/crossfade. A catalog merge id not
@@ -140,6 +141,19 @@ describe("fx catalog audit", () => {
         boxShadowFor([fx]) ||
         overlayFor([fx]) ||
         "";
+      // preview:"gl" effects render in the shared GL compositor — their
+      // preview is a FilterPass, not DOM output. Assert one is produced.
+      if (def.glPreview) {
+        const r = withMediaClip();
+        const clip = findClip(r.doc, r.clipId)!.clip;
+        clip.effects = [{ ...fx, id: "g1" }];
+        const passes = filterPassesFor(clip, 10, { fps: 30, aspect: 16 / 9 });
+        expect(
+          passes.filter((p) => p.effect).length,
+          `'${def.type}' produces no GL pass at drop params`,
+        ).toBeGreaterThan(0);
+        continue;
+      }
       if (!def.noPreview) {
         expect(out.length, `'${def.type}' produces no preview at drop params`).toBeGreaterThan(0);
       }

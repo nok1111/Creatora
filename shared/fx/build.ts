@@ -43,7 +43,9 @@ export type FxCategory =
   | "aesthetic"
   | "moody"
   | "modern"
-  | "mono";
+  | "mono"
+  // Light & atmosphere effects (kind:"effect", preview:"gl")
+  | "light";
 
 /**
  * Color ops baked into a filter's 33³ .cube. Each is a pure function on
@@ -661,6 +663,136 @@ export const MANIFEST: FxManifest = {
       ],
       preview: "gl",
       thumb: "img:monochrome",
+    },
+    // ── Light & Atmosphere (kind:"effect", preview:"gl") ─────────────
+    // Procedural light/optics — NOT color grades. Preview: dedicated GLSL
+    // programs in the shared filter compositor (gl-effects.ts). Export:
+    // baked geq sprites + animated overlay/rotate/blend fragments
+    // (fxeffects.rs). Motion curves live in envelopes.ts, mirrored in Rust
+    // and pinned by curves.golden.json.
+    // ── Cinematic Lens Flare ────────────────────────────────────────
+    // Anamorphic horizontal streak with a hot core and optional ghost
+    // reflections, screen-blended. The flare drifts slowly around the
+    // user-set anchor (speed) and breathes (flicker).
+    {
+      id: "lensFlare",
+      kind: "effect",
+      category: "light",
+      name: "Cinematic Lens Flare",
+      description:
+        "Anamorphic light streak with a hot core and ghost reflections that drifts slowly — cinema-grade flare, not a grade.",
+      params: [
+        num("intensity", "Intensity", 70, 0, 100, 1, "%"),
+        num("x", "Position X", 62, 0, 100, 1, "%"),
+        num("y", "Position Y", 38, 0, 100, 1, "%"),
+        {
+          key: "hue",
+          label: "Tint",
+          type: "enum",
+          def: 0,
+          options: ["Ice Blue", "Warm", "Magenta"],
+        },
+        {
+          key: "elements",
+          label: "Elements",
+          type: "enum",
+          def: 1,
+          options: ["Streak + Core", "+ 2 Ghosts", "+ 4 Ghosts"],
+        },
+        num("spread", "Streak width", 1, 0.4, 2, 0.05),
+        num("speed", "Drift speed", 0.12, 0, 0.6, 0.01, "Hz"),
+        num("flicker", "Flicker", 0.3, 0, 0.6, 0.02),
+      ],
+      derive: {
+        cr: { from: "hue", values: [0.55, 1.0, 1.0] },
+        cg: { from: "hue", values: [0.75, 0.82, 0.5] },
+        cb: { from: "hue", values: [1.0, 0.55, 0.85] },
+        ghosts: { from: "elements", values: [0, 2, 4] },
+      },
+      preview: "gl",
+      thumb: "img:lensFlare",
+    },
+    // ── Light Leak ──────────────────────────────────────────────────
+    // Organic analog exposure burn: a warm blob spilling in from an edge
+    // (or corner, or both sides), drifting in and out while the exposure
+    // flickers. Baked radial field + envelope, screen-blended.
+    {
+      id: "lightLeak",
+      kind: "effect",
+      category: "light",
+      name: "Light Leak",
+      description:
+        "Analog film burn — warm light spilling in from the frame edge with organic drift and exposure flicker.",
+      params: [
+        num("intensity", "Intensity", 70, 0, 100, 1, "%"),
+        { key: "color", label: "Color", type: "color", def: 0xff5a1e, min: 0, max: 0xffffff, step: 1 },
+        {
+          key: "pattern",
+          label: "Pattern",
+          type: "enum",
+          def: 0,
+          options: ["Edge Sweep", "Corner Bloom", "Dual Sides"],
+        },
+        num("spread", "Spread", 0.75, 0.25, 1, 0.02),
+        num("speed", "Drift speed", 0.18, 0.04, 0.8, 0.01, "Hz"),
+        num("flicker", "Flicker", 0.35, 0, 0.6, 0.02),
+      ],
+      preview: "gl",
+      thumb: "img:lightLeak",
+    },
+    // ── God Rays ────────────────────────────────────────────────────
+    // Volumetric shafts from an off-frame source: an angular comb of rays
+    // with a radial reach falloff, baked once and rotated slowly about the
+    // source (sway). GPU/native cost stays low — one rotate of a half-res
+    // sprite per frame.
+    {
+      id: "godRays",
+      kind: "effect",
+      category: "light",
+      name: "God Rays",
+      description:
+        "Volumetric light shafts from a source point — adjustable fan, slow sway, gentle breathing.",
+      params: [
+        num("intensity", "Intensity", 55, 0, 100, 1, "%"),
+        num("x", "Source X", 18, -20, 120, 1, "%"),
+        num("y", "Source Y", -8, -20, 120, 1, "%"),
+        { key: "angle", label: "Fan angle", type: "angle", def: 35, min: 0, max: 360, step: 5, unit: "°" },
+        num("density", "Ray density", 14, 4, 30, 0.5),
+        num("spread", "Ray softness", 0.7, 0.2, 1, 0.02),
+        num("length", "Reach", 0.8, 0.3, 1.2, 0.02),
+        num("speed", "Sway speed", 0.06, 0, 0.4, 0.01, "Hz"),
+      ],
+      preview: "gl",
+      thumb: "img:godRays",
+    },
+    // ── Prism Refraction ────────────────────────────────────────────
+    // Glass dispersion: the red and blue planes diverge radially around a
+    // centre point (export scales/merges real channel planes), plus a slow
+    // spectral glint sweeping the frame. Pattern picks the geometry.
+    {
+      id: "prismRefraction",
+      kind: "effect",
+      category: "light",
+      name: "Prism Refraction",
+      description:
+        "Spectral dispersion — RGB planes split radially around a point while a rainbow glint sweeps the frame.",
+      params: [
+        num("intensity", "Intensity", 65, 0, 100, 1, "%"),
+        num("amount", "Dispersion", 0.8, 0.1, 2, 0.05),
+        num("x", "Centre X", 50, 0, 100, 1, "%"),
+        num("y", "Centre Y", 45, 0, 100, 1, "%"),
+        {
+          key: "pattern",
+          label: "Pattern",
+          type: "enum",
+          def: 0,
+          options: ["Radial", "Edge Split", "Halo"],
+        },
+        num("glint", "Rainbow glint", 0.5, 0, 1, 0.02),
+        num("speed", "Glint speed", 0.08, 0, 0.4, 0.01, "Hz"),
+      ],
+      preview: "gl",
+      thumb: "img:prismRefraction",
     },
   ],
 };

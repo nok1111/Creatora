@@ -194,6 +194,7 @@ export const es: typeof en = {
     fxCatMerge: "Unión",
     fxCatOverlay: "Superposición",
     fxCatFilters: "Filtros",
+    fxCatLight: "Luz y atmósfera",
     fxDragHint: "Arrastra sobre un clip en el timeline",
     fxBinFooter: "Arrastra un efecto sobre un clip. Los efectos de unión van entre dos clips adyacentes.",
     fxDropOnClip: "Suelta el efecto sobre un clip",

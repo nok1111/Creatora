@@ -825,3 +825,252 @@ fn filter_verify() {
     }
     eprintln!("filter_verify ok");
 }
+
+// ── Light & Atmosphere effects (kind:"effect", preview:"gl") ─────────
+
+/// Effect-strip thumbnails: run the REAL fragment chain on the shared
+/// photographic sample, grab 8 frames across ~1.5 s and tile them into
+/// shared/fx/thumbs/<id>.png — the Effects Bin plays the strip with a
+/// CSS steps() animation, so tiles match export frames exactly.
+///   cargo test --lib render::fxlib_parity::light_thumbs -- --ignored
+#[test]
+#[ignore]
+fn light_thumbs() {
+    use crate::project::document::Effect;
+    let Some(ff) = ffmpeg() else {
+        eprintln!("skipping: ffmpeg unavailable");
+        return;
+    };
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let sample = root.join("shared/fx/sample.png");
+    let out_dir = root.join("shared/fx/thumbs");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let (tw, th) = (384u32, 216u32);
+    let sel = (0..8).map(|k| format!("eq(n\\,{})", 6 + k * 5)).collect::<Vec<_>>().join("+");
+    for entry in crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "effect" && e.category == "light")
+    {
+        let fx = Effect {
+            id: "thumbfx1".into(),
+            kind: entry.id.clone(),
+            enabled: true,
+            in_ms: None,
+            out_ms: None,
+            file: None,
+            times: None,
+            params: Default::default(),
+        };
+        let frags = crate::render::fxeffects::fragments(
+            &fx,
+            &crate::render::fxeffects::FxCtx {
+                w: tw,
+                h: th,
+                fps_num: 30,
+                fps_den: 1,
+                clip_ms: 3000,
+                source_in_ms: 0,
+                speed: 1.0,
+            },
+        )
+        .unwrap_or_default()
+        .join(";");
+        let chain = format!("scale={tw}:{th},setsar=1,{frags},select='{sel}',tile=8x1");
+        let out = out_dir.join(format!("{}.png", entry.id));
+        let st = Command::new(&ff)
+            .args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
+            .arg(&sample)
+            .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
+            .arg(&out)
+            .status()
+            .unwrap();
+        assert!(st.success(), "light thumb failed for {}\n{chain}", entry.id);
+        eprintln!("light thumb: {}", entry.id);
+    }
+}
+
+/// Light-effect verification through the real chain: each effect must
+/// visibly change the sample (non-identity) and render across a clip,
+/// not just at t=0.
+///   cargo test --lib render::fxlib_parity::light_verify -- --ignored
+#[test]
+#[ignore]
+fn light_verify() {
+    use crate::project::document::Effect;
+    let Some(ff) = ffmpeg() else {
+        eprintln!("skipping: ffmpeg unavailable");
+        return;
+    };
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let sample = root.join("shared/fx/sample.png");
+    let tmp = std::env::temp_dir().join("creatora-lightverify");
+    std::fs::create_dir_all(&tmp).unwrap();
+    let ctx = crate::render::fxeffects::FxCtx {
+        w: 384,
+        h: 216,
+        fps_num: 30,
+        fps_den: 1,
+        clip_ms: 3000,
+        source_in_ms: 0,
+        speed: 1.0,
+    };
+    let raw = |p: &Path| -> Vec<u8> {
+        Command::new(&ff)
+            .args(["-hide_banner", "-v", "error", "-y", "-i"])
+            .arg(p)
+            .args(["-vf", "format=rgb24", "-f", "rawvideo", "-"])
+            .output()
+            .unwrap()
+            .stdout
+    };
+    let base = raw(&{
+        let b = tmp.join("base.png");
+        Command::new(&ff)
+            .args(["-hide_banner", "-v", "error", "-y", "-i"])
+            .arg(&sample)
+            .args(["-vf", "scale=384:216", "-frames:v", "1", "-update", "1"])
+            .arg(&b)
+            .status()
+            .unwrap();
+        b
+    });
+    let mean = |a: &[u8], b: &[u8]| {
+        a.iter().zip(b.iter()).map(|(x, y)| (*x as f64 - *y as f64).abs()).sum::<f64>() / a.len() as f64
+    };
+    for entry in crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "effect" && e.category == "light")
+    {
+        let fx = Effect {
+            id: "v".into(),
+            kind: entry.id.clone(),
+            enabled: true,
+            in_ms: None,
+            out_ms: None,
+            file: None,
+            times: None,
+            params: Default::default(),
+        };
+        let frags = crate::render::fxeffects::fragments(&fx, &ctx).unwrap_or_default().join(";");
+        // frames 20 and 60 — the animation must be live at both
+        let mut last = 0.0;
+        for n in [20u32, 60] {
+            let out = tmp.join(format!("{}_{n}.png", entry.id));
+            let chain = format!("scale=384:216,setsar=1,{frags},select=eq(n\\,{n})");
+            let st = Command::new(&ff)
+                .args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
+                .arg(&sample)
+                .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
+                .arg(&out)
+                .status()
+                .unwrap();
+            assert!(st.success(), "{}: render failed\n{chain}", entry.id);
+            let a = raw(&out);
+            let d = mean(&a, &base);
+            let mx = a.iter().zip(base.iter()).map(|(x, y)| (*x as i32 - *y as i32).abs()).max().unwrap_or(0);
+            eprintln!("{} n={n}: mean|Δ| = {d:.2}  max|Δ| = {mx}", entry.id);
+            assert!(mx > 60, "{}: frame {n} not visibly affected (maxΔ {mx})", entry.id);
+            last = d;
+        }
+        let _ = last;
+    }
+    eprintln!("light_verify ok");
+}
+
+/// Multi-scene sheet for the light collection: rows = Original + 4 effects,
+/// cols = base / dark / night / bright variants of the QA sample. Same
+/// production chain, same frame — the visual review target for Batch 1.
+///   cargo test --lib render::fxlib_parity::light_scenes -- --ignored
+#[test]
+#[ignore]
+fn light_scenes() {
+    use crate::project::document::Effect;
+    let Some(ff) = ffmpeg() else {
+        eprintln!("skipping: ffmpeg unavailable");
+        return;
+    };
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let sample = root.join("shared/fx/sample.png");
+    let out_dir = root.join("qa/out");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let tmp = std::env::temp_dir().join("creatora-lightscenes");
+    std::fs::create_dir_all(&tmp).unwrap();
+    let ctx = crate::render::fxeffects::FxCtx {
+        w: 384, h: 216, fps_num: 30, fps_den: 1, clip_ms: 3000, source_in_ms: 0, speed: 1.0,
+    };
+    // scene grades: base, dark room, blue night, blown bright
+    let scenes = [
+        ("base", "null"),
+        ("dark", "eq=brightness=-0.28:saturation=0.85"),
+        ("night", "eq=brightness=-0.42:saturation=0.55,colorbalance=bm=0.3:bs=0.35"),
+        ("bright", "eq=brightness=0.22:saturation=0.8"),
+    ];
+    let mut rows: Vec<String> = vec!["Original".to_string()];
+    rows.extend(crate::render::fxlib::manifest()
+        .entries.iter()
+        .filter(|e| e.kind == "effect" && e.category == "light")
+        .map(|e| e.id.clone()));
+    let mut cells: Vec<Vec<String>> = Vec::new();
+    for (ri, row) in rows.iter().enumerate() {
+        let mut cells_row = Vec::new();
+        for (scene, grade) in &scenes {
+            let cell = tmp.join(format!("s_{ri}_{scene}.png"));
+            let frags = if ri == 0 {
+                String::new()
+            } else {
+                let fx = Effect {
+                    id: "v".into(), kind: row.clone(), enabled: true,
+                    in_ms: None, out_ms: None, file: None, times: None,
+                    params: Default::default(),
+                };
+                let f = crate::render::fxeffects::fragments(&fx, &ctx).unwrap_or_default().join(";");
+                format!("{f},")
+            };
+            let chain = format!("scale=384:216,setsar=1,{grade},format=rgb24,{frags}format=rgb24,select=eq(n\\,30)");
+            let st = Command::new(&ff)
+                .args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "2", "-i"])
+                .arg(&sample)
+                .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
+                .arg(&cell)
+                .status()
+                .unwrap();
+            assert!(st.success(), "scene cell {row}/{scene} failed\n{chain}");
+            cells_row.push(cell.to_string_lossy().into_owned());
+        }
+        cells.push(cells_row);
+    }
+    // assemble: 5 rows x 4 cols via one ffmpeg run, drawtext labels
+    let mut cmd = Command::new(&ff);
+    cmd.args(["-hide_banner", "-v", "error", "-y"]);
+    for r in &cells {
+        for c in r {
+            cmd.args(["-i", c]);
+        }
+    }
+    let cols = scenes.len();
+    let mut fc = String::new();
+    for (ri, r) in cells.iter().enumerate() {
+        for (ci, _) in r.iter().enumerate() {
+            let idx = ri * cols + ci;
+            let label = if ci == 0 { rows[ri].as_str() } else { "" };
+            fc.push_str(&format!("[{idx}:v]drawtext=text='{label} {scene}':x=6:y=6:fontsize=13:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=4[c{idx}];", scene = scenes[ci].0));
+        }
+    }
+    for (ri, _) in cells.iter().enumerate() {
+        for (ci, _) in scenes.iter().enumerate() {
+            fc.push_str(&format!("[c{}]", ri * cols + ci));
+        }
+        fc.push_str(&format!("xstack=inputs={cols}:layout=0_0|384_0|768_0|1152_0[r{ri}];"));
+    }
+    fc.push_str("[r0][r1][r2][r3][r4]vstack=inputs=5[vout]");
+    let out = out_dir.join("batch1_light_comparison.png");
+    let st = cmd
+        .args(["-filter_complex", &fc, "-map", "[vout]", "-frames:v", "1", "-update", "1"])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(st.success(), "sheet assembly failed\n{fc}");
+    eprintln!("light sheet → {}", out.display());
+}

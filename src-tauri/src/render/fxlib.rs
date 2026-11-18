@@ -57,6 +57,8 @@ pub enum FxRender {
 pub struct FxEntry {
     pub id: String,
     pub kind: String,
+    #[serde(default)]
+    pub category: String,
     pub params: Vec<FxParam>,
     #[serde(default)]
     pub derive: BTreeMap<String, Derive>,
