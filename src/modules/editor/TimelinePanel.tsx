@@ -1064,7 +1064,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
       </button>
       <button
-        className={`rounded px-0.5 py-0.5 text-[9px] font-bold hover:bg-accent ${track.solo ? "text-accent-foreground" : "text-muted-foreground"}`}
+        className={`rounded px-0.5 py-0.5 text-[10px] font-bold hover:bg-accent ${track.solo ? "text-accent-foreground" : "text-muted-foreground"}`}
         title={t("editor.trackSolo")}
         onClick={(e) => {
           e.stopPropagation();
@@ -1075,7 +1075,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       </button>
       <input
         type="range"
-        className="w-10 accent-cyan-500"
+        className="w-10 accent-primary"
         min={0}
         max={2}
         step={0.01}
@@ -1174,7 +1174,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {t("subs.captions")}
                 {doc.subtitles.length > 0 && (
-                  <span className="ml-1 text-[9px] text-muted-foreground/60">
+                  <span className="ml-1 text-[10px] text-muted-foreground/60">
                     {doc.subtitles.length}
                   </span>
                 )}
@@ -1236,7 +1236,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     title={t("editor.trackUp")}
                     onClick={() => mutate((d) => moveTrackOrder(d, track.id, 1))}
                   >
-                    <span className="text-[9px]">▲</span>
+                    <span className="text-[10px]">▲</span>
                   </button>
                   <button
                     className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -1244,7 +1244,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     title={t("editor.trackDown")}
                     onClick={() => mutate((d) => moveTrackOrder(d, track.id, -1))}
                   >
-                    <span className="text-[9px]">▼</span>
+                    <span className="text-[10px]">▼</span>
                   </button>
                 </div>
                 {trackActions(track)}
@@ -1342,7 +1342,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     key={cue.id}
                     data-cue={cue.id}
                     className={cn(
-                      "absolute top-[3px] h-[24px] rounded border text-[9px] leading-[22px]",
+                      "absolute top-[3px] h-[24px] rounded border text-[10px] leading-[22px]",
                       editing ? "overflow-visible" : "overflow-hidden",
                       sel
                         ? "z-10 border-emerald-300 bg-emerald-400/40 text-emerald-50"
@@ -1563,7 +1563,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                             Object.keys(ovKf ?? {}).length;
                           return n > 0 ? (
                             <span
-                              className="flex shrink-0 items-center gap-0.5 rounded-sm bg-amber-400 px-0.5 text-[9px] font-bold text-black"
+                              className="flex shrink-0 items-center gap-0.5 rounded-sm bg-amber-400 px-0.5 text-[10px] font-bold text-black"
                               title={t("editor.fxBadge")}
                             >
                               <Sparkles className="size-2.5" />

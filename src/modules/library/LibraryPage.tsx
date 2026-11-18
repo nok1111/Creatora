@@ -96,7 +96,7 @@ function AssetCard({ asset, collections, onRelink, onDelete, onFav, onAssign, on
             {thumbError && (
               <button
                 disabled={regenerating}
-                className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60"
+                className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60"
                 title="Regenerate thumbnail"
                 onClick={async () => {
                   setRegenerating(true);

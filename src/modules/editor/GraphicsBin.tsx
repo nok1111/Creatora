@@ -261,19 +261,19 @@ export function GraphicsBin() {
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("gfxB.addElement")}</div>
         <div className="grid grid-cols-3 gap-1">
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addTitle}>
-            <Type className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_title")}</span>
+            <Type className="size-4" /> <span className="text-[10px]">{t("gfxB.preset_title")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addLowerThird}>
-            <RectangleHorizontal className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_lower3rd")}</span>
+            <RectangleHorizontal className="size-4" /> <span className="text-[10px]">{t("gfxB.preset_lower3rd")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addShape}>
-            <Square className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_shape")}</span>
+            <Square className="size-4" /> <span className="text-[10px]">{t("gfxB.preset_shape")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addBadge}>
-            <BadgeCheck className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_badge")}</span>
+            <BadgeCheck className="size-4" /> <span className="text-[10px]">{t("gfxB.preset_badge")}</span>
           </button>
           <button className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent" onClick={addCallout}>
-            <MessageSquare className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_callout")}</span>
+            <MessageSquare className="size-4" /> <span className="text-[10px]">{t("gfxB.preset_callout")}</span>
           </button>
           <button
             className="flex flex-col items-center gap-0.5 rounded border border-border p-1.5 hover:bg-accent"
@@ -295,7 +295,7 @@ export function GraphicsBin() {
               })
             }
           >
-            <Heading className="size-4" /> <span className="text-[9px]">{t("gfxB.preset_heading")}</span>
+            <Heading className="size-4" /> <span className="text-[10px]">{t("gfxB.preset_heading")}</span>
           </button>
         </div>
       </div>
@@ -321,7 +321,7 @@ export function GraphicsBin() {
         </div>
         {[...groups.entries()].map(([cat, tpls]) => (
           <div key={cat}>
-            <div className="text-[9px] uppercase text-muted-foreground/70">{t(`gfxB.cat_${cat}`)}</div>
+            <div className="text-[10px] uppercase text-muted-foreground/70">{t(`gfxB.cat_${cat}`)}</div>
             {tpls.map((tpl) => (
               <div
                 key={tpl.id}
@@ -625,19 +625,19 @@ function EditKitInline({ kit, onSaved }: { kit: BrandKit; onSaved: () => void })
   return (
     <div className="space-y-1">
       <textarea
-        className="h-8 w-full rounded border border-border bg-background p-1 font-mono text-[9px]"
+        className="h-8 w-full rounded border border-border bg-background p-1 font-mono text-[10px]"
         value={colors}
         onChange={(e) => setColors(e.target.value)}
         placeholder="#RRGGBB, #RRGGBB, …"
       />
       <textarea
-        className="h-12 w-full rounded border border-border bg-background p-1 font-mono text-[9px]"
+        className="h-12 w-full rounded border border-border bg-background p-1 font-mono text-[10px]"
         value={fonts}
         onChange={(e) => setFonts(e.target.value)}
         placeholder={"Name|C:\\path\\font.ttf"}
       />
       <textarea
-        className="h-12 w-full rounded border border-border bg-background p-1 font-mono text-[9px]"
+        className="h-12 w-full rounded border border-border bg-background p-1 font-mono text-[10px]"
         value={logos}
         onChange={(e) => setLogos(e.target.value)}
         placeholder={"Name|C:\\path\\logo.png|primary"}

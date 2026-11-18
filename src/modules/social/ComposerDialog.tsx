@@ -315,7 +315,7 @@ export function ComposerDialog({
                       {PLATFORM_LABEL[p]}
                     </span>
                     {cap?.requiresAppReview && (
-                      <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] text-warning">
+                      <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] text-warning">
                         {tr("social.needsApp")}
                       </span>
                     )}

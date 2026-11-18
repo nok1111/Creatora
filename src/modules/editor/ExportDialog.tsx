@@ -66,7 +66,7 @@ function AspectTile({ w, h }: { w: number; h: number }) {
   const d = g(w, h);
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-[9px] font-semibold text-primary"
+      className="flex shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-[10px] font-semibold text-primary"
       style={{ width: bw + 8, height: bh + 8 }}
     >
       {w / d}:{h / d}

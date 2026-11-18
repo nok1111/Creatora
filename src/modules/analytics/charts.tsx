@@ -110,7 +110,7 @@ export function SourceBadge({ source }: { source: string }) {
         ? "bg-warning/15 text-warning"
         : "bg-muted text-muted-foreground";
   return (
-    <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${cls}`}>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${cls}`}>
       {source}
     </span>
   );

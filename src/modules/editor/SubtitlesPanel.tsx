@@ -372,7 +372,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             <button
               key={id}
               onClick={() => setToolsTab(id)}
-              className={`flex flex-1 flex-col items-center gap-0.5 rounded px-1 py-1.5 text-[9px] transition-colors ${
+              className={`flex flex-1 flex-col items-center gap-0.5 rounded px-1 py-1.5 text-[10px] transition-colors ${
                 toolsTab === id
                   ? "bg-primary/15 text-foreground"
                   : "text-muted-foreground hover:bg-accent"
@@ -434,7 +434,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                     chosen ? (
                       <CheckCircle2 className="size-3.5 shrink-0 text-primary" aria-label={t("subs.installed")} />
                     ) : (
-                      <span className="text-[9px] text-muted-foreground">{t("subs.installed")}</span>
+                      <span className="text-[10px] text-muted-foreground">{t("subs.installed")}</span>
                     )
                   ) : dl ? (
                     <span className="flex items-center gap-1">
@@ -474,7 +474,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             {job ? `${t("subs.transcribing")} ${Math.round(job.p * 100)}%` : t("subs.transcribeBtn")}
           </Button>
           {modelsQ.data && !modelsQ.data.some((m) => m.present) && (
-            <p className="mt-1 text-[9px] text-warning">
+            <p className="mt-1 text-[10px] text-warning">
               {t("subs.noModelWarn")}
             </p>
           )}
@@ -498,12 +498,12 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                 <p className="mb-1.5 flex items-center gap-1 font-medium">
                   <Captions className="size-3" />
                   {t("subs.cueAtPlayhead")}
-                  <span className="ml-auto truncate text-[9px] font-normal text-muted-foreground">
+                  <span className="ml-auto truncate text-[10px] font-normal text-muted-foreground">
                     {sel.text.slice(0, 18)}{sel.text.length > 18 ? "…" : ""}
                   </span>
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <label className="text-[9px] text-muted-foreground">
+                  <label className="text-[10px] text-muted-foreground">
                     {t("subs.startMs")}
                     <input
                       key={`s${sel.id}${sel.startMs}`}
@@ -516,7 +516,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                       }}
                     />
                   </label>
-                  <label className="text-[9px] text-muted-foreground">
+                  <label className="text-[10px] text-muted-foreground">
                     {t("subs.endMs")}
                     <input
                       key={`e${sel.id}${sel.endMs}`}
@@ -557,7 +557,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                 {t("subs.shiftAllApply")}
               </Button>
             </div>
-            <p className="mb-1 mt-2 text-[9px] text-muted-foreground">{t("subs.readingSpeed")}</p>
+            <p className="mb-1 mt-2 text-[10px] text-muted-foreground">{t("subs.readingSpeed")}</p>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" className="h-6 flex-1 text-[10px]"
                 onClick={() => mutate((d) => scaleCueTimes(d, 1.1))}>{t("subs.slower")}</Button>
@@ -586,10 +586,10 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             </Button>
             {issues && (
               <div className="mt-1 max-h-24 space-y-0.5 overflow-y-auto">
-                {issues.length === 0 && <p className="text-[9px] text-emerald-400">{t("subs.noTimingIssues")}</p>}
+                {issues.length === 0 && <p className="text-[10px] text-emerald-400">{t("subs.noTimingIssues")}</p>}
                 {issues.map((i) => (
                   <button key={i.cueId + i.kind}
-                    className="block w-full truncate text-left text-[9px] text-amber-300 hover:underline"
+                    className="block w-full truncate text-left text-[10px] text-amber-300 hover:underline"
                     onClick={() => {
                       const c = cues.find((x) => x.id === i.cueId);
                       if (c) setPlayhead(c.startMs);
@@ -607,7 +607,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
         {toolsTab === "style" && (
         <div className="rounded border border-border/60 p-2">
           <p className="mb-1.5 flex items-center gap-1 font-medium">
-            <Wand2 className="size-3" /> Style {versionId && <span className="text-[9px] text-accent-foreground">{t("subs.versionLbl")}</span>}
+            <Wand2 className="size-3" /> Style {versionId && <span className="text-[10px] text-accent-foreground">{t("subs.versionLbl")}</span>}
           </p>
           <div
             className="grid gap-1.5"
@@ -669,7 +669,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                       : "border-border text-muted-foreground hover:bg-accent"
                   }`}
                 >
-                  <div className="text-[9px] font-medium">{label}</div>
+                  <div className="text-[10px] font-medium">{label}</div>
                   <div className="text-[7px] opacity-70">{hint}</div>
                 </button>
               ))}
@@ -684,7 +684,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                   ["highlightColor", t("subs.colorHi")],
                 ] as const
               ).map(([key, label]) => (
-                <label key={key} className="flex flex-1 items-center gap-1 text-[9px] text-muted-foreground">
+                <label key={key} className="flex flex-1 items-center gap-1 text-[10px] text-muted-foreground">
                   <input
                     type="color"
                     className="h-5 w-7 cursor-pointer rounded border border-border bg-transparent p-0"
@@ -710,7 +710,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               ).map(([key, label, def]) => {
                 const on = style.text[key] != null;
                 return (
-                  <label key={key} className="flex flex-1 items-center gap-1 text-[9px] text-muted-foreground">
+                  <label key={key} className="flex flex-1 items-center gap-1 text-[10px] text-muted-foreground">
                     <input
                       type="checkbox"
                       className="size-3"
@@ -778,7 +778,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           {/* Saved styles — live in the project; per-cue via lane menu. */}
           <div className="mt-1.5 flex items-center gap-1">
             <button
-              className="flex h-6 items-center gap-0.5 rounded border border-border px-1.5 text-[9px] text-muted-foreground hover:bg-accent"
+              className="flex h-6 items-center gap-0.5 rounded border border-border px-1.5 text-[10px] text-muted-foreground hover:bg-accent"
               title={t("subs.saveStyle")}
               onClick={() => {
                 const name = window.prompt(t("subs.saveStylePrompt"), "");
@@ -793,7 +793,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               {(doc.subtitleStyles ?? []).map((s) => (
                 <span key={s.id} className="group flex shrink-0 items-center rounded border border-border">
                   <button
-                    className="px-1.5 py-0.5 text-[9px] hover:bg-accent"
+                    className="px-1.5 py-0.5 text-[10px] hover:bg-accent"
                     style={{ color: s.style.text.color }}
                     title={t("subs.applyStyleTip")}
                     onClick={() => setStyle(s.style)}

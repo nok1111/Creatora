@@ -259,7 +259,7 @@ export function EditorPage() {
           </div>
           {comparePane && (
             <div className="relative min-w-0 flex-1 border-l border-border">
-              <span className="absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-accent-foreground">
+              <span className="absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-accent-foreground">
                 {doc?.meta.name} · {t("versions.master")}
               </span>
               <Preview assets={assetMap} docOverride={doc ?? undefined} />

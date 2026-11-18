@@ -277,7 +277,7 @@ export function EffectsBin() {
                       <span className="truncate">{item.label}</span>
                     </div>
                     {item.description && (
-                      <span className="line-clamp-2 text-[9px] leading-tight text-muted-foreground">
+                      <span className="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
                         {item.description}
                       </span>
                     )}
@@ -289,7 +289,7 @@ export function EffectsBin() {
                           new CustomEvent("creatora:apply-fx", { detail: { category: cat.id, itemId: item.id } }),
                         )
                       }
-                      className="absolute right-1 top-1 hidden rounded bg-primary px-1.5 py-0.5 text-[9px] text-primary-foreground group-hover:block"
+                      className="absolute right-1 top-1 hidden rounded bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground group-hover:block"
                     >
                       Apply
                     </button>

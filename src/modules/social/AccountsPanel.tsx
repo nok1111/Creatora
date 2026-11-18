@@ -121,21 +121,21 @@ export function AccountsPanel() {
               </h3>
               <div className="flex gap-1">
                 {cap?.officialClient && (
-                  <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">
+                  <span className="rounded bg-success/15 px-1.5 py-0.5 text-[10px] text-success">
                     {t("social.acct_officialApp")}
                   </span>
                 )}
                 {cap?.publish ? (
-                  <span className="rounded bg-success/15 px-1.5 py-0.5 text-[9px] text-success">
+                  <span className="rounded bg-success/15 px-1.5 py-0.5 text-[10px] text-success">
                     {t("social.acct_publish")}
                   </span>
                 ) : (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     {t("social.acct_exportOnly")}
                   </span>
                 )}
                 {cap?.requiresAppReview && (
-                  <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] text-warning">
+                  <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] text-warning">
                     {t("social.acct_appReview")}
                   </span>
                 )}
@@ -241,10 +241,10 @@ export function AccountsPanel() {
                 <Button size="sm" variant="secondary" onClick={() => void saveClient(p)}>
                   {t("social.acct_saveCreds")}
                 </Button>
-                <p className="text-[9px] leading-snug text-muted-foreground">
+                <p className="text-[10px] leading-snug text-muted-foreground">
                   {t("social.acct_credsHelp")}
                 </p>
-                <p className="text-[9px] leading-snug text-muted-foreground">
+                <p className="text-[10px] leading-snug text-muted-foreground">
                   {t("social.acct_redirectUris")}
                 </p>
                 {OAUTH_REDIRECT_URIS.map((uri) => (
@@ -252,7 +252,7 @@ export function AccountsPanel() {
                     key={uri}
                     type="button"
                     title={t("social.acct_copyUri")}
-                    className="flex w-full items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-left font-mono text-[9px] text-muted-foreground hover:bg-accent/40"
+                    className="flex w-full items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-left font-mono text-[10px] text-muted-foreground hover:bg-accent/40"
                     onClick={() => {
                       void navigator.clipboard.writeText(uri);
                       toast.success(t("common.copied"));

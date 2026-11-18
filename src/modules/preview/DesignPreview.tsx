@@ -201,7 +201,7 @@ export function DesignPreview() {
             {["#FF795E", "#B8F36B", "#B99AFF", "#FFD477", "#F4F0E8", "#17171D"].map((c) => (
               <div key={c} className="group cursor-pointer">
                 <div className="h-12 rounded-lg border border-border/50 transition-transform group-hover:scale-105" style={{ background: c }} />
-                <div className="mt-1 text-center font-mono text-[9px] text-muted-foreground">{c}</div>
+                <div className="mt-1 text-center font-mono text-[10px] text-muted-foreground">{c}</div>
               </div>
             ))}
             <div className="col-span-3 flex items-center gap-3 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">

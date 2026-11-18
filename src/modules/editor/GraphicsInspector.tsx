@@ -78,7 +78,7 @@ function Section({
           <Icon className="size-3.5 shrink-0 text-primary" />
           <span className={cn(PANEL_LABEL, "truncate")}>{title}</span>
           {badge && (
-            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-medium text-primary">
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
               {badge}
             </span>
           )}
@@ -394,7 +394,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
             const v = doc.versions.find((x) => x.id === activeVersionId);
             return v?.clipOverrides[clipId] ? (
               <button
-                className="rounded px-1 text-[9px] text-accent-foreground hover:bg-accent"
+                className="rounded px-1 text-[10px] text-accent-foreground hover:bg-accent"
                 title={t("gfxI.dropOverride")}
                 onClick={() => mutate((d) => clearVersionClipOverrides(d, activeVersionId, clipId))}
               >
@@ -439,7 +439,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
         </button>
       </div>
       {version && (
-        <p className="text-[9px] italic text-accent-foreground/80">
+        <p className="text-[10px] italic text-accent-foreground/80">
           {t("versions.editingVersion", { name: version.name })}
         </p>
       )}
@@ -743,7 +743,7 @@ export function GraphicsInspector({ clipId }: { clipId: string }) {
         </div>
         {(presetId === "typewriter" || presetId === "typewriterOut" || presetId === "wipe" || presetId === "wipeOut" || presetId === "blurIn" || presetId === "blurOut") &&
           !supportsTextFx(doc, clipId) && (
-            <p className="text-[9px] text-warning">{t("gfxI.textFxOnly")}</p>
+            <p className="text-[10px] text-warning">{t("gfxI.textFxOnly")}</p>
           )}
         <button
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
@@ -953,7 +953,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
             const hasOv = !!v?.clipOverrides[clipId];
             return hasOv ? (
               <button
-                className="rounded px-1 text-[9px] text-accent-foreground hover:bg-accent"
+                className="rounded px-1 text-[10px] text-accent-foreground hover:bg-accent"
                 title={t("gfxI.dropOverride")}
                 onClick={() => mutate((d) => clearVersionClipOverrides(d, activeVersionId, clipId))}
               >
@@ -1126,7 +1126,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
           </select>
         </div>
         {(presetId === "typewriter" || presetId === "wipe") && !supportsTextFx(doc, clipId) && (
-          <div className="text-[9px] text-warning">Only on text/graphics clips</div>
+          <div className="text-[10px] text-warning">Only on text/graphics clips</div>
         )}
       </div>
 
@@ -1180,7 +1180,7 @@ export function GraphicsSection({ clipId }: { clipId: string }) {
           </div>
         </div>
       )}
-      {!isGraphic && <div className="text-[9px] text-muted-foreground">presets apply to any clip; typewriter/wipe need text/graphics</div>}
+      {!isGraphic && <div className="text-[10px] text-muted-foreground">presets apply to any clip; typewriter/wipe need text/graphics</div>}
     </section>
   );
 }

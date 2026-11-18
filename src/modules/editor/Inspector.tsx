@@ -239,7 +239,7 @@ export function Inspector() {
       <div className="space-y-2 border-b border-border p-3 pb-2">
         <div className="font-medium text-foreground">{t("editor.inspector")}</div>
         {version && (
-          <p className="text-[9px] italic text-accent-foreground/80">
+          <p className="text-[10px] italic text-accent-foreground/80">
             {t("versions.editingVersion", { name: version.name })}
           </p>
         )}
@@ -606,7 +606,7 @@ export function Inspector() {
                     )
                   }
                 />
-                <span className="text-[9px] text-muted-foreground">→</span>
+                <span className="text-[10px] text-muted-foreground">→</span>
                 <input
                   type="number"
                   className="w-14 rounded border border-border bg-background px-1 text-right font-mono text-[10px]"
@@ -621,7 +621,7 @@ export function Inspector() {
                     )
                   }
                 />
-                <span className="text-[9px] text-muted-foreground">ms</span>
+                <span className="text-[10px] text-muted-foreground">ms</span>
               </div>
             </div>
           );
@@ -685,7 +685,7 @@ export function Inspector() {
                         )
                       }
                     />
-                    <span className="text-[9px] text-muted-foreground">ms</span>
+                    <span className="text-[10px] text-muted-foreground">ms</span>
                   </span>
                   <button
                     className="text-muted-foreground hover:text-destructive"

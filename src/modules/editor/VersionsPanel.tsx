@@ -232,7 +232,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
         {aspectTile(doc.canvas.width, doc.canvas.height, activeId === null)}
         <span className="text-left">
           <div>{t("versions.master")}</div>
-          <div className="text-[9px] opacity-60">
+          <div className="text-[10px] opacity-60">
             {ratioStr(doc.canvas.width, doc.canvas.height)} · {doc.canvas.width}×{doc.canvas.height}
           </div>
         </span>
@@ -251,7 +251,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
             {aspectTile(v.canvas.width, v.canvas.height, activeId === v.id)}
             <span>
               <div>{v.name}</div>
-              <div className="text-[9px] opacity-60">
+              <div className="text-[10px] opacity-60">
                 {ratioStr(v.canvas.width, v.canvas.height)} · {v.canvas.width}×{v.canvas.height}
               </div>
             </span>
@@ -286,7 +286,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
             <button
               title={t("versions.rename")}
               onClick={() => setRenaming({ id: v.id, name: v.name })}
-              className="rounded px-0.5 text-[9px] hover:text-foreground"
+              className="rounded px-0.5 text-[10px] hover:text-foreground"
             >
               Aa
             </button>
@@ -341,7 +341,7 @@ export function VersionsPanel({ assets }: { assets: Map<string, AssetSummary> })
                     >
                       {ratioStr(p.canvas.width, p.canvas.height)}
                     </div>
-                    <div className="text-center text-[9px] font-medium leading-tight">
+                    <div className="text-center text-[10px] font-medium leading-tight">
                       {p.platform}
                       <div className="text-[8px] font-normal text-muted-foreground">{ar}</div>
                       {p.maxDurationMs && (

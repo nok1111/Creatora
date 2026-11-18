@@ -66,7 +66,7 @@ export function AudioTools({ clipId, trackId }: { clipId: string; trackId: strin
   const enabledTypes = new Set((clip.effects ?? []).filter((e) => e.enabled).map((e) => e.type));
 
   const sectionLabel = (children: React.ReactNode) => (
-    <p className="pt-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <p className="pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </p>
   );

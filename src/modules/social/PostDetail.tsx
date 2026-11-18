@@ -253,7 +253,7 @@ function TargetRow({
         </span>
         <span
           className={cn(
-            "rounded px-1.5 py-0.5 text-[9px] uppercase",
+            "rounded px-1.5 py-0.5 text-[10px] uppercase",
             t.status === "published"
               ? "bg-success/15 text-success"
               : t.status === "failed"

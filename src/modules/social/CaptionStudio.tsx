@@ -147,12 +147,12 @@ export function CaptionStudio({
         </div>
         {suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            <span className="text-[9px] text-muted-foreground">{tr("social.cs_usedBefore")}</span>
+            <span className="text-[10px] text-muted-foreground">{tr("social.cs_usedBefore")}</span>
             {suggestions.slice(0, 8).map((h) => (
               <button
                 key={h}
                 onClick={() => onHashtags([...hashtags, h])}
-                className="rounded border border-border px-1 py-0.5 text-[9px] text-muted-foreground hover:bg-accent"
+                className="rounded border border-border px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
               >
                 #{h}
               </button>
