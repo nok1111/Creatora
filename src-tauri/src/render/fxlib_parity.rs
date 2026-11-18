@@ -15,6 +15,17 @@ use std::process::Command;
 
 /// Test-only twin of src/lib/fx/ffmpeg-expand.ts::expandSamplers — the
 /// plane dispatch `xfade=custom` needs to run the SPEC through ffmpeg.
+/// `PLANE` in a recipe means channel index R,G,B,A = 0..3 (the manifest /
+/// GLSL convention). `xfade=custom` runs on `gbrap`, whose planes are
+/// G,B,R,A — remap the recipe's `PLANE` reads to real channel indices
+/// before `expand_samplers` injects its own raw `PLANE` dispatches.
+fn gbrap_plane_fix(expr: &str) -> String {
+    expr.replace(
+        "PLANE",
+        "if(eq(PLANE,0),1,if(eq(PLANE,1),2,if(eq(PLANE,2),0,3)))",
+    )
+}
+
 fn expand_samplers(expr: &str) -> String {
     fn split_args(s: &str) -> Vec<String> {
         let (mut out, mut depth, mut cur) = (Vec::new(), 0i32, String::new());
@@ -234,9 +245,9 @@ fn spec_frame(
 ) {
     let e = entry(kind).unwrap();
     let pm: BTreeMap<String, f64> = params.iter().map(|(k, v)| (k.to_string(), *v)).collect();
-    let expr = expand_samplers(
+    let expr = expand_samplers(&gbrap_plane_fix(
         &expand_text(e, e.expr.as_ref().unwrap(), &pm, None, &format!("{u:.6}")).unwrap(),
-    );
+    ));
     let fc = format!(
         "[0:v]format=gbrap[a];[1:v]format=gbrap[b];[a][b]xfade=transition=custom:duration=1:offset=0:expr='{expr}',format=yuv420p,format=rgb24"
     );
@@ -341,6 +352,12 @@ fn native_render_matches_spec() {
             &[("drip", 1.0), ("wave", 0.1), ("freq", 6.0), ("wobble", 1.0)],
             33.0,
         ),
+        ("inkBleed", &[], 33.0),
+        ("glitchShift", &[], 30.0),
+        ("tearRift", &[], 33.0),
+        ("blockCascade", &[], 33.0),
+        ("vortexSpin", &[], 30.0),
+        ("lumeSweep", &[], 40.0),
     ];
     for (kind, params, min_psnr) in cases {
         let (doc, srcs) = two_clip_doc(kind, params, &a, &b);
@@ -360,6 +377,75 @@ fn native_render_matches_spec() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Debug dump: native vs spec mid-transition frames for one kind.
+/// `cargo test --lib lume_debug -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn lume_debug() {
+    let dir = PathBuf::from("../qa/out");
+    std::fs::create_dir_all(&dir).unwrap();
+    let (a, b) = make_sources(&dir);
+    let kind = std::env::var("FX_KIND").unwrap_or("lumeSweep".into());
+    let params: Vec<(String, f64)> = std::env::var("FX_PARAMS")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|kv| {
+            let mut it = kv.splitn(2, '=');
+            (it.next().unwrap().to_string(), it.next().unwrap().parse().unwrap())
+        })
+        .collect();
+    let pr: Vec<(&str, f64)> = params.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+    let (doc, srcs) = two_clip_doc(&kind, &pr, &a, &b);
+    let k = 15u32;
+    let n = 30 + k;
+    let (nat, spec) = (dir.join("dbg_nat.png"), dir.join("dbg_spec.png"));
+    let (fa, fb) = (dir.join("dbg_fa.png"), dir.join("dbg_fb.png"));
+    native_frame(&doc, &srcs, n, &nat);
+    src_frame(&a, n, &fa);
+    src_frame(&b, k, &fb);
+    spec_frame(&kind, &pr, &fa, &fb, (k as f64 + 0.5) / 30.0, &spec);
+    {
+        let e = entry(&kind).unwrap();
+        let pm: BTreeMap<String, f64> = pr.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+        let ex = expand_samplers(&gbrap_plane_fix(
+            &expand_text(e, e.expr.as_ref().unwrap(), &pm, None, "0.516667").unwrap(),
+        ));
+        std::fs::write(dir.join("dbg_expr.txt"), &ex).unwrap();
+    }
+    eprintln!("PSNR {}", psnr(&nat, &spec));
+    let p = plan::build_plan(&doc, &srcs).unwrap();
+    std::fs::write(dir.join("dbg_graph.fc"), &p.filter_complex).unwrap();
+    let args = p.ffmpeg_args(&dir.join("x.mp4"));
+    let fc_at = args.iter().position(|a| a == "-filter_complex").unwrap();
+    eprintln!("INPUTS: {:?}", &args[1..fc_at]);
+    // Tap the maskedmerge output (pre-glow) at the same frame.
+    let mut fc2 = p.filter_complex.clone();
+    let gpos = fc2.find(",format=gbrp").expect("glow field");
+    let pos = fc2[..gpos].rfind(";color=c=black").expect("glow chain start");
+    fc2.truncate(pos);
+    fc2.push_str(";[x0_1mrg]format=rgb24[dbgout]");
+    let mut a2: Vec<String> = args[1..fc_at].to_vec();
+    a2.push("-filter_complex".into());
+    a2.push(format!(
+        "{fc2};[dbgout]select=eq(n\\,{k})[dsel];[x0_1ah][x0_1br]concat=n=2:v=1:a=0[rest]"
+    ));
+    a2.extend([
+        "-map".into(),
+        "[dsel]".into(),
+        "-frames:v".into(),
+        "1".into(),
+        dir.join("dbg_mrg.png").to_string_lossy().into(),
+        "-map".into(),
+        "[rest]".into(),
+        "-f".into(),
+        "null".into(),
+        "-".into(),
+    ]);
+    let refs: Vec<&str> = a2.iter().map(String::as_str).collect();
+    run(&refs).unwrap_or_else(|e| panic!("mrg tap failed:\n{fc2}\n{e}"));
+}
+
 /// Frames outside the overlap are untouched, the total length is exact and
 /// the chain stays frame-accurate (no drift, no dropped frames).
 #[test]
@@ -369,7 +455,16 @@ fn transition_keeps_timeline_exact() {
     }
     let dir = tmpdir("timing");
     let (a, b) = make_sources(&dir);
-    for kind in ["velocitySwipe", "liquidMelt"] {
+    for kind in [
+        "velocitySwipe",
+        "liquidMelt",
+        "inkBleed",
+        "glitchShift",
+        "tearRift",
+        "blockCascade",
+        "vortexSpin",
+        "lumeSweep",
+    ] {
         let (doc, srcs) = two_clip_doc(kind, &[], &a, &b);
         let p = plan::build_plan(&doc, &srcs).unwrap();
         let out = dir.join(format!("{kind}.mp4"));
@@ -424,7 +519,17 @@ fn perf_1080p() {
     };
     let a = mk("a.mp4", "testsrc2");
     let b = mk("b.mp4", "smptebars");
-    for kind in ["crossfade", "velocitySwipe", "liquidMelt"] {
+    for kind in [
+        "crossfade",
+        "velocitySwipe",
+        "liquidMelt",
+        "inkBleed",
+        "glitchShift",
+        "tearRift",
+        "blockCascade",
+        "vortexSpin",
+        "lumeSweep",
+    ] {
         let (mut doc, srcs) = two_clip_doc(kind, &[], &a, &b);
         doc.canvas.width = 1920;
         doc.canvas.height = 1080;

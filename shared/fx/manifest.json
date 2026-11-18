@@ -133,6 +133,411 @@
       "thumb": "fxt-melt"
     },
     {
+      "id": "inkBleed",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Ink Bleed",
+      "description": "The next clip bleeds in through a ragged organic front, with scattered droplets that hold briefly before being absorbed.",
+      "params": [
+        {
+          "key": "direction",
+          "label": "Direction",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Left to right",
+            "Right to left",
+            "Top to bottom",
+            "Bottom to top"
+          ]
+        },
+        {
+          "key": "ragged",
+          "label": "Raggedness",
+          "type": "number",
+          "def": 0.6,
+          "min": 0.3,
+          "max": 0.9,
+          "step": 0.02
+        },
+        {
+          "key": "soft",
+          "label": "Edge softness",
+          "type": "number",
+          "def": 0.045,
+          "min": 0.02,
+          "max": 0.09,
+          "step": 0.005
+        },
+        {
+          "key": "islands",
+          "label": "Droplets",
+          "type": "number",
+          "def": 0.12,
+          "min": 0,
+          "max": 0.3,
+          "step": 0.01
+        }
+      ],
+      "expr": "(clip(clip(((if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1)-({T}*2.3-0.6))/{soft}+0.5,0,1)-clip(((0.5+0.5*sin((X/W)*29.3+(Y/H)*24.1+3.7)*sin((Y/H)*27.7-(X/W)*16.9+1.1))-(0.86-{islands}*0.7))/0.08,0,1)*between((if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1)-({T}*2.3-0.6),0.03,0.22)*0.85+clip(((0.5+0.5*sin((X/W)*29.3+(Y/H)*24.1+3.7)*sin((Y/H)*27.7-(X/W)*16.9+1.1))-(0.88-{islands}*0.5))/0.09,0,1)*between(({T}*2.3-0.6)-(if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1),0.05,0.32)*0.65,0,1))*SA(X,Y)+(1-(clip(clip(((if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1)-({T}*2.3-0.6))/{soft}+0.5,0,1)-clip(((0.5+0.5*sin((X/W)*29.3+(Y/H)*24.1+3.7)*sin((Y/H)*27.7-(X/W)*16.9+1.1))-(0.86-{islands}*0.7))/0.08,0,1)*between((if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1)-({T}*2.3-0.6),0.03,0.22)*0.85+clip(((0.5+0.5*sin((X/W)*29.3+(Y/H)*24.1+3.7)*sin((Y/H)*27.7-(X/W)*16.9+1.1))-(0.88-{islands}*0.5))/0.09,0,1)*between(({T}*2.3-0.6)-(if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1),0.05,0.32)*0.65,0,1)))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X",
+          "ay": "Y",
+          "m": "clip(clip(((if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1)-({T}*2.3-0.6))/{soft}+0.5,0,1)-clip(((0.5+0.5*sin((X/W)*29.3+(Y/H)*24.1+3.7)*sin((Y/H)*27.7-(X/W)*16.9+1.1))-(0.86-{islands}*0.7))/0.08,0,1)*between((if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1)-({T}*2.3-0.6),0.03,0.22)*0.85+clip(((0.5+0.5*sin((X/W)*29.3+(Y/H)*24.1+3.7)*sin((Y/H)*27.7-(X/W)*16.9+1.1))-(0.88-{islands}*0.5))/0.09,0,1)*between(({T}*2.3-0.6)-(if(eq({direction},0),(X/W),if(eq({direction},1),1-(X/W),if(eq({direction},2),(Y/H),1-(Y/H))))+{ragged}*(((0.5+0.5*sin((X/W)*9.7+(Y/H)*4.3)*sin((Y/H)*8.3-(X/W)*5.1))*0.58+(0.5+0.5*sin((X/W)*23.9+(Y/H)*15.1+1.7)*sin((Y/H)*19.7+(X/W)*11.3))*0.32+(0.5+0.5*sin((X/W)*67.3-(Y/H)*47.7+4.3)*sin((Y/H)*58.9+2.9))*0.1)-0.5)*1.1),0.05,0.32)*0.65,0,1)"
+        }
+      },
+      "defaultDurationMs": 800,
+      "defaultEase": "easeInOut",
+      "preview": "gl",
+      "thumb": "fxt-ink"
+    },
+    {
+      "id": "glitchShift",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Glitch Shift",
+      "description": "Horizontal bands stutter apart mid-transition while slices of the next clip snap in out of order — a controlled digital tear.",
+      "params": [
+        {
+          "key": "bands",
+          "label": "Bands",
+          "type": "number",
+          "def": 18,
+          "min": 12,
+          "max": 32,
+          "step": 1
+        },
+        {
+          "key": "amount",
+          "label": "Shift",
+          "type": "number",
+          "def": 1,
+          "min": 0.3,
+          "max": 1.5,
+          "step": 0.05
+        },
+        {
+          "key": "cell",
+          "label": "Block size",
+          "type": "number",
+          "def": 26,
+          "min": 14,
+          "max": 48,
+          "step": 1,
+          "unit": "px"
+        },
+        {
+          "key": "block",
+          "label": "Pixelation",
+          "type": "number",
+          "def": 0.55,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        }
+      ],
+      "expr": "(if(lt({T},0.05),1,if(eq(mod(floor(Y/(H/{bands}))+floor({T}*13),11),0)*lt({T},0.92),1-gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),{T}*1.08),gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),{T}*1.08))))*SA(((X+(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1)-0.5)*2*{amount}*W*0.1*sin(PI*{T})+(mod(sin(floor(Y/((H/{bands})/3.3))*39.3463+3.1)*24634.6345,1)-0.5)*{amount}*W*0.1*0.5*sin(PI*{T}))*(1-({block}*sin(PI*{T})))+(floor((X+(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1)-0.5)*2*{amount}*W*0.1*sin(PI*{T})+(mod(sin(floor(Y/((H/{bands})/3.3))*39.3463+3.1)*24634.6345,1)-0.5)*{amount}*W*0.1*0.5*sin(PI*{T}))/{cell})*{cell}+{cell}/2)*({block}*sin(PI*{T}))),(Y*(1-({block}*sin(PI*{T})))+(floor(Y/{cell})*{cell}+{cell}/2)*({block}*sin(PI*{T}))))+(1-(if(lt({T},0.05),1,if(eq(mod(floor(Y/(H/{bands}))+floor({T}*13),11),0)*lt({T},0.92),1-gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),{T}*1.08),gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),{T}*1.08)))))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "((X+(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1)-0.5)*2*{amount}*W*0.1*sin(PI*{T})+(mod(sin(floor(Y/((H/{bands})/3.3))*39.3463+3.1)*24634.6345,1)-0.5)*{amount}*W*0.1*0.5*sin(PI*{T}))*(1-({block}*sin(PI*{T})))+(floor((X+(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1)-0.5)*2*{amount}*W*0.1*sin(PI*{T})+(mod(sin(floor(Y/((H/{bands})/3.3))*39.3463+3.1)*24634.6345,1)-0.5)*{amount}*W*0.1*0.5*sin(PI*{T}))/{cell})*{cell}+{cell}/2)*({block}*sin(PI*{T})))",
+          "ay": "(Y*(1-({block}*sin(PI*{T})))+(floor(Y/{cell})*{cell}+{cell}/2)*({block}*sin(PI*{T})))",
+          "m": "if(lt({T},0.05),1,if(eq(mod(floor(Y/(H/{bands}))+floor({T}*13),11),0)*lt({T},0.92),1-gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),{T}*1.08),gte(mod(sin(floor(Y/(H/{bands}))*12.9898+7.7)*43758.5453,1),{T}*1.08)))"
+        }
+      },
+      "defaultDurationMs": 500,
+      "defaultEase": "linear",
+      "preview": "gl",
+      "thumb": "fxt-glitch"
+    },
+    {
+      "id": "tearRift",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Tear Rift",
+      "description": "The frame tears open along a jagged vertical rift; both halves slide apart and sag while the next clip appears inside.",
+      "params": [
+        {
+          "key": "gap",
+          "label": "Separation",
+          "type": "number",
+          "def": 0.4,
+          "min": 0.2,
+          "max": 0.6,
+          "step": 0.02
+        },
+        {
+          "key": "width",
+          "label": "Rift width",
+          "type": "number",
+          "def": 0.7,
+          "min": 0.4,
+          "max": 1,
+          "step": 0.02
+        }
+      ],
+      "expr": "(clip((abs((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))))-({T}*{width}*W*0.28*(0.7+0.3*sin((Y/H)*43.3+1.3))))/3+0.5,0,1))*SA((X-(gte((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))),0)*2-1)*{gap}*W*0.4*{T}),(Y+{gap}*W*0.4*{T}*0.3*clip(abs((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))))/(0.35*W),0,1)))+(1-(clip((abs((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))))-({T}*{width}*W*0.28*(0.7+0.3*sin((Y/H)*43.3+1.3))))/3+0.5,0,1)))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "(X-(gte((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))),0)*2-1)*{gap}*W*0.4*{T})",
+          "ay": "(Y+{gap}*W*0.4*{T}*0.3*clip(abs((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))))/(0.35*W),0,1))",
+          "m": "clip((abs((X-(W*(0.5+0.09*sin((Y/H)*8.9+2.1)+0.05*sin((Y/H)*27.3+4.7)+0.025*sin((Y/H)*61.7)))))-({T}*{width}*W*0.28*(0.7+0.3*sin((Y/H)*43.3+1.3))))/3+0.5,0,1)"
+        }
+      },
+      "defaultDurationMs": 700,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-rift"
+    },
+    {
+      "id": "blockCascade",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Block Cascade",
+      "description": "The outgoing clip crumbles into tiles that drop out top to bottom with staggered timing and gravity acceleration.",
+      "params": [
+        {
+          "key": "tile",
+          "label": "Tile size",
+          "type": "number",
+          "def": 96,
+          "min": 48,
+          "max": 160,
+          "step": 8,
+          "unit": "px"
+        },
+        {
+          "key": "jitter",
+          "label": "Stagger",
+          "type": "number",
+          "def": 0.35,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.02
+        },
+        {
+          "key": "sway",
+          "label": "Side drift",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "shrink",
+          "label": "Collapse",
+          "type": "number",
+          "def": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        }
+      ],
+      "expr": "(clip((0.9-clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))/0.1,0,1)*lt(max(abs((X-((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+((mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)-0.5)*{sway}*W*0.06*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))),abs((Y-((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(H*1.15*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))))),({tile}*H/540)*0.5*(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))*SA(((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(X-((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+((mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)-0.5)*{sway}*W*0.06*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))*(1/(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))),((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(Y-((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(H*1.15*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))*(1/(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))))+(1-(clip((0.9-clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))/0.1,0,1)*lt(max(abs((X-((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+((mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)-0.5)*{sway}*W*0.06*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))),abs((Y-((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(H*1.15*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))))),({tile}*H/540)*0.5*(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(X-((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+((mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)-0.5)*{sway}*W*0.06*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))*(1/(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))",
+          "ay": "((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(Y-((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(H*1.15*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))*(1/(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))",
+          "m": "clip((0.9-clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))/0.1,0,1)*lt(max(abs((X-((floor(X/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+((mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)-0.5)*{sway}*W*0.06*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1))))),abs((Y-((floor(Y/({tile}*H/540))*({tile}*H/540)+({tile}*H/540)/2)+(H*1.15*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))))),({tile}*H/540)*0.5*(1-0.55*{shrink}*clip(({T}-(floor(Y/({tile}*H/540))*({tile}*H/540)/H*0.42+mod(sin(floor(X/({tile}*H/540))*7.13+floor(Y/({tile}*H/540))*13.71+2.9)*43758.5453,1)*{jitter})*0.62)/0.38,0,1)))"
+        }
+      },
+      "defaultDurationMs": 800,
+      "defaultEase": "easeIn",
+      "preview": "gl",
+      "thumb": "fxt-cascade"
+    },
+    {
+      "id": "vortexSpin",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Vortex Spin",
+      "description": "The outgoing clip spirals into the centre of the frame — inner pixels twist faster — and vanishes into the vortex.",
+      "params": [
+        {
+          "key": "spin",
+          "label": "Twist",
+          "type": "number",
+          "def": 3,
+          "min": 1,
+          "max": 6,
+          "step": 0.2,
+          "unit": "rad"
+        },
+        {
+          "key": "pull",
+          "label": "Pull",
+          "type": "number",
+          "def": 1,
+          "min": 0.5,
+          "max": 1.5,
+          "step": 0.05
+        }
+      ],
+      "expr": "(clip((((1-{T})*1.18*hypot((W*0.5),(H*0.5)))-hypot((X-(W*0.5)),(Y-(H*0.5))))/(0.1*hypot((W*0.5),(H*0.5)))+0.5,0,1))*SA(((W*0.5)+(hypot((X-(W*0.5)),(Y-(H*0.5)))*(1+{pull}*2.6*{T}))*cos(atan2((Y-(H*0.5)),(X-(W*0.5)))-({spin}*{T}*(1-0.55*clip(hypot((X-(W*0.5)),(Y-(H*0.5)))/hypot((W*0.5),(H*0.5)),0,1))))),((H*0.5)+(hypot((X-(W*0.5)),(Y-(H*0.5)))*(1+{pull}*2.6*{T}))*sin(atan2((Y-(H*0.5)),(X-(W*0.5)))-({spin}*{T}*(1-0.55*clip(hypot((X-(W*0.5)),(Y-(H*0.5)))/hypot((W*0.5),(H*0.5)),0,1))))))+(1-(clip((((1-{T})*1.18*hypot((W*0.5),(H*0.5)))-hypot((X-(W*0.5)),(Y-(H*0.5))))/(0.1*hypot((W*0.5),(H*0.5)))+0.5,0,1)))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "((W*0.5)+(hypot((X-(W*0.5)),(Y-(H*0.5)))*(1+{pull}*2.6*{T}))*cos(atan2((Y-(H*0.5)),(X-(W*0.5)))-({spin}*{T}*(1-0.55*clip(hypot((X-(W*0.5)),(Y-(H*0.5)))/hypot((W*0.5),(H*0.5)),0,1)))))",
+          "ay": "((H*0.5)+(hypot((X-(W*0.5)),(Y-(H*0.5)))*(1+{pull}*2.6*{T}))*sin(atan2((Y-(H*0.5)),(X-(W*0.5)))-({spin}*{T}*(1-0.55*clip(hypot((X-(W*0.5)),(Y-(H*0.5)))/hypot((W*0.5),(H*0.5)),0,1)))))",
+          "m": "clip((((1-{T})*1.18*hypot((W*0.5),(H*0.5)))-hypot((X-(W*0.5)),(Y-(H*0.5))))/(0.1*hypot((W*0.5),(H*0.5)))+0.5,0,1)"
+        }
+      },
+      "defaultDurationMs": 900,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-vortex"
+    },
+    {
+      "id": "lumeSweep",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Lume Sweep",
+      "description": "A tinted bar of light sweeps the frame diagonally — bright core, decaying trail — revealing the next clip behind it.",
+      "params": [
+        {
+          "key": "direction",
+          "label": "Direction",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Diagonal down",
+            "Diagonal up",
+            "Horizontal",
+            "Vertical"
+          ]
+        },
+        {
+          "key": "tint",
+          "label": "Light",
+          "type": "enum",
+          "def": 1,
+          "options": [
+            "White",
+            "Gold",
+            "Cyan",
+            "Magenta"
+          ]
+        },
+        {
+          "key": "corei",
+          "label": "Core",
+          "type": "number",
+          "def": 1,
+          "min": 0,
+          "max": 1.5,
+          "step": 0.05
+        },
+        {
+          "key": "trail",
+          "label": "Trail",
+          "type": "number",
+          "def": 0.18,
+          "min": 0.05,
+          "max": 0.5,
+          "step": 0.01
+        },
+        {
+          "key": "bulge",
+          "label": "Edge push",
+          "type": "number",
+          "def": 0.4,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "edge",
+          "label": "Edge softness",
+          "type": "number",
+          "def": 0.08,
+          "min": 0.04,
+          "max": 0.15,
+          "step": 0.005
+        }
+      ],
+      "derive": {
+        "ca": {
+          "from": "direction",
+          "values": [
+            0.7071,
+            0.7071,
+            1,
+            0
+          ]
+        },
+        "sa": {
+          "from": "direction",
+          "values": [
+            0.7071,
+            -0.7071,
+            0,
+            1
+          ]
+        },
+        "vb": {
+          "from": "direction",
+          "values": [
+            0,
+            0.7071,
+            0,
+            0
+          ]
+        },
+        "cr": {
+          "from": "tint",
+          "values": [
+            255,
+            255,
+            140,
+            255
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            255,
+            205,
+            235,
+            120
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            255,
+            140,
+            255,
+            235
+          ]
+        }
+      },
+      "expr": "(clip((((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/{edge}+0.5,0,1))*SA((X+{ca}*({bulge}*W*0.035*exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.006)*sin(PI*{T}))),(Y+{sa}*({bulge}*W*0.035*exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.006)*sin(PI*{T}))))+(1-(clip((((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/{edge}+0.5,0,1)))*SB(X,Y)+(255-((clip((((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/{edge}+0.5,0,1))*SA((X+{ca}*({bulge}*W*0.035*exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.006)*sin(PI*{T}))),(Y+{sa}*({bulge}*W*0.035*exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.006)*sin(PI*{T}))))+(1-(clip((((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/{edge}+0.5,0,1)))*SB(X,Y)))*(min((clip((exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.0011)*{corei}+(exp(-max(0,0-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15)))/{trail})*0.45)*{corei})*pow(sin(PI*{T}),0.7),0,1.4))*(if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))),255))/255",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "(X+{ca}*({bulge}*W*0.035*exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.006)*sin(PI*{T})))",
+          "ay": "(Y+{sa}*({bulge}*W*0.035*exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.006)*sin(PI*{T})))",
+          "m": "clip((((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/{edge}+0.5,0,1)",
+          "glow": "clip((exp(-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))*(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15))/0.0011)*{corei}+(exp(-max(0,0-(((X/W)*{ca}+(Y/H)*{sa}+{vb})-({T}*((abs({ca})+abs({sa}))+0.3)-0.15)))/{trail})*0.45)*{corei})*pow(sin(PI*{T}),0.7),0,1.4)"
+        }
+      },
+      "defaultDurationMs": 700,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-lume"
+    },
+    {
       "id": "rgbDisplacement",
       "kind": "effect",
       "category": "vfx",

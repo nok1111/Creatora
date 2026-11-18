@@ -91,8 +91,11 @@ export type FxRender =
       /** Field resolution divisor (fields are evaluated at 1/div size). */
       div: number;
       /** ax/ay: source px of the outgoing clip; m: 0..1 weight of the
-       *  outgoing clip (0 = incoming). Templates in the dialect. */
-      fields: { ax: string; ay: string; m: string };
+       *  outgoing clip (0 = incoming). Optional `glow`: additive light
+       *  luma 0..1 screen-blended over the merged result (tinted by the
+       *  `cr/cg/cb` derived constants when present). Templates in the
+       *  dialect. */
+      fields: { ax: string; ay: string; m: string; glow?: string };
     };
 
 export interface FxEntry {
@@ -196,6 +199,171 @@ const MELT = (() => {
 const liquidMeltExpr = () =>
   `(${MELT.m})*SA(${MELT.ax},${MELT.ay})+(1-(${MELT.m}))*SB(X,Y)`;
 
+// ── Ink Bleed ──────────────────────────────────────────────────────────
+// B bleeds into A through a ragged organic boundary: a 3-octave sine-noise
+// field warps the sweep front and seeds sparse droplet islands of A that
+// survive briefly ahead of the front before being absorbed. Pure mask —
+// neither clip is warped.
+const INK = (() => {
+  const u = "(X/W)", v = "(Y/H)";
+  // Low-frequency dominant noise: broad organic lobes plus a fine grain,
+  // so the front reads as soaked paper rather than pixelated blocks.
+  const n1 = `(0.5+0.5*sin(${u}*9.7+${v}*4.3)*sin(${v}*8.3-${u}*5.1))`;
+  const n2 = `(0.5+0.5*sin(${u}*23.9+${v}*15.1+1.7)*sin(${v}*19.7+${u}*11.3))`;
+  const n3 = `(0.5+0.5*sin(${u}*67.3-${v}*47.7+4.3)*sin(${v}*58.9+2.9))`;
+  const noise = `(${n1}*0.58+${n2}*0.32+${n3}*0.1)`;
+  const axis = `if(eq({direction},0),${u},if(eq({direction},1),1-${u},if(eq({direction},2),${v},1-${v})))`;
+  const d = `(${axis}+{ragged}*(${noise}-0.5)*1.1)`;
+  const front = `(${T}*2.3-0.6)`;
+  const core = `clip((${d}-${front})/{soft}+0.5,0,1)`;
+  // Feathered blob field drives droplets on both sides: B seeps ahead of
+  // the front (the bleed) and A holds islands behind it before dissolving.
+  const blob = `(0.5+0.5*sin(${u}*29.3+${v}*24.1+3.7)*sin(${v}*27.7-${u}*16.9+1.1))`;
+  const seep = `clip((${blob}-(0.86-{islands}*0.7))/0.08,0,1)*between(${d}-${front},0.03,0.22)`;
+  const hold = `clip((${blob}-(0.88-{islands}*0.5))/0.09,0,1)*between(${front}-${d},0.05,0.32)`;
+  return {
+    ax: "X",
+    ay: "Y",
+    m: `clip(${core}-${seep}*0.85+${hold}*0.65,0,1)`,
+  };
+})();
+const inkBleedExpr = () =>
+  `(${INK.m})*SA(${INK.ax},${INK.ay})+(1-(${INK.m}))*SB(X,Y)`;
+
+// ── Glitch Shift ───────────────────────────────────────────────────────
+// Horizontal bands of A snap out with per-band hash offsets (peaking
+// mid-transition, quantized into stutter steps) while bands flip to B in
+// hash order; a subset blinks back for flicker. Mid-transition the sampling
+// quantizes into coarse cells — the pixelation is the glitch.
+const GLITCH = (() => {
+  const bh = `(H/{bands})`;
+  const bi = `floor(Y/${bh})`;
+  const hb = `mod(sin(${bi}*12.9898+7.7)*43758.5453,1)`;
+  const bi2 = `floor(Y/(${bh}/3.3))`;
+  const hb2 = `mod(sin(${bi2}*39.3463+3.1)*24634.6345,1)`;
+  const env = `sin(PI*${T})`;
+  const amp = `{amount}*W*0.1`;
+  const off = `(${hb}-0.5)*2*${amp}*${env}+(${hb2}-0.5)*${amp}*0.5*${env}`;
+  const ax0 = `(X+${off})`;
+  const cs = `{cell}`;
+  const qx = `(floor(${ax0}/${cs})*${cs}+${cs}/2)`;
+  const qy = `(floor(Y/${cs})*${cs}+${cs}/2)`;
+  const qb = `({block}*${env})`;
+  const ax = `(${ax0}*(1-${qb})+${qx}*${qb})`;
+  const ay = `(Y*(1-${qb})+${qy}*${qb})`;
+  const flip = `gte(${hb},${T}*1.08)`;
+  const blink = `eq(mod(${bi}+floor(${T}*13),11),0)`;
+  const m = `if(lt(${T},0.05),1,if(${blink}*lt(${T},0.92),1-${flip},${flip}))`;
+  return { ax, ay, m };
+})();
+const glitchShiftExpr = () =>
+  `(${GLITCH.m})*SA(${GLITCH.ax},${GLITCH.ay})+(1-(${GLITCH.m}))*SB(X,Y)`;
+
+// ── Tear Rift ──────────────────────────────────────────────────────────
+// A jagged vertical tear splits the frame; the two halves of A slide apart
+// and droop with distance from the tear while B appears inside the widening
+// rift. Edge raggedness comes from per-row noise on the rift half-width.
+const RIFT = (() => {
+  const v = "(Y/H)";
+  const lx = `(W*(0.5+0.09*sin(${v}*8.9+2.1)+0.05*sin(${v}*27.3+4.7)+0.025*sin(${v}*61.7)))`;
+  const dxl = `(X-${lx})`;
+  const side = `(gte(${dxl},0)*2-1)`;
+  const gap = `{gap}*W*0.4*${T}`;
+  const riftw = `(${T}*{width}*W*0.28*(0.7+0.3*sin(${v}*43.3+1.3)))`;
+  return {
+    ax: `(X-${side}*${gap})`,
+    ay: `(Y+${gap}*0.3*clip(abs(${dxl})/(0.35*W),0,1))`,
+    m: `clip((abs(${dxl})-${riftw})/3+0.5,0,1)`,
+  };
+})();
+const tearRiftExpr = () =>
+  `(${RIFT.m})*SA(${RIFT.ax},${RIFT.ay})+(1-(${RIFT.m}))*SB(X,Y)`;
+
+// ── Block Cascade ──────────────────────────────────────────────────────
+// A breaks into square tiles that drop out of frame top→bottom with
+// per-tile jitter, accelerating under "gravity" and fading at the end of
+// their fall; B sits underneath.
+const CASCADE = (() => {
+  const ts = `({tile}*H/540)`;
+  const tx = `floor(X/${ts})`;
+  const ty = `floor(Y/${ts})`;
+  const h1 = `mod(sin(${tx}*7.13+${ty}*13.71+2.9)*43758.5453,1)`;
+  const cx = `(${tx}*${ts}+${ts}/2)`;
+  const cy = `(${ty}*${ts}+${ts}/2)`;
+  // Stagger: top rows lead (they fall through lower rows) plus hash jitter.
+  const d = `(${ty}*${ts}/H*0.42+${h1}*{jitter})`;
+  const tt = `clip((${T}-${d}*0.62)/0.38,0,1)`;
+  const fall = `(H*1.15*${tt}*${tt})`;
+  const sway = `((${h1}-0.5)*{sway}*W*0.06*${tt}*${tt})`;
+  // Display-space centre drops and drifts; the visible cell shrinks toward
+  // it while the sample contracts inside the tile's own bounds — so each
+  // block collapses into itself instead of scrambling neighbour content.
+  const cxd = `(${cx}+${sway})`;
+  const cyd = `(${cy}+${fall})`;
+  const pdx = `(X-${cxd})`;
+  const pdy = `(Y-${cyd})`;
+  const k = `(1-0.55*{shrink}*${tt})`;
+  const inside = `lt(max(abs(${pdx}),abs(${pdy})),${ts}*0.5*${k})`;
+  const sf = `(1/${k})`;
+  return {
+    ax: `(${cx}+${pdx}*${sf})`,
+    ay: `(${cy}+${pdy}*${sf})`,
+    m: `clip((0.9-${tt})/0.1,0,1)*${inside}`,
+  };
+})();
+const blockCascadeExpr = () =>
+  `(${CASCADE.m})*SA(${CASCADE.ax},${CASCADE.ay})+(1-(${CASCADE.m}))*SB(X,Y)`;
+
+// ── Vortex Spin ────────────────────────────────────────────────────────
+// A spirals into the frame centre: differential twist (inner spins faster)
+// plus radial pull shrinks the outgoing image into a swirl while the A
+// domain contracts to a point. B is revealed from the edges inward.
+const VORTEX = (() => {
+  const cx = "(W*0.5)", cy = "(H*0.5)";
+  const ddx = `(X-${cx})`, ddy = `(Y-${cy})`;
+  const r = `hypot(${ddx},${ddy})`;
+  const a = `atan2(${ddy},${ddx})`;
+  const rm = `hypot(${cx},${cy})`;
+  const sw = `({spin}*${T}*(1-0.55*clip(${r}/${rm},0,1)))`;
+  const rr = `(${r}*(1+{pull}*2.6*${T}))`;
+  const lim = `((1-${T})*1.18*${rm})`;
+  return {
+    ax: `(${cx}+${rr}*cos(${a}-${sw}))`,
+    ay: `(${cy}+${rr}*sin(${a}-${sw}))`,
+    m: `clip((${lim}-${r})/(0.1*${rm})+0.5,0,1)`,
+  };
+})();
+const vortexSpinExpr = () =>
+  `(${VORTEX.m})*SA(${VORTEX.ax},${VORTEX.ay})+(1-(${VORTEX.m}))*SB(X,Y)`;
+
+// ── Lume Sweep ─────────────────────────────────────────────────────────
+// A tinted light bar sweeps the frame diagonally: a tight bright core rides
+// the reveal front, a decaying trail glows behind it, and A's edge bulges
+// slightly ahead of the light. The glow is a fourth field, screen-blended
+// over the merge (per-channel tint via derived cr/cg/cb).
+const LUME = (() => {
+  const u = "(X/W)", v = "(Y/H)";
+  const q = `(${u}*{ca}+${v}*{sa}+{vb})`;
+  const span = "(abs({ca})+abs({sa}))";
+  const f = `(${T}*(${span}+0.3)-0.15)`;
+  const dq = `(${q}-${f})`;
+  const m = `clip(${dq}/{edge}+0.5,0,1)`;
+  const bulge = `({bulge}*W*0.035*exp(-${dq}*${dq}/0.006)*sin(PI*${T}))`;
+  const ax = `(X+{ca}*${bulge})`;
+  const ay = `(Y+{sa}*${bulge})`;
+  const glow = `clip((exp(-${dq}*${dq}/0.0011)*{corei}+(exp(-max(0,0-${dq})/{trail})*0.45)*{corei})*pow(sin(PI*${T}),0.7),0,1.4)`;
+  const merged = `(${m})*SA(${ax},${ay})+(1-(${m}))*SB(X,Y)`;
+  // The spec clamps the tinted glow at 255 so it matches the 8-bit glow
+  // field used by the native screen blend (which also saturates at 255).
+  const tint = `if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))`;
+  const tinted = `min((${glow})*(${tint}),255)`;
+  return {
+    fields: { ax, ay, m, glow },
+    expr: `${merged}+(255-(${merged}))*(${tinted})/255`,
+  };
+})();
+const lumeSweepExpr = () => LUME.expr;
+
 const num = (
   key: string,
   label: string,
@@ -252,6 +420,150 @@ export const MANIFEST: FxManifest = {
       defaultEase: "easeInOut",
       preview: "gl",
       thumb: "fxt-melt",
+    },
+    {
+      id: "inkBleed",
+      kind: "transition",
+      category: "transitions",
+      name: "Ink Bleed",
+      description:
+        "The next clip bleeds in through a ragged organic front, with scattered droplets that hold briefly before being absorbed.",
+      params: [
+        {
+          key: "direction",
+          label: "Direction",
+          type: "enum",
+          def: 0,
+          options: ["Left to right", "Right to left", "Top to bottom", "Bottom to top"],
+        },
+        num("ragged", "Raggedness", 0.6, 0.3, 0.9, 0.02),
+        num("soft", "Edge softness", 0.045, 0.02, 0.09, 0.005),
+        num("islands", "Droplets", 0.12, 0, 0.3, 0.01),
+      ],
+      expr: inkBleedExpr(),
+      render: { kind: "fields", div: 8, fields: INK },
+      defaultDurationMs: 800,
+      defaultEase: "easeInOut",
+      preview: "gl",
+      thumb: "fxt-ink",
+    },
+    {
+      id: "glitchShift",
+      kind: "transition",
+      category: "transitions",
+      name: "Glitch Shift",
+      description:
+        "Horizontal bands stutter apart mid-transition while slices of the next clip snap in out of order — a controlled digital tear.",
+      params: [
+        num("bands", "Bands", 18, 12, 32, 1),
+        num("amount", "Shift", 1, 0.3, 1.5, 0.05),
+        num("cell", "Block size", 26, 14, 48, 1, "px"),
+        num("block", "Pixelation", 0.55, 0, 1, 0.05),
+      ],
+      expr: glitchShiftExpr(),
+      render: { kind: "fields", div: 8, fields: GLITCH },
+      defaultDurationMs: 500,
+      defaultEase: "linear",
+      preview: "gl",
+      thumb: "fxt-glitch",
+    },
+    {
+      id: "tearRift",
+      kind: "transition",
+      category: "transitions",
+      name: "Tear Rift",
+      description:
+        "The frame tears open along a jagged vertical rift; both halves slide apart and sag while the next clip appears inside.",
+      params: [
+        num("gap", "Separation", 0.4, 0.2, 0.6, 0.02),
+        num("width", "Rift width", 0.7, 0.4, 1, 0.02),
+      ],
+      expr: tearRiftExpr(),
+      render: { kind: "fields", div: 8, fields: RIFT },
+      defaultDurationMs: 700,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-rift",
+    },
+    {
+      id: "blockCascade",
+      kind: "transition",
+      category: "transitions",
+      name: "Block Cascade",
+      description:
+        "The outgoing clip crumbles into tiles that drop out top to bottom with staggered timing and gravity acceleration.",
+      params: [
+        num("tile", "Tile size", 96, 48, 160, 8, "px"),
+        num("jitter", "Stagger", 0.35, 0, 0.6, 0.02),
+        num("sway", "Side drift", 0.5, 0, 1, 0.05),
+        num("shrink", "Collapse", 0.6, 0, 1, 0.05),
+      ],
+      expr: blockCascadeExpr(),
+      render: { kind: "fields", div: 8, fields: CASCADE },
+      defaultDurationMs: 800,
+      defaultEase: "easeIn",
+      preview: "gl",
+      thumb: "fxt-cascade",
+    },
+    {
+      id: "vortexSpin",
+      kind: "transition",
+      category: "transitions",
+      name: "Vortex Spin",
+      description:
+        "The outgoing clip spirals into the centre of the frame — inner pixels twist faster — and vanishes into the vortex.",
+      params: [
+        num("spin", "Twist", 3, 1, 6, 0.2, "rad"),
+        num("pull", "Pull", 1, 0.5, 1.5, 0.05),
+      ],
+      expr: vortexSpinExpr(),
+      render: { kind: "fields", div: 8, fields: VORTEX },
+      defaultDurationMs: 900,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-vortex",
+    },
+    {
+      id: "lumeSweep",
+      kind: "transition",
+      category: "transitions",
+      name: "Lume Sweep",
+      description:
+        "A tinted bar of light sweeps the frame diagonally — bright core, decaying trail — revealing the next clip behind it.",
+      params: [
+        {
+          key: "direction",
+          label: "Direction",
+          type: "enum",
+          def: 0,
+          options: ["Diagonal down", "Diagonal up", "Horizontal", "Vertical"],
+        },
+        {
+          key: "tint",
+          label: "Light",
+          type: "enum",
+          def: 1,
+          options: ["White", "Gold", "Cyan", "Magenta"],
+        },
+        num("corei", "Core", 1, 0, 1.5, 0.05),
+        num("trail", "Trail", 0.18, 0.05, 0.5, 0.01),
+        num("bulge", "Edge push", 0.4, 0, 1, 0.05),
+        num("edge", "Edge softness", 0.08, 0.04, 0.15, 0.005),
+      ],
+      derive: {
+        ca: { from: "direction", values: [0.7071, 0.7071, 1, 0] },
+        sa: { from: "direction", values: [0.7071, -0.7071, 0, 1] },
+        vb: { from: "direction", values: [0, 0.7071, 0, 0] },
+        cr: { from: "tint", values: [255, 255, 140, 255] },
+        cg: { from: "tint", values: [255, 205, 235, 120] },
+        cb: { from: "tint", values: [255, 140, 255, 235] },
+      },
+      expr: lumeSweepExpr(),
+      render: { kind: "fields", div: 8, fields: LUME.fields },
+      defaultDurationMs: 700,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-lume",
     },
     {
       id: "rgbDisplacement",

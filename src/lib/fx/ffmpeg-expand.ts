@@ -56,11 +56,20 @@ export function expandSamplers(expr: string): string {
   return out;
 }
 
+/**
+ * `PLANE` in a recipe means channel index R,G,B,A = 0..3 (the manifest /
+ * GLSL convention). `xfade=custom` runs on `gbrap`, whose planes are
+ * G,B,R,A — remap recipe `PLANE` reads to real channel indices before
+ * `expandSamplers` injects its own raw `PLANE` dispatches.
+ */
+const gbrapPlaneFix = (expr: string): string =>
+  expr.replace(/\bPLANE\b/g, "if(eq(PLANE,0),1,if(eq(PLANE,1),2,if(eq(PLANE,2),0,3)))");
+
 export function ffmpegExpr(
   e: FxEntry,
   params: Record<string, number> | undefined,
   ease?: string,
 ): string {
   // xfade's progress P runs 1→0; the recipe's linear progress is u = 1-P.
-  return expandSamplers(expandTemplate(e, params, ease, "1-P"));
+  return expandSamplers(gbrapPlaneFix(expandTemplate(e, params, ease, "1-P")));
 }

@@ -391,7 +391,42 @@ pub fn transition_graph(
             f.push(format!("{}{fm}", field("m", "gray", &mask)?));
             let warped = l("warp");
             f.push(format!("{a_tail}{fax}{fay}remap{warped}"));
-            f.push(format!("{b_head}{warped}{fm}maskedmerge{tr_lbl}"));
+            let merged = if fields.contains_key("glow") {
+                l("mrg")
+            } else {
+                tr_lbl.clone()
+            };
+            f.push(format!("{b_head}{warped}{fm}maskedmerge{merged}"));
+            // Optional additive light field: luma 0..1 baked at field res,
+            // tinted per channel via cr/cg/cb constants, screen-blended
+            // over the merged frames (spec: M+(255-M)·G·tint/255).
+            if let Some(glow_t) = fields.get("glow") {
+                let c = resolve_constants(e, &tr.params);
+                let tint = |k: &str| {
+                    fmt_num(c.get(k).copied().unwrap_or(255.0).clamp(0.0, 255.0))
+                };
+                let text = expand_text(e, glow_t, &tr.params, ease, &u).ok()?;
+                let cx = format!("((X+0.5)*{div}-0.5)");
+                let cy = format!("((Y+0.5)*{div}-0.5)");
+                let t = ident_replace(&text, "X", "§X");
+                let t = ident_replace(&t, "Y", "§Y");
+                let t = ident_replace(&t, "W", &fmt_num(w));
+                let t = ident_replace(&t, "H", &fmt_num(h));
+                let t = t.replace("§X", &cx).replace("§Y", &cy);
+                let fg = l("fg");
+                // geq output is uint8 and wraps mod 256 — the glow can
+                // exceed 1.0 so clamp each channel like the spec's min().
+                f.push(format!(
+                    "color=c=black:s={lw}x{lh}:r={fps}:d={secs:.4},format=gbrp,geq=r='min(({t})*{tr_t},255)':g='min(({t})*{tg_t},255)':b='min(({t})*{tb_t},255)',trim=end_frame={n_t},scale={}:{}:flags=bilinear{fg}",
+                    ctx.w,
+                    ctx.h,
+                    t = t,
+                    tr_t = tint("cr"),
+                    tg_t = tint("cg"),
+                    tb_t = tint("cb"),
+                ));
+                f.push(format!("{merged}{fg}blend=all_mode='screen'{tr_lbl}"));
+            }
         }
     }
 
