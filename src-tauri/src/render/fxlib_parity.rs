@@ -1398,3 +1398,100 @@ fn light_scenes() {
     assert!(st.success(), "sheet assembly failed\n{fc}");
     eprintln!("light sheet → {}", out.display());
 }
+
+/// Bin strip thumbnails for every transition & intro/outro tile: render
+/// the REAL production plan (fields engine for manifest effects, native
+/// xfades for legacy merge tiles) on crops of the photographic sample,
+/// select 8 frames across the gesture and tile 8x1 into
+/// shared/fx/thumbs/<id>.png — the bin plays them as `.fxstrip`, so
+/// tiles show actual export frames instead of CSS approximations.
+///   cargo test --lib render::fxlib_parity::fx_thumbs -- --ignored --nocapture
+#[test]
+#[ignore]
+fn fx_thumbs() {
+    if ffmpeg().is_none() {
+        eprintln!("skipping: ffmpeg unavailable");
+        return;
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let sample = root.join("shared/fx/sample.png");
+    let out_dir = root.join("shared/fx/thumbs");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let tmp = tmpdir("fxthumbs");
+    let (tw, th) = (384u32, 216u32);
+
+    // A/B sources = different crops of the same 1536×496 panorama sample,
+    // so transition tiles read as two distinct scenes.
+    let a_img = tmp.join("a.png");
+    let b_img = tmp.join("b.png");
+    run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:60:60"),
+          "-frames:v", "1", "-update", "1", a_img.to_str().unwrap()]).unwrap();
+    run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:1050:160"),
+          "-frames:v", "1", "-update", "1", b_img.to_str().unwrap()]).unwrap();
+    let a_mp4 = tmp.join("a.mp4");
+    let b_mp4 = tmp.join("b.mp4");
+    for (img, mp4) in [(&a_img, &a_mp4), (&b_img, &b_mp4)] {
+        run(&["-loop", "1", "-t", "4", "-i", img.to_str().unwrap(),
+              "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
+              mp4.to_str().unwrap()]).unwrap();
+    }
+
+    // One plan render per tile: select 8 frames, tile into a strip.
+    let tap = |doc: &ProjectDoc, srcs: &HashMap<String, SourceInfo>, frames: &[u32], out: &Path| {
+        let p = plan::build_plan(doc, srcs).expect("plan");
+        let sel = frames.iter().map(|n| format!("eq(n\\,{n})")).collect::<Vec<_>>().join("+");
+        let args = p.ffmpeg_args(out);
+        let fc_at = args.iter().position(|a| a == "-filter_complex").unwrap();
+        let mut a: Vec<String> = args[1..fc_at].to_vec();
+        a.push("-filter_complex".into());
+        a.push(format!("{};[vout]select='{sel}',format=rgb24,tile=8x1[sel]", p.filter_complex));
+        a.extend(["-map".into(), "[sel]".into(), "-frames:v".into(), "1".into(), out.to_string_lossy().into()]);
+        let refs: Vec<&str> = a.iter().map(String::as_str).collect();
+        run(&refs).unwrap_or_else(|e| panic!("thumb render failed:\n{e}"));
+    };
+
+    // Intro/outro: 8 samples across the effect's own `duration` window.
+    let us: [f64; 8] = [0.02, 0.16, 0.30, 0.44, 0.58, 0.72, 0.86, 0.97];
+    for entry in crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "effect" && (e.category == "intro" || e.category == "outro"))
+    {
+        let win = entry.params.iter().find(|p| p.key == "duration").map(|p| p.def).unwrap_or(900.0);
+        let at_end = entry.category == "outro";
+        let (mut doc, srcs) = effect_doc(&entry.id, &[], &a_img, win, at_end);
+        doc.canvas.width = tw;
+        doc.canvas.height = th;
+        let wf = win * 30.0 / 1000.0;
+        let base = if at_end { 60.0 - wf } else { 0.0 };
+        let frames: Vec<u32> = us.iter().map(|u| (base + u * wf).round() as u32).collect();
+        let out = out_dir.join(format!("{}.png", entry.id));
+        tap(&doc, &srcs, &frames, &out);
+        eprintln!("thumb {} ({})", entry.id, entry.category);
+    }
+
+    // Merge: 8 manifest transitions + the 12 curated legacy xfades.
+    // two_clip_doc puts the 1 s join at frames 30–60 of a 90-frame
+    // timeline — sample the gesture across it.
+    let mut kinds: Vec<String> = crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "transition")
+        .map(|e| e.id.clone())
+        .collect();
+    kinds.extend([
+        "crossfade", "dipToBlack", "dipToWhite", "dissolve", "hblur", "pixelize",
+        "zoomin", "radial", "circleopen", "wipeleft", "slideleft", "hlslice",
+    ].iter().map(|s| s.to_string()));
+    let tr_frames: [u32; 8] = [30, 34, 38, 42, 46, 50, 54, 59];
+    for kind in &kinds {
+        let (mut doc, srcs) = two_clip_doc(kind, &[], &a_mp4, &b_mp4);
+        doc.canvas.width = tw;
+        doc.canvas.height = th;
+        let out = out_dir.join(format!("{kind}.png"));
+        tap(&doc, &srcs, &tr_frames, &out);
+        eprintln!("thumb {kind} (transition)");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+    eprintln!("fx thumbs → {}", out_dir.display());
+}
