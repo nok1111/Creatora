@@ -74,6 +74,7 @@ import { FilmstripCanvas } from "@/modules/editor/FilmstripCanvas";
 import { getDragPayload, isEffectPayload, type EffectCategory } from "@/lib/drag-payload";
 import { effectDef, EFFECT_DROP_PARAMS } from "@/lib/effects";
 import { fxEntry, fxTransition } from "@/lib/fx/manifest";
+import { applyCombo, comboPreset } from "@/lib/fx-combos";
 import { ANIM_PRESETS } from "@/lib/anim-presets";
 import { SUBTITLE_PRESETS } from "@/lib/subtitle-presets";
 import { cn } from "@/lib/utils";
@@ -740,6 +741,23 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     );
     if (!target) {
       toast.error(t("editor.fxDropOnClip"));
+      return;
+    }
+    // Creative combos — one drop applies a curated stack; every step
+    // stays an individual effect/keyframe set.
+    const combo = comboPreset(itemId);
+    if (combo) {
+      let applied = 0;
+      mutate((d) => {
+        const r = applyCombo(d, target, combo.id, {
+          durationMs: Math.min(600, Math.max(100, target.durationMs / 2)),
+          versionId: activeVersionId,
+        });
+        applied = r.applied;
+        return r.doc;
+      });
+      if (applied > 0) toast.success(t("editor.fxApplied", { name: combo.label }));
+      else toast.error(t("editor.fxNothingApplied", { name: combo.label }));
       return;
     }
     // Manifest intro/outro effects (start/end bins) apply as windowed

@@ -11,6 +11,7 @@ import {
   Expand,
   Eye,
   Grid3x3,
+  Layers,
   LogIn,
   LogOut,
   Moon,
@@ -39,6 +40,7 @@ const thumbUrl = (id: string) => THUMBS[`../../../shared/fx/thumbs/${id}.png`];
 import { setDragPayload, type EffectCategory } from "@/lib/drag-payload";
 import { EFFECTS } from "@/lib/effects";
 import { ANIM_PRESETS } from "@/lib/anim-presets";
+import { COMBO_PRESETS, comboPreset } from "@/lib/fx-combos";
 
 /**
  * Effects library — draggable tiles applied to timeline clips on drop.
@@ -170,6 +172,18 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
   },
   {
     id: "overlay",
+    labelKey: "editor.fxCatCombos",
+    icon: Layers,
+    items: COMBO_PRESETS.map((c) => ({
+      id: c.id,
+      label: c.label,
+      icon: Layers,
+      description: c.description,
+      thumb: c.thumb,
+    })),
+  },
+  {
+    id: "overlay",
     labelKey: "editor.fxCatOverlay",
     icon: Wand2,
     items: [
@@ -189,6 +203,7 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
 
 /** Display section (the 8 library categories) for a catalog item. */
 function sectionOf(cat: EffectCategory, id: string): string {
+  if (comboPreset(id)) return "combos";
   const e = fxEntry(id);
   if (e) return e.category;
   if (cat === "merge") return "transitions";

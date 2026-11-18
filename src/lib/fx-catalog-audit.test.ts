@@ -34,6 +34,7 @@ import {
 import type { Effect, ProjectDoc } from "@/lib/project-types";
 import { DEFAULT_SUBTITLE_STYLE } from "@/lib/project-types";
 import { fxEntry } from "@/lib/fx/manifest";
+import { comboPreset } from "@/lib/fx-combos";
 import { filterPassesFor } from "@/lib/fx/gl-filter";
 
 /** ffmpeg xfade transition names — mirror of plan.rs::XFADES plus the
@@ -102,6 +103,7 @@ describe("fx catalog audit", () => {
         ).toBe(true);
       } else {
         const known =
+          comboPreset(id) !== undefined ||
           animPreset(id) !== undefined ||
           EFFECTS.some((e) => e.type === id) ||
           fxEntry(id)?.kind === "effect" ||

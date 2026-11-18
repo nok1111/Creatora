@@ -217,6 +217,19 @@
 .fxt-iris::after{background:radial-gradient(circle at 50% 50%,#3b82f6 0 30%,transparent 34%);animation:fxt-iris 1.5s ease-in-out infinite}
 @keyframes fxt-iris{0%{transform:scale(3.2)}75%,100%{transform:scale(.15)}}
 
+/* Combo tiles — stacked-look marks: two layered tones sliding together */
+.fxt-cmb-cine{background:linear-gradient(115deg,#92400e 0 55%,#1e3a8a 55%)}
+.fxt-cmb-cine::after{background:radial-gradient(circle,#fff 0,transparent 55%);animation:fxt-focus 1.5s ease-out infinite}
+.fxt-cmb-neon{background:linear-gradient(115deg,#0891b2 0 55%,#701a75 55%)}
+.fxt-cmb-neon::after{background:repeating-linear-gradient(0deg,#f0abfc 0 3px,transparent 3px 8px);animation:fxt-boot .9s steps(4) infinite}
+.fxt-cmb-dream{background:linear-gradient(115deg,#f9a8d4 0 55%,#c4b5fd 55%)}
+.fxt-cmb-dream::after{background:radial-gradient(circle at 30% 35%,#fff 0 4%,transparent 8%),radial-gradient(circle at 65% 60%,#fff 0 3%,transparent 7%),radial-gradient(circle at 80% 25%,#fff 0 2%,transparent 6%);animation:fxt-cmb-drift 2.2s linear infinite}
+@keyframes fxt-cmb-drift{0%{transform:translate(0,0);opacity:.9}100%{transform:translate(-8%,-18%);opacity:.4}}
+.fxt-cmb-burn{background:linear-gradient(115deg,#0f172a 0 55%,#7c2d12 55%)}
+.fxt-cmb-burn::after{background:radial-gradient(circle at 55% 45%,transparent 18%,#f97316 24%,#0f172a 34%);animation:fxt-burn 1.5s ease-in infinite}
+.fxt-cmb-crt{background:linear-gradient(115deg,#334155 0 55%,#0f172a 55%)}
+.fxt-cmb-crt::after{background:linear-gradient(0deg,transparent 0 49%,#e2e8f0 49% 51%,transparent 51%);animation:fxt-signal 1.4s ease-in-out infinite}
+
 /* Light & Atmosphere tiles — real 8-frame production strips (3072x216)
    rendered by the ffmpeg chain; steps() plays them back as a sprite. */
 .fxstrip{background-size:800% 100%;background-position:0 0;background-repeat:no-repeat;animation:fxstrip 1.6s steps(8) infinite}
