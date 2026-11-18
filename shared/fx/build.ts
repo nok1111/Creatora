@@ -449,6 +449,132 @@ const SHARD = (() => {
   };
 })();
 
+// ══ Outros — u runs 0→1 over the clip's closing window; identity at
+// u=0, fully gone at u=1. ═══════════════════════════════════════════
+
+// ── Signal Off ─────────────────────────────────────────────────────
+// CRT power-off: the picture squeezes to a bright horizontal line, the
+// line collapses to a hot dot, the dot dies. Three staged envelopes.
+const SIGNAL = (() => {
+  const ss = (x: string) => `(clip(${x},0,1)*clip(${x},0,1)*(3-2*clip(${x},0,1)))`;
+  const kv = ss(`${T}/0.55`);           // vertical squeeze
+  const kh = ss(`(${T}-0.55)/0.3`);      // horizontal squeeze
+  const kf = ss(`(${T}-0.82)/0.18`);     // dot fade-out
+  const dy = `(Y-H/2)`;
+  const dx = `(X-W/2)`;
+  const r = `hypot(${dx},${dy})`;
+  return {
+    ax: `(X+${dx}*(0-${kh}))`,
+    ay: `(Y+${dy}*(0-${kv}))`,
+    m: `(1-${kf})`,
+    glow: `({glint}*(0.7*exp(0-${dy}*${dy}/(2*pow(H*0.012,2)))*${kv}*(1-${kf})+1.5*exp(0-${r}*${r}/(2*pow(W*0.03,2)))*${kh}*(1-${kf})))`,
+  };
+})();
+
+// ── Disintegrate ───────────────────────────────────────────────────
+// The frame breaks into particles that crumble, lift and scatter.
+// Two particle scales (a share of cells subdivides), per-cell dissolve
+// threshold for stagger, noise-roughened erosion front biased upward.
+// ── Disintegrate ───────────────────────────────────────────────────
+// Organic erosion: a smooth multi-frequency field gives every pixel a
+// release time, so neighbourhoods let go together as ragged patches —
+// never square cells. Once released, a patch lifts upward with a wind
+// sway while it fades, so it reads as matter carried off, not a wipe.
+// A finer high-frequency field frays the patch borders (granules) and
+// a gentle bottom-up bias gives the sweep direction.
+const DISINT = (() => {
+  // Macro front: two-scale organic field picks WHERE matter lets go —
+  // lobes release coherent ragged patches, never polygons.
+  const fs = `(64/{size})`;
+  const lobe = `(0.5+0.5*sin(X/W*6.3*${fs}+1.7)*sin(Y/H*4.1*${fs}-0.9))`;
+  const lobe2 = `(0.5+0.5*sin(X/W*11.7*${fs}-2.6)*sin(Y/H*8.9*${fs}+3.4))`;
+  const grain = `(0.5+0.5*sin(X*0.53+sin(Y*0.31)*3.1+7.1)*sin(Y*0.47+sin(X*0.29)*2.7-3.9))`;
+  const field = `clip(${lobe}*0.55+${lobe2}*0.32+${grain}*0.13,0.02,0.98)`;
+  // Granule layer: small cells with a per-cell hash give the dissolve
+  // its particle identity — each granule releases, drifts and fades on
+  // its own clock inside the macro front.
+  const ts = `({size}*H/540*0.26)`;
+  const cx = `floor(X/${ts})`;
+  const cy = `floor(Y/${ts})`;
+  const gh = `mod(sin(${cx}*7.13+${cy}*13.71+2.9)*43758.5453,1)`;
+  const gh2 = `mod(sin(${cx}*3.97+${cy}*9.31+5.3)*24634.6345,1)`;
+  const gh3 = `mod(sin(${cx}*11.31+${cy}*5.77+8.9)*12734.2345,1)`;
+  // Release clock: organic front + granule jitter + slight bottom→top.
+  const rt = `(${field}*{stagger}*0.5+${gh}*0.26+(1-Y/H)*0.14)`;
+  const p = `clip((${T}-${rt})/0.3,0,1)`;      // local release 0→1
+  const pp = `(${p}*${p})`;
+  // Granules lift and scatter — travel varies per granule → depth;
+  // neighbouring granules share the lobe drift → coherent gusts.
+  const lift = `(${pp}*H*{drift}*(0.10+0.10*${gh3}+0.06*${lobe}))`;
+  const sway = `((0.5-${gh2})*${pp}*W*0.10*{drift}+(0.5-${lobe2})*${pp}*W*0.05*{drift})`;
+  return {
+    ax: `(X-${sway})`,
+    ay: `(Y+${lift})`,
+    // Solid while held, then a short feathered dissolve — released
+    // matter lingers a beat before vanishing (no hard pop).
+    m: `(1-clip((${p}-0.38)/0.5,0,1))`,
+  };
+})();
+
+// ── Film Burn ──────────────────────────────────────────────────────
+// Emulsion burn: a hot point eats the frame outward, charred rim lit
+// orange, everything consumed at the end.
+const BURN = (() => {
+  const r = `(hypot(X-{ox}*W,Y-{oy}*H)/hypot(W,H))`;
+  // Irregular emulsion front — a perfect circle reads as a wipe.
+  const nz = `(sin(X*0.21+7.3)*sin(Y*0.19-2.1)*0.6+sin(X*0.043-1.7)*sin(Y*0.051+3.9))`;
+  const R = `(pow(${T},0.75)*1.05-0.02+${nz}*0.016)`;
+  const e = `(${r}-${R})`;
+  return {
+    ax: "X",
+    ay: "Y",
+    // Wide asymmetric char: the emulsion darkens well ahead of the
+    // glowing rim (charred band), then falls off sharply — this is
+    // what reads as burnt film rather than a soft radial wipe.
+    m: `clip((${e}+{soft}*1.1)/({soft}*1.5),0,1)`,
+    // Hot rim at the front plus a wider ember halo bleeding inward.
+    glow: `({heat}*(1.25*exp(0-${e}*${e}/(2*pow({soft}*0.4,2)))+0.4*exp(0-pow(${e}+{soft}*1.6,2)/(2*pow({soft}*1.3,2))))*(0.45+0.55*${T}))`,
+  };
+})();
+
+// ── Implode Flash ──────────────────────────────────────────────────
+// The picture accelerates into the centre and pops white-hot.
+const IMPLODE = (() => {
+  // Pull blends a linear ramp with an accelerating term so the suck-in
+  // is perceptible from the first frames, not just the last third.
+  const k = `(0.3*${T}+0.7*pow(${T},1.6))`;
+  const dx = `(X-W/2)`;
+  const dy = `(Y-H/2)`;
+  const r = `(hypot(${dx},${dy})/min(W,H))`;
+  // Linear-in-T swirl so the vortex is visible early.
+  const sw = `(${T}*0.18)`;
+  return {
+    ax: `(X+${dx}*(0-${k}*0.995)+${dy}*${sw})`,
+    ay: `(Y+${dy}*(0-${k}*0.995)-${dx}*${sw})`,
+    m: `(1-clip((${T}-0.8)/0.2,0,1))`,
+    // Faint core glow builds through the middle; the flash blooms wide
+    // enough to read as a pop, then a broad wash dies with the frame.
+    glow: `({flash}*(0.4*pow(${T},3)*exp(0-${r}*${r}*30)+pow(${T},6)*exp(0-${r}*${r}*140)+0.7*pow(clip((${T}-0.86)/0.14,0,1),2)))`,
+  };
+})();
+
+// ── Iris Out ───────────────────────────────────────────────────────
+// Classic circular close with a smooth feathered edge and a
+// positionable centre.
+const IRIS = (() => {
+  const cx = `({cx}*W/100)`;
+  const cy = `({cy}*H/100)`;
+  const d = `hypot(X-${cx},Y-${cy})`;
+  const rmax = `(hypot(max(${cx},W-${cx}),max(${cy},H-${cy}))+{soft})`;
+  // Closes fully: at u=1 the radius lands one edge below zero.
+  const rc = `(${rmax}*(1-${T})-{soft})`;
+  return {
+    ax: "X",
+    ay: "Y",
+    m: `clip((${rc}-${d})/{soft}+0.5,0,1)`,
+  };
+})();
+
 export const MANIFEST: FxManifest = {
   version: 1,
   eases,
@@ -744,6 +870,115 @@ export const MANIFEST: FxManifest = {
       defaultEase: "easeInOutCubic",
       preview: "field",
       thumb: "fxt-shard",
+    },
+    {
+      id: "signalOff",
+      kind: "effect",
+      category: "outro",
+      name: "Signal Off",
+      description:
+        "CRT power-off: the picture squeezes to a bright line, collapses to a hot dot and dies.",
+      params: [
+        num("duration", "Duration", 750, 300, 2000, 50, "ms"),
+        num("glint", "Glint", 0.8, 0, 1.5, 0.05),
+      ],
+      derive: {
+        cr: { from: "glint", values: [255] },
+        cg: { from: "glint", values: [238] },
+        cb: { from: "glint", values: [205] },
+      },
+      render: { kind: "fields", div: 8, fields: SIGNAL },
+      defaultEase: "linear",
+      preview: "field",
+      thumb: "fxt-signal",
+    },
+    {
+      id: "disintegrate",
+      kind: "effect",
+      category: "outro",
+      name: "Disintegrate",
+      description:
+        "The frame breaks into particles of varied size that crumble, lift and scatter.",
+      params: [
+        num("duration", "Duration", 1100, 400, 3000, 50, "ms"),
+        num("size", "Patch size", 64, 28, 140, 4, "px"),
+        num("stagger", "Stagger", 0.7, 0.2, 1, 0.02),
+        num("drift", "Drift", 0.8, 0, 1.5, 0.02),
+      ],
+      render: { kind: "fields", div: 8, fields: DISINT },
+      defaultEase: "linear",
+      preview: "field",
+      thumb: "fxt-disintegrate",
+    },
+    {
+      id: "filmBurn",
+      kind: "effect",
+      category: "outro",
+      name: "Film Burn",
+      description:
+        "Emulsion burn-out: a hot point consumes the frame behind a charred orange rim.",
+      params: [
+        num("duration", "Duration", 1000, 400, 3000, 50, "ms"),
+        {
+          key: "origin",
+          label: "Origin",
+          type: "enum",
+          def: 0,
+          options: ["Center", "Bottom left", "Bottom right", "Top"],
+        },
+        num("heat", "Heat", 1.0, 0, 1.5, 0.05),
+        num("soft", "Edge softness", 0.045, 0.01, 0.12, 0.005),
+      ],
+      derive: {
+        ox: { from: "origin", values: [0.5, 0.12, 0.88, 0.5] },
+        oy: { from: "origin", values: [0.5, 0.9, 0.9, 0.08] },
+        cr: { from: "origin", values: [255] },
+        cg: { from: "origin", values: [128] },
+        cb: { from: "origin", values: [26] },
+      },
+      render: { kind: "fields", div: 8, fields: BURN },
+      defaultEase: "easeIn",
+      preview: "field",
+      thumb: "fxt-burn",
+    },
+    {
+      id: "implodeFlash",
+      kind: "effect",
+      category: "outro",
+      name: "Implode Flash",
+      description:
+        "The picture accelerates into the centre and pops in a white-hot flash.",
+      params: [
+        num("duration", "Duration", 800, 300, 2500, 50, "ms"),
+        num("flash", "Flash", 0.9, 0, 1.5, 0.05),
+      ],
+      derive: {
+        cr: { from: "flash", values: [255] },
+        cg: { from: "flash", values: [248] },
+        cb: { from: "flash", values: [230] },
+      },
+      render: { kind: "fields", div: 8, fields: IMPLODE },
+      defaultEase: "easeInOutCubic",
+      preview: "field",
+      thumb: "fxt-implode",
+    },
+    {
+      id: "irisOut",
+      kind: "effect",
+      category: "outro",
+      name: "Iris Out",
+      description:
+        "Classic circular close-down with a feathered edge and a positionable centre.",
+      params: [
+        num("duration", "Duration", 900, 300, 2500, 50, "ms"),
+        num("cx", "Center X", 50, 0, 100, 1, "%"),
+        num("cy", "Center Y", 50, 0, 100, 1, "%"),
+        num("soft", "Edge softness", 14, 2, 60, 1, "px"),
+      ],
+      render: { kind: "fields", div: 8, fields: IRIS },
+      defaultEase: "easeInOutCubic",
+      preview: "field",
+      thumb: "fxt-iris",
     },
     {
       id: "rgbDisplacement",

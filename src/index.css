@@ -202,6 +202,20 @@
 .fxt-shard{background:#1e293b}
 .fxt-shard::after{background:repeating-conic-gradient(#f59e0b 0 25%,#3b82f6 0 50%);background-size:18px 18px;animation:fxt-shard 1.3s ease-out infinite}
 @keyframes fxt-shard{0%{transform:scale(1.35) rotate(6deg);opacity:.3}100%{transform:scale(1) rotate(0);opacity:1}}
+.fxt-signal{background:linear-gradient(0deg,#3b82f6 0 49%,#fef9c3 49% 51%,#3b82f6 51%);animation:fxt-signal 1.4s ease-in-out infinite}
+@keyframes fxt-signal{0%{background-size:100% 100%}55%{background-size:100% 12%}80%,100%{background-size:4% 4%;background-position:50% 50%;background-repeat:no-repeat}}
+.fxt-disintegrate{background:#3b82f6}
+.fxt-disintegrate::after{background:repeating-conic-gradient(#f59e0b 0 12%,transparent 0 25%);background-size:14px 14px;mask-image:linear-gradient(115deg,transparent 30%,#000 70%);-webkit-mask-image:linear-gradient(115deg,transparent 30%,#000 70%);animation:fxt-disintegrate 1.5s ease-in infinite}
+@keyframes fxt-disintegrate{0%{transform:translate(0,0);opacity:1}100%{transform:translate(-18%,-30%);opacity:0}}
+.fxt-burn{background:#3b82f6}
+.fxt-burn::after{background:radial-gradient(circle at 55% 45%,transparent 18%,#f97316 24%,#0f172a 34%);animation:fxt-burn 1.5s ease-in infinite}
+@keyframes fxt-burn{0%{transform:scale(.2);opacity:0}25%{opacity:1}100%{transform:scale(2.6);opacity:1}}
+.fxt-implode{background:radial-gradient(circle at 50% 50%,#3b82f6 0,#1e293b 80%)}
+.fxt-implode::after{background:radial-gradient(circle,#fff 0,transparent 45%);animation:fxt-implode 1.4s ease-in infinite}
+@keyframes fxt-implode{0%{transform:scale(.1);opacity:0}70%{transform:scale(.15);opacity:.4}100%{transform:scale(2.8);opacity:1}}
+.fxt-iris{background:#0f172a}
+.fxt-iris::after{background:radial-gradient(circle at 50% 50%,#3b82f6 0 30%,transparent 34%);animation:fxt-iris 1.5s ease-in-out infinite}
+@keyframes fxt-iris{0%{transform:scale(3.2)}75%,100%{transform:scale(.15)}}
 
 /* Light & Atmosphere tiles — real 8-frame production strips (3072x216)
    rendered by the ffmpeg chain; steps() plays them back as a sprite. */
