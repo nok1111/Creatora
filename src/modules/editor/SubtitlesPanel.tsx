@@ -531,12 +531,12 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
                   </label>
                 </div>
                 <div className="mt-1 flex gap-1">
-                  <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                  <Button variant="outline" size="sm" className="h-6 flex-1 text-[10px]"
                     title={t("subs.snapStartTip")}
                     onClick={() => mutate((d) => resizeCue(d, sel.id, { startMs: playheadMs }))}>
                     ⤓ {t("subs.startHere")}
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+                  <Button variant="outline" size="sm" className="h-6 flex-1 text-[10px]"
                     title={t("subs.snapEndTip")}
                     onClick={() => mutate((d) => resizeCue(d, sel.id, { endMs: Math.max(sel.startMs + 200, playheadMs) }))}>
                     {t("subs.endHere")} ⤓
@@ -552,16 +552,16 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
             <div className="flex items-center gap-1">
               <input value={shift} onChange={(e) => setShift(e.target.value)}
                 className="h-6 w-16 rounded border border-border bg-transparent px-1 text-[10px]" placeholder="±ms" />
-              <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+              <Button variant="outline" size="sm" className="h-6 flex-1 text-[10px]"
                 onClick={() => { const d = parseInt(shift); if (d) mutate((doc) => shiftAllCues(doc, d)); }}>
                 {t("subs.shiftAllApply")}
               </Button>
             </div>
             <p className="mb-1 mt-2 text-[9px] text-muted-foreground">{t("subs.readingSpeed")}</p>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+              <Button variant="outline" size="sm" className="h-6 flex-1 text-[10px]"
                 onClick={() => mutate((d) => scaleCueTimes(d, 1.1))}>{t("subs.slower")}</Button>
-              <Button variant="ghost" size="sm" className="h-6 flex-1 text-[10px]"
+              <Button variant="outline" size="sm" className="h-6 flex-1 text-[10px]"
                 onClick={() => mutate((d) => scaleCueTimes(d, 0.9))}>{t("subs.faster")}</Button>
             </div>
           </div>
@@ -570,17 +570,17 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
           <div className="rounded border border-border/60 p-2">
             <p className="mb-1.5 flex items-center gap-1 font-medium"><ListChecks className="size-3" />{t("subs.fixCheck")}</p>
             <div className="grid grid-cols-2 gap-1">
-              <Button variant="ghost" size="sm" className="h-6 text-[10px]"
+              <Button variant="outline" size="sm" className="h-6 text-[10px]"
                 title={t("subs.autoTimeTip")}
                 onClick={() => mutate((d) => autoTimeAllCues(d))}>
                 <Wand2 className="mr-1 size-3" />{t("subs.autoTime")}
               </Button>
-              <Button variant="ghost" size="sm" className="h-6 text-[10px]"
+              <Button variant="outline" size="sm" className="h-6 text-[10px]"
                 onClick={() => mutate((d) => fixOverlaps(d))}>
                 {t("subs.fixOverlaps")}
               </Button>
             </div>
-            <Button variant="ghost" size="sm" className="mt-1 h-6 w-full text-[10px]"
+            <Button variant="outline" size="sm" className="mt-1 h-6 w-full text-[10px]"
               onClick={() => setIssues(diagnoseCues(doc))}>
               <ListChecks className="mr-1 size-3" />{t("subs.checkTiming")}
             </Button>
