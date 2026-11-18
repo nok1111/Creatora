@@ -724,7 +724,7 @@ export const MANIFEST: FxManifest = {
       description:
         "Analog film burn — warm light spilling in from the frame edge with organic drift and exposure flicker.",
       params: [
-        num("intensity", "Intensity", 55, 0, 100, 1, "%"),
+        num("intensity", "Intensity", 62, 0, 100, 1, "%"),
         { key: "color", label: "Color", type: "color", def: 0xff5a1e, min: 0, max: 0xffffff, step: 1 },
         {
           key: "pattern",

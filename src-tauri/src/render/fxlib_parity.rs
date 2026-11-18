@@ -1065,7 +1065,13 @@ fn light_scenes() {
         fc.push_str(&format!("xstack=inputs={cols}:layout=0_0|384_0|768_0|1152_0[r{ri}];"));
     }
     fc.push_str("[r0][r1][r2][r3][r4]vstack=inputs=5[vout]");
-    let out = out_dir.join("batch1_light_comparison.png");
+    // versioned name — a previous sheet may be open in a viewer (Windows lock)
+    let mut n = 2;
+    let mut out = out_dir.join("batch1_light_comparison.png");
+    while std::fs::OpenOptions::new().write(true).open(&out).is_err() && n < 10 {
+        out = out_dir.join(format!("batch1_light_comparison_v{n}.png"));
+        n += 1;
+    }
     let st = cmd
         .args(["-filter_complex", &fc, "-map", "[vout]", "-frames:v", "1", "-update", "1"])
         .arg(&out)
