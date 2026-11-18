@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Shuffle,
   Sparkles,
+  Star,
   Sun,
   Target,
   Type,
@@ -82,6 +83,10 @@ const OVERLAY_ICONS: Record<string, LucideIcon> = {
 };
 
 const tr = (id: string, label: string, icon: LucideIcon): FxItem => ({ id, label, icon });
+
+/** Phase E signature picks — the tiles a creator would choose Creatora
+    for. Marked in the bin; kept honest by the catalog audit. */
+const SIGNATURE = new Set(["signalOff", "disintegrate", "inkBleed", "velocitySwipe"]);
 
 /** Exported so the fx-catalog audit test iterates the same tiles the UI
     renders — a tile that maps to nothing is a test failure, not a silent
@@ -274,6 +279,14 @@ export function EffectsBin() {
                       />
                     )}
                     {item.thumb && !item.thumbImg && <div className={`fxt ${item.thumb}`} aria-hidden />}
+                    {SIGNATURE.has(item.id) && (
+                      <span
+                        title="Signature"
+                        className="absolute left-1 top-1 rounded bg-black/60 px-1 py-0.5 text-amber-300"
+                      >
+                        <Star className="size-2.5 fill-amber-300" />
+                      </span>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <item.icon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{item.label}</span>
