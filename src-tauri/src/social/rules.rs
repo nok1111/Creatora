@@ -185,6 +185,8 @@ pub const RULES_JSON: &str = r##"{
       },
       "oauth": {
         "authUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "clientId": "552552990174-r7gf1urthaq5so0i4n8fgkb65ah52jo0.apps.googleusercontent.com",
+        "clientSecret": "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",
         "tokenUrl": "https://oauth2.googleapis.com/token",
         "scopes": ["https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/youtube.readonly","https://www.googleapis.com/auth/yt-analytics.readonly"],
         "pkce": true,
