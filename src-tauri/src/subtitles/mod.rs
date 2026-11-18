@@ -136,6 +136,25 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
         };
         let start = ass_time(cue.start_ms);
         let end = ass_time(cue.end_ms);
+        // Free-drag offset → \pos() override anchored at the same point the
+        // preview block is anchored to (alignment + margins + offset).
+        let pos = if ss.offset_x_px != 0.0 || ss.offset_y_px != 0.0 {
+            let st0 = &ss.text;
+            let (cw, ch) = (doc.canvas.width as f64, doc.canvas.height as f64);
+            let ax = match st0.align_h.as_str() {
+                "left" => ss.margin_h_px + ss.offset_x_px,
+                "right" => cw - ss.margin_h_px + ss.offset_x_px,
+                _ => cw / 2.0 + ss.offset_x_px,
+            };
+            let ay = match st0.align_v.as_str() {
+                "top" => ss.margin_v_px + ss.offset_y_px,
+                "middle" => ch / 2.0 + ss.offset_y_px,
+                _ => ch - ss.margin_v_px + ss.offset_y_px,
+            };
+            format!("{{\\pos({},{})}}", ax as i64, ay as i64)
+        } else {
+            String::new()
+        };
         match ss.mode.as_str() {
             "karaoke" | "jump" if !cue.words.is_empty() => {
                 // Karaoke fill per word; "jump" adds a per-syllable scale
@@ -152,14 +171,14 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
                         t.push_str(&format!("{{\\k{dur_cs}}}{}", esc_ass(&w.word)));
                     }
                 }
-                out.push_str(&format!("Dialogue: 0,{start},{end},{sname},,0,0,0,,{t}\n"));
+                out.push_str(&format!("Dialogue: 0,{start},{end},{sname},,0,0,0,,{pos}{t}\n"));
             }
             "impact" if !cue.words.is_empty() => {
                 // Word-by-word: one Dialogue per word that slams down from
                 // 160% over ~250ms as it appears.
                 for w in &cue.words {
                     out.push_str(&format!(
-                        "Dialogue: 0,{},{},{sname},,0,0,0,,{{\\fscx160\\fscy160\\t(0,250,\\fscx100\\fscy100)}}{}\n",
+                        "Dialogue: 0,{},{},{sname},,0,0,0,,{pos}{{\\fscx160\\fscy160\\t(0,250,\\fscx100\\fscy100)}}{}\n",
                         ass_time(w.start_ms),
                         ass_time(w.end_ms),
                         esc_ass(w.word.trim())
@@ -170,7 +189,7 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
                 // One Dialogue per word — only the active word is visible.
                 for w in &cue.words {
                     out.push_str(&format!(
-                        "Dialogue: 0,{},{},{sname},,0,0,0,,{}\n",
+                        "Dialogue: 0,{},{},{sname},,0,0,0,,{pos}{}\n",
                         ass_time(w.start_ms),
                         ass_time(w.end_ms),
                         esc_ass(w.word.trim())
@@ -185,7 +204,7 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
                 let chars: Vec<char> = cue.text.chars().collect();
                 if chars.is_empty() {
                     out.push_str(&format!(
-                        "Dialogue: 0,{start},{end},{sname},,0,0,0,,{}\n",
+                        "Dialogue: 0,{start},{end},{sname},,0,0,0,,{pos}{}\n",
                         esc_ass(&cue.text)
                     ));
                 } else {
@@ -196,20 +215,20 @@ pub fn to_ass(doc: &ProjectDoc, cues: &[SubtitleCue], style: &SubtitleStyle) -> 
                         t.push_str(&format!("{{\\k{dur_cs}}}{}", esc_ass(&ch.to_string())));
                     }
                     out.push_str(&format!(
-                        "Dialogue: 0,{start},{end},{sname},,0,0,0,,{t}\n"
+                        "Dialogue: 0,{start},{end},{sname},,0,0,0,,{pos}{t}\n"
                     ));
                 }
             }
             "impact" => {
                 // No word timing — slam the whole cue in.
                 out.push_str(&format!(
-                    "Dialogue: 0,{start},{end},{sname},,0,0,0,,{{\\fscx145\\fscy145\\t(0,250,\\fscx100\\fscy100)}}{}\n",
+                    "Dialogue: 0,{start},{end},{sname},,0,0,0,,{pos}{{\\fscx145\\fscy145\\t(0,250,\\fscx100\\fscy100)}}{}\n",
                     esc_ass(&cue.text)
                 ));
             }
             _ => {
                 out.push_str(&format!(
-                    "Dialogue: 0,{start},{end},{sname},,0,0,0,,{}\n",
+                    "Dialogue: 0,{start},{end},{sname},,0,0,0,,{pos}{}\n",
                     esc_ass(&cue.text)
                 ));
             }
@@ -375,6 +394,21 @@ mod tests {
         let n = a.matches("{\\k").count();
         let chars: usize = d.subtitles.iter().map(|c| c.text.chars().count()).sum();
         assert_eq!(n, chars);
+    }
+
+    #[test]
+    fn ass_offset_emits_pos_anchor() {
+        let d = doc_with_cues();
+        let st = SubtitleStyle {
+            offset_x_px: 100.0,
+            offset_y_px: -50.0,
+            ..Default::default()
+        };
+        let a = to_ass(&d, &d.subtitles, &st);
+        assert!(a.contains("{\\pos("));
+        // No offset → no \pos override.
+        let b = to_ass(&d, &d.subtitles, &SubtitleStyle::default());
+        assert!(!b.contains("\\pos("));
     }
 
     #[test]

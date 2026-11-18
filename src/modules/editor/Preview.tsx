@@ -12,6 +12,7 @@ import {
   cueStyle,
   findClip,
   setVersionClipOverride,
+  setVersionSubtitleStyle,
   timelineDuration,
   transitionAlpha,
   updateClip,
@@ -33,7 +34,7 @@ import type { LayerInfo } from "@/lib/fx/layer-raster";
 import { TransitionLayer } from "@/modules/editor/TransitionLayer";
 import { FilterLayer } from "@/modules/editor/FilterLayer";
 import { filterGL, filterPassesFor } from "@/lib/fx/gl-filter";
-import type { Clip } from "@/lib/project-types";
+import type { Clip, SubtitleCue, SubtitleStyle } from "@/lib/project-types";
 import type { AssetSummary } from "@/lib/media-types";
 import { angleDeg, scaleFromCorner, snapToGuides } from "@/lib/canvas-manip";
 import { Button } from "@/components/ui/button";
@@ -242,6 +243,64 @@ export function Preview({
             })
           : updateClip(dd, clipId, { transform: { x: nx, y: ny } }),
       );
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setGuides({ v: null, h: null });
+      endGesture();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  /** Drag the subtitle block on the canvas → style.offsetX/Y (canvas px).
+      Writes to the cue's named style when it has one, else the
+      version-resolved default style (ADR-025). */
+  const dragSub = (e: React.PointerEvent, cue: SubtitleCue, ss: SubtitleStyle) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const stage = stageRef.current;
+    const el = e.currentTarget as HTMLElement;
+    if (!stage) return;
+    beginGesture();
+    const rect = stage.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const scaleX = viewDoc.canvas.width / Math.max(1, rect.width);
+    const scaleY = viewDoc.canvas.height / Math.max(1, rect.height);
+    // Block centre in canvas px — used for guide snapping.
+    const cx = (elRect.left + elRect.width / 2 - rect.left) * scaleX;
+    const cy = (elRect.top + elRect.height / 2 - rect.top) * scaleY;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const baseX = ss.offsetXPx ?? 0;
+    const baseY = ss.offsetYPx ?? 0;
+    const move = (ev: PointerEvent) => {
+      const rawX = baseX + (ev.clientX - startX) * scaleX;
+      const rawY = baseY + (ev.clientY - startY) * scaleY;
+      const ncx = cx + (rawX - baseX);
+      const ncy = cy + (rawY - baseY);
+      const snap = snapToGuides(ncx, ncy, viewDoc.canvas.width, viewDoc.canvas.height, 12);
+      const nx = Math.round(rawX + (snap.vGuide !== null ? snap.x - ncx : 0));
+      const ny = Math.round(rawY + (snap.hGuide !== null ? snap.y - ncy : 0));
+      setGuides({ v: snap.vGuide, h: snap.hGuide });
+      mutateInGesture((dd) => {
+        // Cue bound to a named style → move that style; otherwise the
+        // (version-resolved) project default.
+        if (cue.styleId && dd.subtitleStyles?.some((s) => s.id === cue.styleId)) {
+          return {
+            ...dd,
+            subtitleStyles: dd.subtitleStyles.map((s) =>
+              s.id === cue.styleId ? { ...s, style: { ...s.style, offsetXPx: nx, offsetYPx: ny } } : s,
+            ),
+          };
+        }
+        const next = { ...viewDoc.subtitleStyle, offsetXPx: nx, offsetYPx: ny };
+        const versionId = useEditor.getState().activeVersionId;
+        return versionId
+          ? setVersionSubtitleStyle(dd, versionId, next)
+          : { ...dd, subtitleStyle: next };
+      });
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -828,14 +887,22 @@ export function Preview({
           return (
             <div
               data-subtitle
-              className="pointer-events-none absolute flex"
+              className="pointer-events-none absolute z-40 flex"
               style={{
                 justifyContent: justify,
                 alignItems: align,
                 inset: `${mV} ${mH} ${mV} ${mH}`,
+                // Free position — set by dragging the caption on canvas.
+                transform:
+                  ss.offsetXPx || ss.offsetYPx
+                    ? `translate(${((ss.offsetXPx ?? 0) / viewDoc.canvas.width) * 100}cqw, ${((ss.offsetYPx ?? 0) / viewDoc.canvas.height) * 100}cqh)`
+                    : undefined,
               }}
             >
               <span
+                onPointerDown={(e) => dragSub(e, cue, ss)}
+                className="pointer-events-auto cursor-move"
+                title={t("subs.dragTip", { defaultValue: "Drag to reposition" })}
                 style={{
                   fontSize: `${(st.fontSizePx / viewDoc.canvas.height) * 100}cqh`,
                   fontFamily: fontFamilyFor(st.fontFile) ?? st.fontName ?? undefined,

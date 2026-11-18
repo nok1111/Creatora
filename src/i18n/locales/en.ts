@@ -858,6 +858,7 @@ export const en = {
     resizeTools: "Drag to resize",
     styleTab: "Style",
     exportTab: "Export",
+    dragTip: "Drag to reposition",
     autoTime: "Auto-time words",
     autoTimeTip: "Give every typed cue word timings (no audio needed) so word modes work",
     autoTimeOne: "Auto-time words",

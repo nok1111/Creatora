@@ -662,6 +662,11 @@ pub struct SubtitleStyle {
     pub margin_v_px: f64,
     #[serde(default = "default_margin_h")]
     pub margin_h_px: f64,
+    /// Free drag offsets in canvas px (preview drag → ASS \pos). 0 = anchored.
+    #[serde(default)]
+    pub offset_x_px: f64,
+    #[serde(default)]
+    pub offset_y_px: f64,
 }
 
 fn default_highlight() -> String {
@@ -685,6 +690,8 @@ impl Default for SubtitleStyle {
             mode: default_sub_mode(),
             margin_v_px: default_margin_v(),
             margin_h_px: default_margin_h(),
+            offset_x_px: 0.0,
+            offset_y_px: 0.0,
         }
     }
 }

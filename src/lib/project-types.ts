@@ -224,6 +224,9 @@ export interface SubtitleStyle {
   /** Bottom margin in canvas px. */
   marginVPx: number;
   marginHPx: number;
+  /** Free drag offsets in canvas px (preview drag → ASS \pos). 0 = anchored. */
+  offsetXPx?: number;
+  offsetYPx?: number;
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
@@ -257,6 +260,8 @@ export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   mode: "none",
   marginVPx: 48,
   marginHPx: 40,
+  offsetXPx: 0,
+  offsetYPx: 0,
 };
 
 export interface Keyframe {

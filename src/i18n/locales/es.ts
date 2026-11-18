@@ -861,6 +861,7 @@ export const es: typeof en = {
     resizeTools: "Arrastra para redimensionar",
     styleTab: "Estilo",
     exportTab: "Exportar",
+    dragTip: "Arrastra para reposicionar",
     autoTime: "Tiempos auto (palabras)",
     autoTimeTip: "Reparte el tiempo entre palabras de cada cue escrito a mano — sin audio",
     autoTimeOne: "Tiempos auto",
