@@ -682,6 +682,21 @@ fn long_graphs_are_moved_to_a_file() {
     assert!(externalize_filter_graph(&mut short).is_none());
 }
 
+/// Attach `chain` (a `-vf`-style graph with possible `;` sub-graphs) to the
+/// command as `-filter_complex '[0:v]chain[vout]'` + `-map [vout]`, moving it
+/// to a temp script file when it would exceed the argv limit — same rule the
+/// production runner applies (some light geq fields are >16 kB).
+fn push_chain(c: &mut Command, chain: &str) -> Option<super::commands::TempGraphFile> {
+    let mut args = vec![
+        "-filter_complex".to_string(),
+        format!("[0:v]{chain}[vout]"),
+    ];
+    let guard = super::commands::externalize_filter_graph(&mut args);
+    c.args(&args);
+    c.args(["-map", "[vout]"]);
+    guard
+}
+
 /// Filter thumbnails: run the REAL production fragment chain (fxeffects::
 /// fragments → the same string export embeds in the filtergraph) on the
 /// shared photographic sample and write shared/fx/thumbs/<id>.png.
@@ -878,13 +893,12 @@ fn light_thumbs() {
         .join(";");
         let chain = format!("scale={tw}:{th},setsar=1,{frags},select='{sel}',tile=8x1");
         let out = out_dir.join(format!("{}.png", entry.id));
-        let st = Command::new(&ff)
-            .args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
-            .arg(&sample)
-            .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
-            .arg(&out)
-            .status()
-            .unwrap();
+        let mut c = Command::new(&ff);
+        c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
+            .arg(&sample);
+        let _g = push_chain(&mut c, &chain);
+        c.args(["-frames:v", "1", "-update", "1"]).arg(&out);
+        let st = c.status().unwrap();
         assert!(st.success(), "light thumb failed for {}\n{chain}", entry.id);
         eprintln!("light thumb: {}", entry.id);
     }
@@ -959,13 +973,12 @@ fn light_verify() {
         for n in [20u32, 60] {
             let out = tmp.join(format!("{}_{n}.png", entry.id));
             let chain = format!("scale=384:216,setsar=1,{frags},select=eq(n\\,{n})");
-            let st = Command::new(&ff)
-                .args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
-                .arg(&sample)
-                .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
-                .arg(&out)
-                .status()
-                .unwrap();
+            let mut c = Command::new(&ff);
+            c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
+                .arg(&sample);
+            let _g = push_chain(&mut c, &chain);
+            c.args(["-frames:v", "1", "-update", "1"]).arg(&out);
+            let st = c.status().unwrap();
             assert!(st.success(), "{}: render failed\n{chain}", entry.id);
             let a = raw(&out);
             let d = mean(&a, &base);
@@ -977,6 +990,77 @@ fn light_verify() {
         let _ = last;
     }
     eprintln!("light_verify ok");
+}
+
+/// Debug: write the generated fragment chain for one light effect to
+/// qa/out/frag_<id>.txt for manual ffmpeg runs.
+///   cargo test --lib render::fxlib_parity::light_dump -- --ignored
+#[test]
+#[ignore]
+fn light_dump() {
+    use crate::project::document::Effect;
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let out_dir = root.join("qa/out");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let ctx = crate::render::fxeffects::FxCtx {
+        w: 1280, h: 720, fps_num: 30, fps_den: 1, clip_ms: 3000, source_in_ms: 0, speed: 1.0,
+    };
+    for entry in crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "effect" && e.category == "light")
+    {
+        let fx = Effect {
+            id: "v".into(), kind: entry.id.clone(), enabled: true,
+            in_ms: None, out_ms: None, file: None, times: None,
+            params: Default::default(),
+        };
+        let frags = crate::render::fxeffects::fragments(&fx, &ctx).unwrap_or_default().join(";");
+        let chain = format!("scale=1280:720,setsar=1,{frags},select=eq(n\\,30)");
+        std::fs::write(out_dir.join(format!("frag_{}.txt", entry.id)), &chain).unwrap();
+        eprintln!("dumped {}", entry.id);
+    }
+}
+
+/// Full-res (1280×720) production frames for visual QA of the light
+/// collection — one PNG per effect at t=1 s on the photographic sample.
+///   cargo test --lib render::fxlib_parity::light_frames -- --ignored
+#[test]
+#[ignore]
+fn light_frames() {
+    use crate::project::document::Effect;
+    let Some(ff) = ffmpeg() else {
+        eprintln!("skipping: ffmpeg unavailable");
+        return;
+    };
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let sample = root.join("shared/fx/sample.png");
+    let out_dir = root.join("qa/out/light_frames");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let ctx = crate::render::fxeffects::FxCtx {
+        w: 1280, h: 720, fps_num: 30, fps_den: 1, clip_ms: 3000, source_in_ms: 0, speed: 1.0,
+    };
+    for entry in crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "effect" && e.category == "light")
+    {
+        let fx = Effect {
+            id: "v".into(), kind: entry.id.clone(), enabled: true,
+            in_ms: None, out_ms: None, file: None, times: None,
+            params: Default::default(),
+        };
+        let frags = crate::render::fxeffects::fragments(&fx, &ctx).unwrap_or_default().join(";");
+        let chain = format!("scale=1280:720,setsar=1,{frags},select=eq(n\\,30)");
+        let out = out_dir.join(format!("{}.png", entry.id));
+        let mut c = Command::new(&ff);
+        c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "2", "-i"])
+            .arg(&sample);
+        let _g = push_chain(&mut c, &chain);
+        c.args(["-frames:v", "1", "-update", "1"]).arg(&out);
+        assert!(c.status().unwrap().success(), "frame failed for {}", entry.id);
+        eprintln!("frame: {}", entry.id);
+    }
 }
 
 /// Multi-scene sheet for the light collection: rows = Original + 4 effects,
@@ -1029,13 +1113,12 @@ fn light_scenes() {
                 format!("{f},")
             };
             let chain = format!("scale=384:216,setsar=1,{grade},format=rgb24,{frags}format=rgb24,select=eq(n\\,30)");
-            let st = Command::new(&ff)
-                .args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "2", "-i"])
-                .arg(&sample)
-                .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
-                .arg(&cell)
-                .status()
-                .unwrap();
+            let mut c = Command::new(&ff);
+            c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "2", "-i"])
+                .arg(&sample);
+            let _g = push_chain(&mut c, &chain);
+            c.args(["-frames:v", "1", "-update", "1"]).arg(&cell);
+            let st = c.status().unwrap();
             assert!(st.success(), "scene cell {row}/{scene} failed\n{chain}");
             cells_row.push(cell.to_string_lossy().into_owned());
         }
@@ -1064,12 +1147,16 @@ fn light_scenes() {
         }
         fc.push_str(&format!("xstack=inputs={cols}:layout=0_0|384_0|768_0|1152_0[r{ri}];"));
     }
-    fc.push_str("[r0][r1][r2][r3][r4]vstack=inputs=5[vout]");
+    for (ri, _) in cells.iter().enumerate() {
+        fc.push_str(&format!("[r{ri}]"));
+    }
+    fc.push_str(&format!("vstack=inputs={n}[vout]", n = cells.len()));
     // versioned name — a previous sheet may be open in a viewer (Windows lock)
     let mut n = 2;
-    let mut out = out_dir.join("batch1_light_comparison.png");
-    while std::fs::OpenOptions::new().write(true).open(&out).is_err() && n < 10 {
-        out = out_dir.join(format!("batch1_light_comparison_v{n}.png"));
+    let mut out = out_dir.join("light_comparison.png");
+    let usable = |p: &Path| !p.exists() || std::fs::OpenOptions::new().write(true).open(p).is_ok();
+    while !usable(&out) && n < 10 {
+        out = out_dir.join(format!("light_comparison_v{n}.png"));
         n += 1;
     }
     let st = cmd

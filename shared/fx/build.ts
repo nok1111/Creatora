@@ -794,6 +794,142 @@ export const MANIFEST: FxManifest = {
       preview: "gl",
       thumb: "img:prismRefraction",
     },
+    // ── Floating Dust ───────────────────────────────────────────────
+    // Suspended particles in light: a cell-hash field — one particle per
+    // grid cell — each on its own slow elliptical orbit with independent
+    // twinkle. Near particles are bigger, softer and brighter (depth).
+    // Live quarter-res geq in export; identical hash layout in preview.
+    {
+      id: "floatingDust",
+      kind: "effect",
+      category: "light",
+      name: "Floating Dust",
+      description:
+        "Atmospheric particles drifting in light — depth-varied sizes, lazy organic motion and gentle glints.",
+      params: [
+        num("intensity", "Intensity", 60, 0, 100, 1, "%"),
+        num("density", "Density", 0.55, 0.1, 1, 0.02),
+        num("size", "Size", 1, 0.4, 2.2, 0.05),
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 0,
+          options: ["Warm Dust", "Neutral", "Cool Dust"],
+        },
+        num("twinkle", "Twinkle", 0.45, 0, 1, 0.02),
+        num("speed", "Drift speed", 0.5, 0, 1.5, 0.02),
+      ],
+      derive: {
+        cr: { from: "tint", values: [1.0, 0.92, 0.62] },
+        cg: { from: "tint", values: [0.86, 0.9, 0.74] },
+        cb: { from: "tint", values: [0.62, 0.9, 1.0] },
+      },
+      preview: "gl",
+      thumb: "img:floatingDust",
+    },
+    // ── Star Glint ──────────────────────────────────────────────────
+    // Optical sparkle bound to highlights: the field samples the frame's
+    // own luminance at cell centres (geq input sampling / source texture
+    // in preview) so stars appear only where the image is bright, with
+    // 4/8-point rays, per-star rotation and progressive twinkle.
+    {
+      id: "starGlint",
+      kind: "effect",
+      category: "light",
+      name: "Star Glint",
+      description:
+        "Lens sparkle on highlights — multi-point optical glints that bloom and fade on bright details.",
+      params: [
+        num("intensity", "Intensity", 65, 0, 100, 1, "%"),
+        num("threshold", "Highlight threshold", 0.72, 0.4, 0.95, 0.01),
+        {
+          key: "points",
+          label: "Points",
+          type: "enum",
+          def: 0,
+          options: ["4-point", "8-point"],
+        },
+        num("size", "Size", 1, 0.4, 2, 0.05),
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 0,
+          options: ["White", "Gold", "Ice Blue", "Rainbow"],
+        },
+        num("speed", "Twinkle speed", 0.35, 0, 1, 0.02),
+      ],
+      derive: {
+        rays: { from: "points", values: [4, 8] },
+        cr: { from: "tint", values: [1.0, 1.0, 0.62, 1.0] },
+        cg: { from: "tint", values: [1.0, 0.82, 0.78, 1.0] },
+        cb: { from: "tint", values: [1.0, 0.45, 1.0, 1.0] },
+        colMode: { from: "tint", values: [0, 0, 0, 1] },
+      },
+      preview: "gl",
+      thumb: "img:starGlint",
+    },
+    // ── Neon Trails ─────────────────────────────────────────────────
+    // Long-exposure light streaks: K trails riding closed Lissajous
+    // paths (periodic → seamless motion), a hot head and a decaying
+    // tail of nodes, additive glow. Curved trajectories — never UI lines.
+    {
+      id: "neonTrails",
+      kind: "effect",
+      category: "light",
+      name: "Neon Trails",
+      description:
+        "Long-exposure light streaks on organic paths — glowing heads with decaying tails, city-night energy.",
+      params: [
+        num("intensity", "Intensity", 70, 0, 100, 1, "%"),
+        {
+          key: "tint",
+          label: "Color",
+          type: "enum",
+          def: 1,
+          options: ["Cyber Blue", "Neon Pink", "Violet", "Rainbow Flow"],
+        },
+        num("trails", "Trails", 3, 1, 4, 1),
+        num("thickness", "Thickness", 1, 0.4, 2, 0.05),
+        num("length", "Trail length", 0.6, 0.2, 1, 0.02),
+        num("speed", "Speed", 0.25, 0.02, 0.8, 0.01, "Hz"),
+        num("glow", "Outer glow", 0.5, 0, 1, 0.02),
+      ],
+      derive: {
+        cr: { from: "tint", values: [0.13, 1.0, 0.66, 1.0] },
+        cg: { from: "tint", values: [0.83, 0.18, 0.33, 1.0] },
+        cb: { from: "tint", values: [0.93, 0.58, 0.97, 1.0] },
+        colMode: { from: "tint", values: [0, 0, 0, 1] },
+      },
+      preview: "gl",
+      thumb: "img:neonTrails",
+    },
+    // ── Golden Rays ─────────────────────────────────────────────────
+    // Warm sunlight shafts: godRays machinery (live quarter-res geq fan)
+    // with a golden tint, softer comb and an ambient halo around the
+    // source — sunlight through atmosphere, not drawn beams.
+    {
+      id: "goldenRays",
+      kind: "effect",
+      category: "light",
+      name: "Golden Rays",
+      description:
+        "Golden-hour volumetric light — warm shafts with a soft ambient halo and slow atmospheric drift.",
+      params: [
+        num("intensity", "Intensity", 55, 0, 100, 1, "%"),
+        num("x", "Source X", 15, -20, 120, 1, "%"),
+        num("y", "Source Y", -10, -20, 120, 1, "%"),
+        { key: "angle", label: "Fan angle", type: "angle", def: 38, min: 0, max: 360, step: 5, unit: "°" },
+        num("density", "Ray density", 9, 3, 20, 0.5),
+        num("spread", "Ray softness", 0.7, 0.2, 1, 0.02),
+        num("length", "Reach", 0.9, 0.3, 1.3, 0.02),
+        num("halo", "Ambient glow", 0.45, 0, 1, 0.02),
+        num("speed", "Drift speed", 0.05, 0, 0.3, 0.01, "Hz"),
+      ],
+      preview: "gl",
+      thumb: "img:goldenRays",
+    },
   ],
 };
 

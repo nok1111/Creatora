@@ -451,6 +451,308 @@ fn prism_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::B
     v
 }
 
+// ── batch 2: dust / glint / trails / golden ───────────────────────────
+
+/// `fract(sin(cx*a + cy*b)*43758.5453)` — same sin-hash polynomial the
+/// GLSL `dh/sh` helpers use, so preview and export lay particles out
+/// identically.
+fn ghash(cx: &str, cy: &str, a: f64, b: f64) -> String {
+    let v = format!("sin(({cx})*{}+({cy})*{})*43758.5453", fxlib::fmt_num(a), fxlib::fmt_num(b));
+    format!("({v}-floor({v}))")
+}
+
+/// Floating Dust — cell-hash particle field, live quarter-res geq.
+/// Each cell owns ≤1 particle on a slow elliptical orbit; a 3×3 stencil
+/// catches orbit crossings. No wrap discontinuities (all sin orbits).
+fn floating_dust_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh_ as f64;
+    let (u, v) = (format!("X/{ghf}"), format!("Y/{ghf}"));
+    let cs = 0.075;
+    let density = p["density"];
+    let size = p["size"];
+    let twk = p["twinkle"];
+    let spd = p["speed"];
+    let mut terms = Vec::new();
+    for ix in -1..=1 {
+        for iy in -1..=1 {
+            let cx = format!("floor({u}/{cs}){}{}", if ix >= 0 { "+" } else { "" }, ix);
+            let cy = format!("floor({v}/{cs}){}{}", if iy >= 0 { "+" } else { "" }, iy);
+            let h1 = ghash(&cx, &cy, 127.1, 311.7);
+            let h2 = ghash(&cx, &cy, 269.5, 183.3);
+            let h3 = ghash(&cx, &cy, 419.2, 371.9);
+            let h4 = ghash(&cx, &cy, 113.5, 271.9);
+            let h5 = ghash(&cx, &cy, 213.9, 117.3);
+            let tt = format!("(T*{})", fxlib::fmt_num(spd));
+            let orb_x = format!("0.13*sin(6.2832*({tt}*(0.055+0.10*{h2})+{h3}))");
+            let orb_y = format!("0.09*sin(6.2832*({tt}*(0.045+0.08*{h4})+{h5}))");
+            let px = format!("({cx}+0.15+0.7*{h3}+{orb_x})*{cs}");
+            let py = format!("({cy}+0.15+0.7*{h5}+{orb_y})*{cs}");
+            let r2 = format!("(({u}-({px}))*({u}-({px}))+({v}-({py}))*({v}-({py})))");
+            let depth = format!("(0.25+0.75*pow({h4},2.5))"); // mostly distant, rare bokeh
+            let sr = format!("((0.0022+0.011*{depth}*{depth})*{sz})", sz = fxlib::fmt_num(size));
+            let tw = format!(
+                "(1-{tk}*0.6*(0.5+0.5*sin(6.2832*{tt}*(0.09+0.2*{h3})+{h4}*6.2832)))",
+                tk = fxlib::fmt_num(twk)
+            );
+            let patch = ghash(&format!("floor(({cx})/3)"), &format!("floor(({cy})/3)"), 53.7, 141.3);
+            let bri = format!("((0.3+0.7*{depth})*{tw}*(0.35+0.65*{patch})*0.75)");
+            let sr2 = format!("({sr}*{sr})");
+            terms.push(format!(
+                "lt({h1},{d})*({bri})*(exp(-{r2}/(2*{sr2}))+0.45*exp(-{r2}/(10*{sr2})))",
+                d = fxlib::fmt_num(density)
+            ));
+        }
+    }
+    let field = terms.join("+");
+    let (mm, gs, go) = (attr_name(e, "dm"), attr_name(e, "ds"), attr_name(e, "do"));
+    let expr = |c: f64| format!("255*min(1,{}*({field})*{})", fxlib::fmt_num(c), fxlib::fmt_num(i));
+    vec![
+        format!("null[{mm}]"),
+        format!(
+            "color=c=black:s={gw}x{gh_}:r={fps}:d={dur},format=rgb24,geq=r='{}':g='{}':b='{}'[{gs}]",
+            expr(p["cr"]),
+            expr(p["cg"]),
+            expr(p["cb"]),
+            fps = ctx.fps_str(),
+            dur = ctx.clip_ms as f64 / 1000.0
+        ),
+        format!("[{gs}]scale={w}:{h},gblur=sigma=3[{go}]", w = ctx.w, h = ctx.h),
+        format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Star Glint — sparkle bound to the frame's own luminance. The geq runs
+/// ON the quarter-res main input and samples its channels at cell
+/// centres (r/g/b input sampling): a star only ignites where the image
+/// is already bright. Preview samples the source texture identically.
+fn star_glint_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh_ as f64;
+    let (u, v) = (format!("X/{ghf}"), format!("Y/{ghf}"));
+    let cs = 0.115;
+    let th = p["threshold"];
+    let lobes = p["rays"] / 2.0;
+    let size = p["size"];
+    let spd = p["speed"];
+    let rainbow = p["colMode"] > 0.5;
+    let samp = |cxp: &str, cyp: &str| {
+        // max luma over a 5-tap cross (GLSL twin taps src() the same way)
+        let l = |dx: &str, dy: &str| {
+            format!(
+                "(0.299*r(({cxp}){dx},{cyp}{dy})+0.587*g(({cxp}){dx},({cyp}){dy})+0.114*b(({cxp}){dx},({cyp}){dy}))/255"
+            )
+        };
+        let o = format!("0.28*{cs}*{ghf}"); // px units (cxp is already *ghf)
+        format!(
+            "max(max({c},{p1}),max(max({p2},{p3}),{p4}))",
+            c = l("", ""),
+            p1 = l(&format!("+{o}"), ""),
+            p2 = l(&format!("-{o}"), ""),
+            p3 = l("", &format!("+{o}")),
+            p4 = l("", &format!("-{o}")),
+        )
+    };
+    let mut terms_r = Vec::new();
+    let mut terms_g = Vec::new();
+    let mut terms_b = Vec::new();
+    for ix in -1..=1 {
+        for iy in -1..=1 {
+            let cx = format!("floor({u}/{cs}){}{}", if ix >= 0 { "+" } else { "" }, ix);
+            let cy = format!("floor({v}/{cs}){}{}", if iy >= 0 { "+" } else { "" }, iy);
+            let ccx = format!("({cx}+0.5)*{cs}");
+            let ccy = format!("({cy}+0.5)*{cs}");
+            let l = samp(&format!("({ccx})*{ghf}"), &format!("({ccy})*{ghf}"));
+            let m = format!("min(1,max(0,({l}-{th})/{den}))", th = fxlib::fmt_num(th), den = fxlib::fmt_num((1.0 - th).max(0.05)));
+            let h1 = ghash(&cx, &cy, 127.1, 311.7);
+            let h2 = ghash(&cx, &cy, 269.5, 183.3);
+            let gate = ghash(&cx, &cy, 419.2, 371.9); // thin the field out
+            let rot = format!("({h1}-0.5)*0.9");
+            let lx = format!("({u}-({ccx}))");
+            let ly = format!("({v}-({ccy}))");
+            let r = format!("sqrt({lx}*{lx}+{ly}*{ly})");
+            let a = format!("(atan2({ly},{lx})+{rot})");
+            let arms = format!("pow(abs(cos({n}*{a})),64)", n = fxlib::fmt_num(lobes));
+            let tw = format!("(0.4+0.6*(0.5+0.5*sin(6.2832*{sp}*T+{h2}*6.2832)))", sp = fxlib::fmt_num(spd));
+            let sig = fxlib::fmt_num(0.012 * size);
+            let rayl = fxlib::fmt_num(0.07 * size);
+            let star = format!(
+                "gte({gate},0.38)*({m})*({tw})*(1.3*exp(-{r}*{r}/(2*{sig}*{sig}))+0.9*({arms})*exp(-{r}/{rayl}))"
+            );
+            if rainbow {
+                for (out, ph) in [(&mut terms_r, 0.0), (&mut terms_g, 2.09), (&mut terms_b, 4.19)] {
+                    out.push(format!(
+                        "{star}*(0.55+0.45*cos(6.2832*{r}*2.6+{a}+{ph}))",
+                        ph = fxlib::fmt_num(ph)
+                    ));
+                }
+            } else {
+                terms_r.push(star.clone());
+                terms_g.push(star.clone());
+                terms_b.push(star);
+            }
+        }
+    }
+    let tint = |c: f64, body: &str| format!("255*min(1,{}*({body})*{gain})", fxlib::fmt_num(c), gain = fxlib::fmt_num(i * 2.2));
+    let (mm, mq, gf, go) = (attr_name(e, "gm"), attr_name(e, "gq"), attr_name(e, "gf"), attr_name(e, "go"));
+    vec![
+        format!("split[{mm}][{mq}]"),
+        format!("[{mq}]scale={gw}:{gh_},format=rgb24,geq=r='{}':g='{}':b='{}'[{gf}]",
+            tint(p["cr"], &terms_r.join("+")),
+            tint(p["cg"], &terms_g.join("+")),
+            tint(p["cb"], &terms_b.join("+"))),
+        format!("[{gf}]scale={w}:{h},gblur=sigma=2[{go}]", w = ctx.w, h = ctx.h),
+        format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Neon Trails — a STATIC comet field baked once at quarter res (no T:
+/// init-eval only, expr cost irrelevant), then animated by rotating the
+/// sprite around the frame centre. Each closed Lissajous loop carries a
+/// bright head arc fading into a tail, so rotation reads as light
+/// racing along organic paths. Preview rotates its sampling coords
+/// over the identical static field — same model both sides.
+fn neon_trails_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh_) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh_ as f64;
+    let asp = ctx.w as f64 / ctx.h as f64;
+    let (u, v) = (format!("X/{ghf}"), format!("Y/{ghf}"));
+    let m_nodes = 26usize;
+    let sig = 0.008 * p["thickness"];
+    let sig2 = fxlib::fmt_num(2.0 * sig * sig);
+    let sig14 = fxlib::fmt_num(14.0 * sig * sig);
+    let k_trails = (p["trails"].round() as usize).clamp(1, 4);
+    let glow = p["glow"];
+    let rainbow = p["colMode"] > 0.5;
+    let mut terms_r = Vec::new();
+    let mut terms_g = Vec::new();
+    let mut terms_b = Vec::new();
+    for i in 0..k_trails {
+        let fi = i as f64;
+        let ax = (0.50 + 0.26 * (fi * 2.13 + 0.7).sin()) * asp;
+        let bx = (0.30 + 0.14 * (fi * 1.37 + 0.2).sin()) * asp;
+        let kx = 1.0 + fi % 2.0;
+        let ay = 0.50 + 0.24 * (fi * 1.71 + 2.1).sin();
+        let by = 0.24 + 0.12 * (fi * 2.41 + 0.5).cos();
+        let ky = 1.0 + (fi + 1.0) % 3.0;
+        let off = fi * 0.331;
+        for j in 0..m_nodes {
+            let sj = (j as f64 + 0.5) / m_nodes as f64 + off;
+            let s1 = sj + 1.0 / m_nodes as f64;
+            let path = |s: f64| {
+                (
+                    ax + bx * (std::f64::consts::TAU * (kx * s + fi * 0.37)).sin(),
+                    ay + by * (std::f64::consts::TAU * (ky * s + fi * 0.61)).sin(),
+                )
+            };
+            let (ax0v, ay0v) = path(sj);
+            let (bx0v, by0v) = path(s1);
+            // point→segment distance in H-units, constants pre-baked
+            let (ax0, ay0) = (fxlib::fmt_num(ax0v), fxlib::fmt_num(ay0v));
+            let bax = fxlib::fmt_num(bx0v - ax0v);
+            let bay = fxlib::fmt_num(by0v - ay0v);
+            let len2 = fxlib::fmt_num((bx0v - ax0v).powi(2) + (by0v - ay0v).powi(2));
+            let tj = format!(
+                "min(1,max(0,(({u}-({ax0}))*{bax}+({v}-({ay0}))*{bay})/max({len2},0.0000001)))"
+            );
+            let r2 = format!(
+                "(({u}-({ax0})-{bax}*({tj}))*({u}-({ax0})-{bax}*({tj}))+({v}-({ay0})-{bay}*({tj}))*({v}-({ay0})-{bay}*({tj})))"
+            );
+            // comet weight: bright head at s≈1 fading backward along the loop
+            let frac = sj - sj.floor();
+            let wj = (-(1.0 - frac) * 5.5).exp() + 0.06;
+            let node = format!(
+                "{wj}*(exp(-{r2}/{sig2})+{gl}*exp(-{r2}/{sig14}))",
+                wj = fxlib::fmt_num(wj),
+                gl = fxlib::fmt_num(glow * 0.5)
+            );
+            if rainbow {
+                for (out, phc) in [(&mut terms_r, 0.0), (&mut terms_g, 2.09), (&mut terms_b, 4.19)] {
+                    out.push(format!("{node}*({col})", col = fxlib::fmt_num(
+                        0.55 + 0.45 * (std::f64::consts::TAU * frac * 1.4 + phc).cos()
+                    )));
+                }
+            } else {
+                terms_r.push(node.clone());
+                terms_g.push(node.clone());
+                terms_b.push(node);
+            }
+        }
+    }
+    let tint = |c: f64, body: &str| format!("255*min(1,{}*({body})*{gain})", fxlib::fmt_num(c), gain = fxlib::fmt_num(i * 1.4));
+    let (mm, nb, nr, ev, ns, no) = (
+        attr_name(e, "nm"), attr_name(e, "nb"), attr_name(e, "nr"),
+        attr_name(e, "ne"), attr_name(e, "ns"), attr_name(e, "no"),
+    );
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    vec![
+        format!("null[{mm}]"),
+        // one static bake (geq init-eval only — the huge field costs once)
+        format!(
+            "color=c=black:s={gw}x{gh_}:r=1:d=1,format=rgb24,geq=r='{}':g='{}':b='{}',loop=loop=-1:size=1,fps={fps}[{nb}]",
+            tint(p["cr"], &terms_r.join("+")),
+            tint(p["cg"], &terms_g.join("+")),
+            tint(p["cb"], &terms_b.join("+")),
+            fps = ctx.fps_str(),
+        ),
+        // rotate the baked field: head arc travels around the loops
+        format!(
+            "[{nb}]rotate=a='({ang}+{wob}*sin(6.2832*0.11*t))':c=black:ow={gw}:oh={gh_}[{nr}]",
+            ang = format!("6.2832*{}*t", fxlib::fmt_num(p["speed"])),
+            wob = fxlib::fmt_num(3f64.to_radians()),
+        ),
+        // subtle energy pulse via 1x1 env multiply
+        format!(
+            "color=c=black:s=1x1:r={fps}:d={dur},geq=r='255*(0.8+0.2*sin(6.2832*0.9*T))':g='255*(0.8+0.2*sin(6.2832*0.9*T))':b='255*(0.8+0.2*sin(6.2832*0.9*T))'[{ev}]",
+            fps = ctx.fps_str(),
+        ),
+        format!("[{ev}]scale={gw}:{gh_}[{ev}]"),
+        format!("[{nr}][{ev}]blend=all_mode=multiply[{ns}]"),
+        format!("[{ns}]scale={w}:{h},gblur=sigma=2[{no}]", w = ctx.w, h = ctx.h),
+        format!("[{mm}][{no}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Golden Rays — godRays machinery with warm gold tint, softer comb and
+/// an ambient halo around the source. Live quarter-res geq.
+fn golden_rays_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections::BTreeMap<String, f64>) -> Vec<String> {
+    let (gw, gh) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    let ghf = gh as f64;
+    let dur = ctx.clip_ms as f64 / 1000.0;
+    let fps = ctx.fps_str();
+    let (px, py) = (p["x"] / 100.0 * gw as f64, p["y"] / 100.0 * gh as f64);
+    let dx = format!("(X-{})/{gh}", fxlib::fmt_num(px), gh = ghf);
+    let dy = format!("(Y-{})/{gh}", fxlib::fmt_num(py), gh = ghf);
+    let ang = format!(
+        "atan2({dy},{dx})-({a0}+{sw}*sin(6.2832*{sp}*T))",
+        a0 = fxlib::fmt_num(p["angle"].to_radians()),
+        sw = fxlib::fmt_num(5f64.to_radians()),
+        sp = fxlib::fmt_num(p["speed"]),
+    );
+    let comb = format!(
+        "pow(max(0,0.5+0.5*sin({n}*({ang}))),{pe})",
+        n = fxlib::fmt_num(p["density"]),
+        pe = fxlib::fmt_num(3.0 + 14.0 * (1.0 - p["spread"]))
+    );
+    let rad = format!("exp(-sqrt({dx}*{dx}+{dy}*{dy})/{r0})", r0 = fxlib::fmt_num(p["length"] * 0.65));
+    let halo = format!("{}*exp(-({dx}*{dx}+{dy}*{dy})/0.16)", fxlib::fmt_num(p["halo"] * 0.9));
+    let env = flicker_expr(0.18, 0.4 + 3.0 * p["speed"], "T");
+    let lum = format!("((({comb})*({rad}))+({halo}))*({env})*{g}", g = fxlib::fmt_num(i * 1.5));
+    let expr = |c: f64| format!("255*min(1,{}*{})", fxlib::fmt_num(c), lum);
+    let (mm, gv, ov) = (attr_name(e, "am"), attr_name(e, "as"), attr_name(e, "ao"));
+    vec![
+        format!("null[{mm}]"),
+        format!(
+            "color=c=black:s={gw}x{gh}:r={fps}:d={dur},format=rgb24,geq=r='{}':g='{}':b='{}'[{gv}]",
+            expr(1.0),
+            expr(0.8),
+            expr(0.45),
+        ),
+        format!("[{gv}]scale={w}:{h}[{ov}]", w = ctx.w, h = ctx.h),
+        format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
 // ── helpers ───────────────────────────────────────────────────────────
 
 fn attr_name(e: &Effect, tag: &str) -> String {
@@ -699,7 +1001,11 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
     // Light & Atmosphere: baked geq sprites + native animation, all
     // screen-blended (prism uses a bypass crossfade instead). Windowing
     // lands on the trailing blend — disabled → first input passes.
-    if matches!(e.kind.as_str(), "lensFlare" | "lightLeak" | "godRays" | "prismRefraction") {
+    if matches!(
+        e.kind.as_str(),
+        "lensFlare" | "lightLeak" | "godRays" | "prismRefraction"
+            | "floatingDust" | "starGlint" | "neonTrails" | "goldenRays"
+    ) {
         let i = (p.get("intensity").copied().unwrap_or(100.0) / 100.0).clamp(0.0, 1.0);
         if i <= 0.0 || ctx.clip_ms <= 0 {
             return None;
@@ -716,7 +1022,11 @@ pub fn fragments(e: &Effect, ctx: &FxCtx) -> Option<Vec<String>> {
             "lensFlare" => lens_flare_frag(e, ctx, i, &en, &p),
             "lightLeak" => light_leak_frag(e, ctx, i, &en, &p),
             "godRays" => god_rays_frag(e, ctx, i, &en, &p),
-            _ => prism_frag(e, ctx, i, &en, &p),
+            "prismRefraction" => prism_frag(e, ctx, i, &en, &p),
+            "floatingDust" => floating_dust_frag(e, ctx, i, &en, &p),
+            "starGlint" => star_glint_frag(e, ctx, i, &en, &p),
+            "neonTrails" => neon_trails_frag(e, ctx, i, &en, &p),
+            _ => golden_rays_frag(e, ctx, i, &en, &p),
         });
     }
     match e.kind.as_str() {
