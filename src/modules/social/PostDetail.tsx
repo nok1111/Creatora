@@ -147,7 +147,7 @@ export function PostDetail({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[80vh] max-w-2xl flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-5 py-3">
+        <DialogHeader className="brand-hairline relative border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-sm">
             <span className="min-w-0 truncate">
               {post.title || tr("social.untitled")}

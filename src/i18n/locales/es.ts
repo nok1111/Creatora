@@ -351,6 +351,7 @@ export const es: typeof en = {
     licenses: "Licencias",
     openNotices: "Abrir avisos de terceros",
     about: "Acerca de",
+    aboutTagline: "Edición de video para creadores — córtalo, subtitúlalo, publícalo.",
   },
   errors: {
     generic: "Error inesperado",

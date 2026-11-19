@@ -9,6 +9,7 @@ import { api } from "@/lib/ipc";
 import { requestProjectSwitch } from "@/services/project-switch";
 import type { ProjectSummary } from "@/lib/project-types";
 import { useProject } from "@/stores/project";
+import { FormatArt } from "@/components/FormatArt";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -33,17 +34,15 @@ import { Notice } from "@/components/Notice";
 
 /** Mini aspect-ratio tile for the recents list. */
 function AspectTile({ w, h }: { w: number | null; h: number | null }) {
-  const ar = w && h ? w / h : 16 / 9;
-  const max = 26;
-  const tw = ar >= 1 ? max : Math.max(10, Math.round(max * ar));
-  const th = ar >= 1 ? Math.max(10, Math.round(max / ar)) : max;
   return (
-    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-0">
-      <div
-        className="flex items-center justify-center rounded-[3px] border border-primary/40 bg-primary/10"
-        style={{ width: tw, height: th }}
-      />
-    </div>
+    <FormatArt
+      w={w ?? 1920}
+      h={h ?? 1080}
+      tone="primary"
+      safe={false}
+      height={30}
+      className="rounded-md ring-1 ring-border"
+    />
   );
 }
 

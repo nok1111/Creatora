@@ -38,8 +38,16 @@ export function CreatePage() {
   const selected = FORMATS.find((f) => f.id === fmt)!;
   const dims = fmt === "custom" && size ? size : { w: selected.w, h: selected.h };
 
+  // Empty name → "Untitled · 9:16" so a list of untitled projects is
+  // still distinguishable by the format the user picked.
+  const untitledName = () => {
+    const g = (a: number, b: number): number => (b ? g(b, a % b) : a);
+    const d = g(dims.w, dims.h);
+    return `${t("create.untitled")} · ${dims.w / d}:${dims.h / d}`;
+  };
+
   const create = () => {
-    const n = name.trim() || t("create.untitled");
+    const n = name.trim() || untitledName();
     requestProjectSwitch(async () => {
       setBusy(true);
       try {

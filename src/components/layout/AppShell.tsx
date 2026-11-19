@@ -20,7 +20,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-topbar-border bg-topbar px-3">
+      <header className="brand-hairline relative flex h-12 shrink-0 items-center gap-2 border-b border-topbar-border bg-topbar px-3">
         {/* Brand */}
         <div className="mr-2 flex items-center gap-2">
           <BrandMark size={28} className="shrink-0 rounded-lg shadow-sm" />

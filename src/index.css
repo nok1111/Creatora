@@ -116,6 +116,17 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     overscroll-behavior: none;
+    /* Brand ambient — faint coral (top-left) + lavender (bottom-right)
+       wash on the app floor so the shell never reads flat-neutral. */
+    background-image:
+      radial-gradient(52% 42% at 5% -6%, hsl(var(--primary) / 0.05), transparent 70%),
+      radial-gradient(46% 40% at 104% 105%, hsl(var(--accent-foreground) / 0.035), transparent 70%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+  h1,
+  h2 {
+    letter-spacing: -0.012em;
   }
   /* Brand accent for native form controls — sliders, checkboxes and
      radios render coral instead of the browser default blue. */
@@ -152,6 +163,22 @@
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+  /* Signature hairline — coral bleeding into lavender under the topbar
+     and dialog headers. Fades out so it never competes with content. */
+  .brand-hairline::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: -1px;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.5),
+      hsl(var(--accent-foreground) / 0.35) 42%,
+      transparent 78%
+    );
   }
 }
 

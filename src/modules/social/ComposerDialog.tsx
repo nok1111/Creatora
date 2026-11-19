@@ -233,7 +233,7 @@ export function ComposerDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[85vh] max-w-3xl flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-5 py-3">
+        <DialogHeader className="brand-hairline relative border-b border-border px-5 py-3">
           <DialogTitle className="text-sm">
             {postId ? tr("social.composerEdit") : tr("social.composerNew")}
           </DialogTitle>

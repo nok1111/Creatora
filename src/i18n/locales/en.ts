@@ -348,6 +348,7 @@ export const en = {
     licenses: "Licenses",
     openNotices: "Open third-party notices",
     about: "About",
+    aboutTagline: "Video editing for creators — cut it, caption it, post it.",
   },
   errors: {
     generic: "Unexpected error",

@@ -6,6 +6,7 @@ import { useSettings, type Theme } from "@/stores/settings";
 import { SUPPORTED_LANGUAGES, type LanguageCode } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Settings as SettingsIcon } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 
 function Section({
@@ -138,9 +139,22 @@ export function SettingsPage() {
       </Section>
 
       <Section title={t("settings.about")}>
+        <div className="flex items-center gap-3">
+          <BrandMark size={40} className="rounded-lg shadow-raise" />
+          <div>
+            <div className="text-sm font-semibold">Creatora</div>
+            <div className="text-xs text-muted-foreground">
+              {t("settings.aboutTagline")}
+            </div>
+          </div>
+          {info.data && (
+            <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+              v{info.data.version}
+            </span>
+          )}
+        </div>
         {info.data && (
           <dl className="space-y-1 text-sm">
-            <Row label="Creatora" control={<span>{info.data.version}</span>} />
             <Row
               label={t("home.ffmpeg")}
               control={
