@@ -252,7 +252,7 @@ export function EditorPage() {
             ))}
           </div>
           <div className="min-h-0 flex-1">
-            {leftTab === "media" ? <MediaBin assets={assetsQ.data ?? []} /> : leftTab === "effects" ? <EffectsBin /> : leftTab === "sounds" ? <SfxBin /> : <GraphicsBin />}
+            {leftTab === "media" ? <MediaBin assets={assetsQ.data ?? []} /> : leftTab === "effects" ? <EffectsBin /> : leftTab === "sounds" ? <SfxBin assets={assetsQ.data ?? []} /> : <GraphicsBin />}
           </div>
         </div>
         <ResizeHandle

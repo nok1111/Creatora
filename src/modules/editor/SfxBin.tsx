@@ -1,13 +1,17 @@
-import { Pause, Play, Plus, Search } from "lucide-react";
+import { FolderInput, Pause, Play, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "@/lib/ipc";
+import { awaitJob } from "@/services/jobs";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import { addClip } from "@/lib/timeline-engine";
 import { setDragPayload } from "@/lib/drag-payload";
+import type { AssetSummary } from "@/lib/media-types";
 import { cn } from "@/lib/utils";
 import catalogJson from "../../../shared/sfx/catalog.json";
 
@@ -38,7 +42,7 @@ const fmtDur = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
  * what the user drops or adds enters the media catalog as a regular audio
  * asset, so the media bin stays clean and export resolves the real file.
  */
-export function SfxBin() {
+export function SfxBin({ assets }: { assets: AssetSummary[] }) {
   const { t } = useTranslation();
   const doc = useProject((s) => s.doc);
   const playheadMs = useEditor((s) => s.playheadMs);
@@ -64,48 +68,131 @@ export function SfxBin() {
     [cat, query],
   );
 
+  const imported = useMemo(
+    () =>
+      assets.filter(
+        (a) =>
+          a.kind === "audio" &&
+          a.status !== "missing" &&
+          (!query || a.name.toLowerCase().includes(query.toLowerCase())),
+      ),
+    [assets, query],
+  );
+
   if (!doc) return null;
 
-  const togglePlay = (s: SfxSound) => {
+  const togglePlay = (id: string, src: string | undefined) => {
     const el = audioRef.current;
-    const url = sfxUrl(s.file);
-    if (!el || !url) return;
-    if (playing === s.id) {
+    if (!el || !src) return;
+    if (playing === id) {
       el.pause();
       setPlaying(null);
       return;
     }
-    el.src = url;
+    el.src = src;
     void el.play();
-    setPlaying(s.id);
+    setPlaying(id);
+  };
+
+  const placeClip = (a: AssetSummary, fallbackMs: number) => {
+    let clipId = "";
+    mutate((d) => {
+      const r = addClip(d, {
+        mediaRef: a.id,
+        startMs: playheadMs,
+        durationMs: a.durationMs ?? fallbackMs,
+        sourceDurationMs: a.durationMs ?? null,
+        trackKind: "audio",
+      });
+      clipId = r.clipId;
+      if (!r.doc.mediaRefs.some((m) => m.assetId === a.id)) {
+        r.doc.mediaRefs.push({ assetId: a.id, path: a.filePath, hash: null });
+      }
+      return r.doc;
+    });
+    select([clipId]);
+    qc.invalidateQueries({ queryKey: ["assets"] });
+    toast.success(t("editor.clipAdded"));
   };
 
   const addAt = (s: SfxSound) => {
     void api
       .importSfx([s.file])
       .then(([a]) => {
-        if (!a) return;
-        let clipId = "";
-        mutate((d) => {
-          const r = addClip(d, {
-            mediaRef: a.id,
-            startMs: playheadMs,
-            durationMs: a.durationMs ?? s.durationMs,
-            sourceDurationMs: a.durationMs ?? null,
-            trackKind: "audio",
-          });
-          clipId = r.clipId;
-          if (!r.doc.mediaRefs.some((m) => m.assetId === a.id)) {
-            r.doc.mediaRefs.push({ assetId: a.id, path: a.filePath, hash: null });
-          }
-          return r.doc;
-        });
-        select([clipId]);
-        qc.invalidateQueries({ queryKey: ["assets"] });
-        toast.success(t("editor.clipAdded"));
+        if (a) placeClip(a, s.durationMs);
       })
       .catch(() => toast.error(t("editor.sfxImportFailed")));
   };
+
+  const importFiles = async () => {
+    const selected = await openDialog({
+      multiple: true,
+      filters: [{ name: "Audio", extensions: ["mp3","wav","aac","m4a","flac","ogg","opus","wma"] }],
+    });
+    const paths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+    if (!paths.length) return;
+    const jobId = await api.importMedia(paths);
+    await awaitJob(jobId);
+    await qc.invalidateQueries({ queryKey: ["assets"] });
+  };
+
+  const row = (p: {
+    key: string;
+    id: string;
+    name: string;
+    sub: string;
+    src: string | undefined;
+    onDrag: (e: React.DragEvent) => void;
+    onAdd: () => void;
+  }) => (
+    <div
+      key={p.key}
+      draggable
+      onClick={() => togglePlay(p.id, p.src)}
+      onDragStart={p.onDrag}
+      onDragEnd={() => setDragPayload(null)}
+      className={cn(
+        "group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded border bg-background/60 p-1.5 text-xs hover:bg-accent",
+        playing === p.id
+          ? "border-primary/50 bg-primary/10 hover:bg-primary/10"
+          : "border-border",
+      )}
+    >
+      {playing === p.id && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-primary/20">
+          <div ref={barRef} className="h-full bg-primary transition-[width]" />
+        </div>
+      )}
+      <div
+        className={cn(
+          "flex size-6 shrink-0 items-center justify-center rounded-full",
+          playing === p.id
+            ? "bg-primary text-primary-foreground"
+            : "bg-primary/15 text-primary",
+        )}
+      >
+        {playing === p.id ? (
+          <Pause className="size-3" />
+        ) : (
+          <Play className="ml-0.5 size-3" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate">{p.name}</div>
+        <div className="text-[10px] text-muted-foreground">{p.sub}</div>
+      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          p.onAdd();
+        }}
+        className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+        title={t("editor.clipAdded")}
+      >
+        <Plus className="size-3.5" />
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -121,14 +208,23 @@ export function SfxBin() {
         className="hidden"
       />
       <div className="border-b border-border p-2">
-        <div className="flex items-center gap-1.5 rounded border border-border bg-background/60 px-2 py-1">
-          <Search className="size-3.5 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("editor.sfxSearch")}
-            className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          />
+        <div className="flex items-center gap-1.5">
+          <div className="flex flex-1 items-center gap-1.5 rounded border border-border bg-background/60 px-2 py-1">
+            <Search className="size-3.5 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("editor.sfxSearch")}
+              className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+          <button
+            className="rounded p-1 hover:bg-accent"
+            title={t("editor.sfxImport")}
+            onClick={() => void importFiles()}
+          >
+            <FolderInput className="size-3.5" />
+          </button>
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {["all", ...CATALOG.categories.map((c) => c.id)].map((c) => (
@@ -148,12 +244,49 @@ export function SfxBin() {
         </div>
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
-        {sounds.map((s) => (
-          <div
-            key={s.id}
-            draggable
-            onClick={() => togglePlay(s)}
-            onDragStart={(e) => {
+        {imported.length > 0 && (
+          <div className="px-1 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("editor.sfxImported")}
+          </div>
+        )}
+        {imported.map((a) =>
+          row({
+            key: a.id,
+            id: `a-${a.id}`,
+            name: a.name,
+            sub: fmtDur(a.durationMs ?? 0),
+            src: convertFileSrc(a.filePath),
+            onDrag: (e) => {
+              e.dataTransfer.setData("application/x-creatora-asset", a.id);
+              e.dataTransfer.setData("application/x-creatora-path", a.filePath);
+              e.dataTransfer.setData(
+                "application/x-creatora-duration",
+                String(a.durationMs ?? 3000),
+              );
+              e.dataTransfer.effectAllowed = "copy";
+              setDragPayload({
+                assetId: a.id,
+                filePath: a.filePath,
+                durationMs: a.durationMs ?? 3000,
+                kind: "audio",
+              });
+            },
+            onAdd: () => placeClip(a, 3000),
+          }),
+        )}
+        {imported.length > 0 && (
+          <div className="px-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("editor.sfxLibrary")}
+          </div>
+        )}
+        {sounds.map((s) =>
+          row({
+            key: s.id,
+            id: s.id,
+            name: s.name,
+            sub: `${t(`editor.sfxCat.${s.category}`)} · ${fmtDur(s.durationMs)}`,
+            src: sfxUrl(s.file),
+            onDrag: (e) => {
               e.dataTransfer.setData("application/x-creatora-sfx", s.file);
               e.dataTransfer.setData(
                 "application/x-creatora-duration",
@@ -169,52 +302,10 @@ export function SfxBin() {
                 kind: "sfx",
                 sfxFile: s.file,
               });
-            }}
-            onDragEnd={() => setDragPayload(null)}
-            className={cn(
-              "group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded border bg-background/60 p-1.5 text-xs hover:bg-accent",
-              playing === s.id
-                ? "border-primary/50 bg-primary/10 hover:bg-primary/10"
-                : "border-border",
-            )}
-          >
-            {playing === s.id && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-primary/20">
-                <div ref={barRef} className="h-full bg-primary transition-[width]" />
-              </div>
-            )}
-            <div
-              className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded-full",
-                playing === s.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-primary/15 text-primary",
-              )}
-            >
-              {playing === s.id ? (
-                <Pause className="size-3" />
-              ) : (
-                <Play className="ml-0.5 size-3" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate">{s.name}</div>
-              <div className="text-[10px] text-muted-foreground">
-                {t(`editor.sfxCat.${s.category}`)} · {fmtDur(s.durationMs)}
-              </div>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                addAt(s);
-              }}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-              title={t("editor.clipAdded")}
-            >
-              <Plus className="size-3.5" />
-            </button>
-          </div>
-        ))}
+            },
+            onAdd: () => addAt(s),
+          }),
+        )}
       </div>
     </div>
   );
