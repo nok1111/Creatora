@@ -69,10 +69,27 @@ interface FxItem {
   stripImg?: string;
 }
 
+/** CSS thumb class per anim preset — a card performing the gesture
+    (index.css `.fxa-*`), so icon-less presets show their motion. */
+const PRESET_THUMBS: Record<string, string> = {
+  fadeIn: "fxa-fadeIn",
+  scaleIn: "fxa-scaleIn",
+  bounceIn: "fxa-bounceIn",
+  spinIn: "fxa-spinIn",
+  slideIn: "fxa-slideIn",
+  typewriter: "fxa-typewriter",
+  wipe: "fxa-wipe",
+  fadeOut: "fxa-fadeOut",
+  typewriterOut: "fxa-typewriterOut",
+  wipeOut: "fxa-wipeOut",
+  zoomPunch: "fxa-zoomPunch",
+};
+
 const preset = (id: string, icon: LucideIcon): FxItem => ({
   id,
   icon,
   label: ANIM_PRESETS.find((p) => p.id === id)?.label ?? id,
+  thumb: PRESET_THUMBS[id],
 });
 
 const OVERLAY_ICONS: Record<string, LucideIcon> = {
@@ -131,6 +148,7 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
       label: e.label,
       icon: OVERLAY_ICONS[e.type] ?? Contrast,
       description: fxEntry(e.type)?.description,
+      thumbImg: thumbUrl(e.type),
     })),
   },
   {

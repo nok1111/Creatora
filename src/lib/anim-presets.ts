@@ -71,16 +71,22 @@ export const ANIM_PRESETS: AnimPreset[] = [
     id: "fadeIn",
     label: "Fade in",
     category: "in",
-    paths: ["transform.opacity"],
+    paths: ["transform.opacity", "transform.scaleX", "transform.scaleY"],
+    // A bare opacity ramp reads flat; a 3% settle gives the frame depth.
     build: (c, _cv, o) => ({
-      keyframes: { "transform.opacity": bakeKfs(o.delayMs, o.durationMs, 0, c.transform.opacity, o.easing) },
+      keyframes: {
+        "transform.opacity": bakeKfs(o.delayMs, o.durationMs, 0, c.transform.opacity, o.easing),
+        "transform.scaleX": bakeKfs(o.delayMs, o.durationMs, c.transform.scaleX * 0.97, c.transform.scaleX, o.easing),
+        "transform.scaleY": bakeKfs(o.delayMs, o.durationMs, c.transform.scaleY * 0.97, c.transform.scaleY, o.easing),
+      },
     }),
   },
   {
     id: "fadeOut",
     label: "Fade out",
     category: "out",
-    paths: ["transform.opacity"],
+    paths: ["transform.opacity", "transform.scaleX", "transform.scaleY"],
+    // Exits accelerate away (easeIn) — a decelerating exit feels like it hangs.
     build: (c, _cv, o) => ({
       keyframes: {
         "transform.opacity": bakeKfs(
@@ -88,8 +94,10 @@ export const ANIM_PRESETS: AnimPreset[] = [
           o.durationMs,
           c.transform.opacity,
           0,
-          o.easing,
+          "easeIn",
         ),
+        "transform.scaleX": bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.scaleX, c.transform.scaleX * 0.97, "easeIn"),
+        "transform.scaleY": bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.scaleY, c.transform.scaleY * 0.97, "easeIn"),
       },
     }),
   },
@@ -97,15 +105,19 @@ export const ANIM_PRESETS: AnimPreset[] = [
     id: "slideIn",
     label: "Slide in",
     category: "in",
-    paths: ["transform.x", "transform.y"],
+    paths: ["transform.x", "transform.y", "transform.opacity"],
+    // backOut overshoots a hair past the rest position — "arrive and
+    // settle" instead of a panel gliding to a stop; a fade over the
+    // first 40% keeps the travel from reading as a hard wipe.
     build: (c, cv, o) => {
       const t = c.transform;
       const k: Record<string, Keyframe[]> = {};
       const off = o.intensity;
-      if (o.direction === "up") k["transform.y"] = bakeKfs(o.delayMs, o.durationMs, t.y + off, t.y, o.easing);
-      else if (o.direction === "down") k["transform.y"] = bakeKfs(o.delayMs, o.durationMs, t.y - off, t.y, o.easing);
-      else if (o.direction === "right") k["transform.x"] = bakeKfs(o.delayMs, o.durationMs, t.x - off, t.x, o.easing);
-      else k["transform.x"] = bakeKfs(o.delayMs, o.durationMs, t.x + off, t.x, o.easing);
+      if (o.direction === "up") k["transform.y"] = bakeKfs(o.delayMs, o.durationMs, t.y + off, t.y, "backOut");
+      else if (o.direction === "down") k["transform.y"] = bakeKfs(o.delayMs, o.durationMs, t.y - off, t.y, "backOut");
+      else if (o.direction === "right") k["transform.x"] = bakeKfs(o.delayMs, o.durationMs, t.x - off, t.x, "backOut");
+      else k["transform.x"] = bakeKfs(o.delayMs, o.durationMs, t.x + off, t.x, "backOut");
+      k["transform.opacity"] = bakeKfs(o.delayMs, o.durationMs * 0.4, 0, t.opacity, "easeOut");
       void cv;
       return { keyframes: k };
     },
@@ -114,16 +126,19 @@ export const ANIM_PRESETS: AnimPreset[] = [
     id: "slideOut",
     label: "Slide out",
     category: "out",
-    paths: ["transform.x", "transform.y"],
+    paths: ["transform.x", "transform.y", "transform.opacity"],
+    // easeIn accelerates the clip out of frame; the fade covers the
+    // last 40% so the exit dissolves instead of clipping a hard edge.
     build: (c, _cv, o) => {
       const t = c.transform;
       const t0 = Math.max(0, c.durationMs - o.durationMs);
       const off = o.intensity;
       const k: Record<string, Keyframe[]> = {};
-      if (o.direction === "up") k["transform.y"] = bakeKfs(t0, o.durationMs, t.y, t.y - off, o.easing);
-      else if (o.direction === "down") k["transform.y"] = bakeKfs(t0, o.durationMs, t.y, t.y + off, o.easing);
-      else if (o.direction === "right") k["transform.x"] = bakeKfs(t0, o.durationMs, t.x, t.x + off, o.easing);
-      else k["transform.x"] = bakeKfs(t0, o.durationMs, t.x, t.x - off, o.easing);
+      if (o.direction === "up") k["transform.y"] = bakeKfs(t0, o.durationMs, t.y, t.y - off, "easeIn");
+      else if (o.direction === "down") k["transform.y"] = bakeKfs(t0, o.durationMs, t.y, t.y + off, "easeIn");
+      else if (o.direction === "right") k["transform.x"] = bakeKfs(t0, o.durationMs, t.x, t.x + off, "easeIn");
+      else k["transform.x"] = bakeKfs(t0, o.durationMs, t.x, t.x - off, "easeIn");
+      k["transform.opacity"] = bakeKfs(t0 + o.durationMs * 0.6, o.durationMs * 0.4, t.opacity, 0, "easeIn");
       return { keyframes: k };
     },
   },
@@ -132,10 +147,12 @@ export const ANIM_PRESETS: AnimPreset[] = [
     label: "Scale in (pop)",
     category: "in",
     paths: ["transform.scaleX", "transform.scaleY", "transform.opacity"],
+    // backOut: a "pop" without overshoot is just a zoom — the ~10%
+    // overshoot before the settle is what makes it read as a pop.
     build: (c, _cv, o) => ({
       keyframes: {
-        "transform.scaleX": bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleX, o.easing),
-        "transform.scaleY": bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleY, o.easing),
+        "transform.scaleX": bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleX, "backOut"),
+        "transform.scaleY": bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleY, "backOut"),
         "transform.opacity": bakeKfs(o.delayMs, Math.min(o.durationMs, 200), 0, c.transform.opacity, "easeOut"),
       },
     }),
@@ -144,10 +161,14 @@ export const ANIM_PRESETS: AnimPreset[] = [
     id: "rotateIn",
     label: "Rotate in",
     category: "in",
-    paths: ["transform.rotationDeg", "transform.opacity"],
+    paths: ["transform.rotationDeg", "transform.scaleX", "transform.scaleY", "transform.opacity"],
+    // A card swinging in: slight grow + backOut overshoot on the
+    // rotation so it lands with a settle, not a hard stop.
     build: (c, _cv, o) => ({
       keyframes: {
-        "transform.rotationDeg": bakeKfs(o.delayMs, o.durationMs, -90, c.transform.rotationDeg, o.easing),
+        "transform.rotationDeg": bakeKfs(o.delayMs, o.durationMs, -90, c.transform.rotationDeg, "backOut"),
+        "transform.scaleX": bakeKfs(o.delayMs, o.durationMs, c.transform.scaleX * 0.7, c.transform.scaleX, "backOut"),
+        "transform.scaleY": bakeKfs(o.delayMs, o.durationMs, c.transform.scaleY * 0.7, c.transform.scaleY, "backOut"),
         "transform.opacity": bakeKfs(o.delayMs, Math.min(o.durationMs, 250), 0, c.transform.opacity, "easeOut"),
       },
     }),
@@ -184,12 +205,14 @@ export const ANIM_PRESETS: AnimPreset[] = [
     label: "Scale out",
     category: "out",
     paths: ["transform.scaleX", "transform.scaleY", "transform.opacity"],
+    // easeIn: the shrink accelerates — the clip gets sucked away
+    // instead of easing to a stop at zero size.
     build: (c, _cv, o) => {
       const t0 = Math.max(0, c.durationMs - o.durationMs);
       return {
         keyframes: {
-          "transform.scaleX": bakeKfs(t0, o.durationMs, c.transform.scaleX, 0.01, o.easing),
-          "transform.scaleY": bakeKfs(t0, o.durationMs, c.transform.scaleY, 0.01, o.easing),
+          "transform.scaleX": bakeKfs(t0, o.durationMs, c.transform.scaleX, 0.01, "easeIn"),
+          "transform.scaleY": bakeKfs(t0, o.durationMs, c.transform.scaleY, 0.01, "easeIn"),
           "transform.opacity": bakeKfs(Math.max(0, c.durationMs - Math.min(o.durationMs, 250)), Math.min(o.durationMs, 250), c.transform.opacity, 0, "easeIn"),
         },
       };
@@ -199,12 +222,16 @@ export const ANIM_PRESETS: AnimPreset[] = [
     id: "rotateOut",
     label: "Rotate out",
     category: "out",
-    paths: ["transform.rotationDeg", "transform.opacity"],
+    paths: ["transform.rotationDeg", "transform.scaleX", "transform.scaleY", "transform.opacity"],
+    // Spins away with a slight shrink — accelerate (easeIn) so the
+    // exit builds speed like a card flicked off screen.
     build: (c, _cv, o) => {
       const t0 = Math.max(0, c.durationMs - o.durationMs);
       return {
         keyframes: {
-          "transform.rotationDeg": bakeKfs(t0, o.durationMs, c.transform.rotationDeg, c.transform.rotationDeg + 90, o.easing),
+          "transform.rotationDeg": bakeKfs(t0, o.durationMs, c.transform.rotationDeg, c.transform.rotationDeg + 90, "easeIn"),
+          "transform.scaleX": bakeKfs(t0, o.durationMs, c.transform.scaleX, c.transform.scaleX * 0.85, "easeIn"),
+          "transform.scaleY": bakeKfs(t0, o.durationMs, c.transform.scaleY, c.transform.scaleY * 0.85, "easeIn"),
           "transform.opacity": bakeKfs(Math.max(0, c.durationMs - Math.min(o.durationMs, 250)), Math.min(o.durationMs, 250), c.transform.opacity, 0, "easeIn"),
         },
       };
@@ -290,7 +317,7 @@ export const ANIM_PRESETS: AnimPreset[] = [
       keyframes: {
         "transform.opacity": [
           ...bakeKfs(o.delayMs, o.durationMs, 0, c.transform.opacity, o.easing, 6),
-          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.opacity, 0, o.easing, 6).slice(1),
+          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.opacity, 0, "easeIn", 6).slice(1),
         ],
       },
     }),
@@ -304,7 +331,7 @@ export const ANIM_PRESETS: AnimPreset[] = [
       keyframes: {
         "transform.x": [
           ...bakeKfs(o.delayMs, o.durationMs, c.transform.x + o.intensity, c.transform.x, o.easing, 6),
-          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.x, c.transform.x - o.intensity, o.easing, 6).slice(1),
+          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.x, c.transform.x - o.intensity, "easeIn", 6).slice(1),
         ],
       },
     }),
@@ -317,12 +344,12 @@ export const ANIM_PRESETS: AnimPreset[] = [
     build: (c, _cv, o) => ({
       keyframes: {
         "transform.scaleX": [
-          ...bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleX, o.easing, 6),
-          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.scaleX, 0.01, o.easing, 6).slice(1),
+          ...bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleX, "backOut", 6),
+          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.scaleX, 0.01, "easeIn", 6).slice(1),
         ],
         "transform.scaleY": [
-          ...bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleY, o.easing, 6),
-          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.scaleY, 0.01, o.easing, 6).slice(1),
+          ...bakeKfs(o.delayMs, o.durationMs, 0.01, c.transform.scaleY, "backOut", 6),
+          ...bakeKfs(Math.max(0, c.durationMs - o.durationMs), o.durationMs, c.transform.scaleY, 0.01, "easeIn", 6).slice(1),
         ],
       },
     }),
@@ -335,16 +362,20 @@ export const ANIM_PRESETS: AnimPreset[] = [
     build: (c, _cv, o) => {
       // intensity is px-scaled (default 160) — normalize to a scale bump:
       // 160 → 8% grow. Raw 0.08*160 would balloon the clip ~14×.
-      const s = c.transform.scaleX * (1 + 0.08 * (o.intensity / 160));
+      // Asymmetric like a heartbeat: fast 30% attack, slow 70% release —
+      // a symmetric pulse reads as a slow zoom, not a beat hit.
+      const sx = c.transform.scaleX * (1 + 0.08 * (o.intensity / 160));
+      const sy = c.transform.scaleY * (1 + 0.08 * (o.intensity / 160));
+      const hit = o.durationMs * 0.3;
       return {
         keyframes: {
           "transform.scaleX": [
-            ...bakeKfs(o.delayMs, o.durationMs / 2, c.transform.scaleX, s, "easeOut", 4),
-            ...bakeKfs(o.delayMs + o.durationMs / 2, o.durationMs / 2, s, c.transform.scaleX, "easeIn", 4).slice(1),
+            ...bakeKfs(o.delayMs, hit, c.transform.scaleX, sx, "easeOut", 3),
+            ...bakeKfs(o.delayMs + hit, o.durationMs - hit, sx, c.transform.scaleX, "easeInOut", 6).slice(1),
           ],
           "transform.scaleY": [
-            ...bakeKfs(o.delayMs, o.durationMs / 2, c.transform.scaleY, c.transform.scaleY * (1 + 0.08 * (o.intensity / 160)), "easeOut", 4),
-            ...bakeKfs(o.delayMs + o.durationMs / 2, o.durationMs / 2, c.transform.scaleY * (1 + 0.08 * (o.intensity / 160)), c.transform.scaleY, "easeIn", 4).slice(1),
+            ...bakeKfs(o.delayMs, hit, c.transform.scaleY, sy, "easeOut", 3),
+            ...bakeKfs(o.delayMs + hit, o.durationMs - hit, sy, c.transform.scaleY, "easeInOut", 6).slice(1),
           ],
         },
       };
@@ -375,22 +406,26 @@ export const ANIM_PRESETS: AnimPreset[] = [
     id: "shake",
     label: "Shake",
     category: "emphasis",
-    paths: ["transform.x"],
+    paths: ["transform.x", "transform.rotationDeg"],
     build: (c, _cv, o) => {
-      const kfs: Keyframe[] = [{ tMs: o.delayMs, v: c.transform.x, ease: "linear" }];
       const steps = 8;
+      const kfs: Keyframe[] = [{ tMs: o.delayMs, v: c.transform.x, ease: "linear" }];
+      const rot: Keyframe[] = [{ tMs: o.delayMs, v: c.transform.rotationDeg, ease: "linear" }];
       for (let i = 1; i <= steps; i++) {
         // 15% of the px intensity — a punchy ~20px shake at the default,
-        // not a 160px screen-wide fling.
-        const amp = o.intensity * 0.15 * (1 - i / (steps + 1));
-        kfs.push({
-          tMs: Math.round(o.delayMs + (i / steps) * o.durationMs),
-          v: c.transform.x + (i % 2 ? amp : -amp),
-          ease: "linear",
-        });
+        // not a 160px screen-wide fling. Deterministic jitter on the
+        // decay keeps it physical — a perfectly alternating ramp is
+        // what makes a shake look machine-generated.
+        const decay = 1 - i / (steps + 1);
+        const amp = o.intensity * 0.15 * decay * (i % 2 ? 1 : 0.82);
+        const tMs = Math.round(o.delayMs + (i / steps) * o.durationMs);
+        kfs.push({ tMs, v: c.transform.x + (i % 2 ? amp : -amp), ease: "linear" });
+        // A real impact wobbles on its axis too (~±1°).
+        rot.push({ tMs, v: c.transform.rotationDeg + (i % 2 ? -1 : 1) * 1.1 * decay, ease: "linear" });
       }
       kfs.push({ tMs: Math.round(o.delayMs + o.durationMs + 1), v: c.transform.x, ease: "linear" });
-      return { keyframes: { "transform.x": kfs } };
+      rot.push({ tMs: Math.round(o.delayMs + o.durationMs + 1), v: c.transform.rotationDeg, ease: "linear" });
+      return { keyframes: { "transform.x": kfs, "transform.rotationDeg": rot } };
     },
   },
   {
