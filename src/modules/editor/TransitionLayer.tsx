@@ -74,6 +74,16 @@ export function TransitionLayer({
   // failure escalates to the DOM-crossfade fallback.
   const fails = useRef(0);
   useLayoutEffect(() => {
+    // Re-attach the shared canvas if it drifted: dispose() swaps
+    // `gl.canvas` for a fresh element, and an idle dispose can fire while
+    // this layer is still mounted — leaving the DOM holding an orphaned
+    // canvas while draw() paints into a detached one (black preview).
+    const glc = transitionGL();
+    if (glc.canvas.parentElement !== host.current) {
+      glc.canvas.style.cssText =
+        "position:absolute;inset:0;width:100%;height:100%;pointer-events:none";
+      host.current?.appendChild(glc.canvas);
+    }
     const rect = host.current?.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.max(2, Math.min(MAX_W, Math.round((rect?.width || 640) * dpr)));

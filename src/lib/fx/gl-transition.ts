@@ -55,20 +55,33 @@ export class TransitionGL {
   /** Create (or revive) the context. Returns false when GL is unusable. */
   private ensure(): boolean {
     if (this.idleTimer) (clearTimeout(this.idleTimer), (this.idleTimer = null));
-    if (this.status === "unavailable" || this.status === "lost") return false;
+    if (this.status === "unavailable") return false;
     if (this.gl && !this.gl.isContextLost()) return true;
-    const gl = this.canvas.getContext("webgl2", {
+    const attrs = {
       alpha: true,
       premultipliedAlpha: true,
       antialias: false,
       depth: false,
       stencil: false,
       preserveDrawingBuffer: false,
-    }) as WebGL2RenderingContext | null;
-    if (!gl) {
-      this.setStatus("unavailable");
-      return false;
+    };
+    let gl = this.canvas.getContext("webgl2", attrs) as WebGL2RenderingContext | null;
+    if (!gl || gl.isContextLost()) {
+      // The element may be unrecoverable — a canvas that ever got another
+      // context type can never take webgl2 again, and a lost context on a
+      // detached canvas may never fire contextrestored. Swap in a virgin
+      // element once before declaring GL unavailable; the attached layer
+      // re-appends it on its next draw.
+      const fresh = document.createElement("canvas");
+      gl = fresh.getContext("webgl2", attrs) as WebGL2RenderingContext | null;
+      if (!gl) {
+        this.setStatus("unavailable");
+        return false;
+      }
+      this.canvas = fresh;
+      this.listenersBound = false;
     }
+    this.setStatus("ok");
     this.gl = gl;
     if (!this.listenersBound) {
       this.listenersBound = true;
