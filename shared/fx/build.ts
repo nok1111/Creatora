@@ -368,6 +368,74 @@ const LUME = (() => {
 })();
 const lumeSweepExpr = () => LUME.expr;
 
+// ── Classic upgrades (same ids — old projects upgrade automatically) ─
+// The legacy xfades preview as a flat alpha ramp (transitionAlpha treats
+// everything as a linear fade). These entries keep the ids but give each
+// its own gesture. Geometric ones become fields (shared preview+export
+// math, upgraded over the stock xfade); blend/noise ones stay on the
+// native xfade in export and get an expr-only GL preview that mirrors it.
+
+// Wipe Left — directional wipe with a slightly irregular soft front and
+// a lume line travelling on the reveal edge.
+const WIPE = (() => {
+  const fx = `(${T}*W*1.1-W*0.05)`;
+  const edge = `(W*{soft})`;
+  const wob = `sin(Y/H*7+${T}*3)*W*0.01`;
+  const m = `clip((X-${fx}-${wob})/${edge},0,1)`;
+  const glow = `({light}*pow(sin(PI*${T}),2)*exp(0-pow(X-${fx},2)/(${edge}*${edge}*5)))`;
+  const merged = `(${m})*SA(X,Y)+(1-(${m}))*SB(X,Y)`;
+  return fieldsExpr(m, glow, merged);
+})();
+
+// Clock Radial — 12-o'clock sweep with an arc of light on the front.
+const RADIAL = (() => {
+  const cx = "(W*0.5)", cy = "(H*0.5)";
+  const a = `mod(atan2(X-${cx},${cy}-Y)/6.2831853+1,1)`;
+  const m = `clip((${a}-${T})/0.02+0.5,0,1)`;
+  const glow = `({light}*pow(sin(PI*${T}),2)*exp(0-pow(${a}-${T},2)/0.004))`;
+  const merged = `(${m})*SA(X,Y)+(1-(${m}))*SB(X,Y)`;
+  return fieldsExpr(m, glow, merged);
+})();
+
+// Circle Open — centred iris opens with a lume ring on the reveal edge.
+const COPEN = (() => {
+  const cx = "(W*0.5)", cy = "(H*0.5)";
+  const rr = `(hypot(X-${cx},Y-${cy})/hypot(${cx},${cy}))`;
+  const front = `(${T}*1.25-0.1)`;
+  const m = `clip((${rr}*1.06-${front})/0.06,0,1)`;
+  const glow = `({light}*pow(sin(PI*${T}),2)*exp(0-pow(${rr}*1.06-${front},2)/0.02))`;
+  const merged = `(${m})*SA(X,Y)+(1-(${m}))*SB(X,Y)`;
+  return fieldsExpr(m, glow, merged);
+})();
+
+// Blinds — alternating slats sweep in staggered; clean, no glow.
+const BLINDS = (() => {
+  const row = `floor(Y/(H/{slats}))`;
+  const dir = `if(eq(mod(${row},2),0),1,-1)`;
+  const fr = `(${T}*1.45-${row}*(0.45/{slats}))`;
+  const pos = `if(gt(${dir},0),${fr}*W,W-${fr}*W)`;
+  const m = `clip(${dir}*(X-${pos})/(W*{soft}),0,1)`;
+  const merged = `(${m})*SA(X,Y)+(1-(${m}))*SB(X,Y)`;
+  return fieldsExpr(m, null, merged);
+})();
+
+function fieldsExpr(
+  m: string,
+  glow: string | null,
+  merged: string,
+): { fields: { ax: string; ay: string; m: string; glow?: string }; expr: string } {
+  const fields: { ax: string; ay: string; m: string; glow?: string } = { ax: "X", ay: "Y", m };
+  if (glow) fields.glow = glow;
+  if (!glow) return { fields, expr: merged };
+  const tint = `if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))`;
+  const tinted = `min((${glow})*(${tint}),255)`;
+  return { fields, expr: `${merged}+(255-(${merged}))*(${tinted})/255` };
+}
+const wipeExpr = () => WIPE.expr;
+const radialExpr = () => RADIAL.expr;
+const circleOpenExpr = () => COPEN.expr;
+const blindsExpr = () => BLINDS.expr;
+
 // ── Zoom Punch (manifest "zoomin" — replaces the native xfade) ────────
 // The stock xfade zoomin pushes A to ~4× before handing over, so the
 // mid-gesture reads as a grey mosaic blob. This version caps the punch
@@ -837,6 +905,215 @@ export const MANIFEST: FxManifest = {
       defaultEase: "easeInOutCubic",
       preview: "gl",
       thumb: "fxt-zoomin",
+    },
+    // ── Classic upgrades ─────────────────────────────────────────────
+    {
+      id: "wipeleft",
+      kind: "transition",
+      category: "transitions",
+      name: "Wipe Left",
+      description:
+        "The next clip sweeps in behind a soft, slightly irregular front with a line of light on the reveal edge.",
+      params: [
+        num("soft", "Edge softness", 0.02, 0.005, 0.08, 0.002),
+        num("light", "Edge light", 0.5, 0, 1.2, 0.05),
+        {
+          key: "tint",
+          label: "Light",
+          type: "enum",
+          def: 0,
+          options: ["White", "Gold", "Cyan"],
+        },
+      ],
+      derive: {
+        cr: { from: "tint", values: [255, 255, 140] },
+        cg: { from: "tint", values: [255, 205, 235] },
+        cb: { from: "tint", values: [255, 140, 255] },
+      },
+      expr: wipeExpr(),
+      render: { kind: "fields", div: 8, fields: WIPE.fields },
+      defaultDurationMs: 550,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-wipe",
+    },
+    {
+      id: "slideleft",
+      kind: "transition",
+      category: "transitions",
+      name: "Slide Left",
+      description:
+        "The incoming clip pushes the frame across with a hint of motion blur on the seam.",
+      params: [
+        { key: "direction", label: "Direction", type: "enum", def: 0, options: ["Left", "Right"] },
+        num("blur", "Motion blur", 0.035, 0, 0.15, 0.005),
+      ],
+      derive: {
+        dx: { from: "direction", values: [-1, 1] },
+        dy: { from: "direction", values: [0, 0] },
+      },
+      expr: velocitySwipeExpr(),
+      render: { kind: "strip" },
+      defaultDurationMs: 550,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-slide",
+    },
+    {
+      id: "radial",
+      kind: "transition",
+      category: "transitions",
+      name: "Radial",
+      description:
+        "A clock sweep from twelve o'clock peels the frame away, traced by an arc of light.",
+      params: [
+        num("light", "Arc light", 0.5, 0, 1.2, 0.05),
+        {
+          key: "tint",
+          label: "Light",
+          type: "enum",
+          def: 0,
+          options: ["White", "Gold", "Cyan"],
+        },
+      ],
+      derive: {
+        cr: { from: "tint", values: [255, 255, 140] },
+        cg: { from: "tint", values: [255, 205, 235] },
+        cb: { from: "tint", values: [255, 140, 255] },
+      },
+      expr: radialExpr(),
+      render: { kind: "fields", div: 8, fields: RADIAL.fields },
+      defaultDurationMs: 650,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-radial",
+    },
+    {
+      id: "circleopen",
+      kind: "transition",
+      category: "transitions",
+      name: "Circle Open",
+      description:
+        "The next clip opens through a centred iris, its edge traced by a thin ring of light.",
+      params: [
+        num("light", "Ring light", 0.5, 0, 1.2, 0.05),
+        {
+          key: "tint",
+          label: "Light",
+          type: "enum",
+          def: 0,
+          options: ["White", "Gold", "Cyan"],
+        },
+      ],
+      derive: {
+        cr: { from: "tint", values: [255, 255, 140] },
+        cg: { from: "tint", values: [255, 205, 235] },
+        cb: { from: "tint", values: [255, 140, 255] },
+      },
+      expr: circleOpenExpr(),
+      render: { kind: "fields", div: 8, fields: COPEN.fields },
+      defaultDurationMs: 600,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-circle",
+    },
+    {
+      id: "hlslice",
+      kind: "transition",
+      category: "transitions",
+      name: "Blinds",
+      description:
+        "Alternating slats sweep the scene away in a staggered cascade — true venetian blinds.",
+      params: [
+        num("slats", "Slats", 9, 5, 16, 1),
+        num("soft", "Edge softness", 0.03, 0.005, 0.1, 0.005),
+      ],
+      expr: blindsExpr(),
+      render: { kind: "fields", div: 8, fields: BLINDS.fields },
+      defaultDurationMs: 600,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-blinds",
+    },
+    // expr-only: the native xfade already nails these in export — the
+    // recipe only powers the GL preview so they stop looking identical.
+    {
+      id: "crossfade",
+      kind: "transition",
+      category: "transitions",
+      name: "Crossfade",
+      description: "Clean dissolve between clips.",
+      params: [],
+      expr: `(1-${T})*SA(X,Y)+(${T})*SB(X,Y)`,
+      defaultDurationMs: 500,
+      defaultEase: "linear",
+      preview: "gl",
+      thumb: "fxt-xfade",
+    },
+    {
+      id: "dipToBlack",
+      kind: "transition",
+      category: "transitions",
+      name: "Dip to Black",
+      description: "The scene sinks through black and rises into the next clip.",
+      params: [],
+      expr: `if(lt(${T},0.5),SA(X,Y)*(1-${T}*2),SB(X,Y)*(${T}*2-1))`,
+      defaultDurationMs: 700,
+      defaultEase: "linear",
+      preview: "gl",
+      thumb: "fxt-dipb",
+    },
+    {
+      id: "dipToWhite",
+      kind: "transition",
+      category: "transitions",
+      name: "Dip to White",
+      description: "The scene flashes through white into the next clip.",
+      params: [],
+      expr: `if(lt(${T},0.5),SA(X,Y)+(255-SA(X,Y))*${T}*2,SB(X,Y)*(${T}*2-1)+255*(1-(${T}*2-1)))`,
+      defaultDurationMs: 700,
+      defaultEase: "linear",
+      preview: "gl",
+      thumb: "fxt-dipw",
+    },
+    {
+      id: "dissolve",
+      kind: "transition",
+      category: "transitions",
+      name: "Dissolve",
+      description: "Pixels trade places in a fine random scatter until the new scene takes over.",
+      params: [num("soft", "Edge softness", 0.05, 0.01, 0.15, 0.005)],
+      expr: `(1-clip((mod(sin(X*12.9898+Y*78.233)*43758.5453,1)-${T})/{soft}+0.5,0,1))*SA(X,Y)+clip((mod(sin(X*12.9898+Y*78.233)*43758.5453,1)-${T})/{soft}+0.5,0,1)*SB(X,Y)`,
+      defaultDurationMs: 600,
+      defaultEase: "linear",
+      preview: "gl",
+      thumb: "fxt-dissolve",
+    },
+    {
+      id: "hblur",
+      kind: "transition",
+      category: "transitions",
+      name: "Blur Dissolve",
+      description: "The frame drifts out of focus as the next clip surfaces through it.",
+      params: [num("amt", "Smear", 1, 0.3, 2, 0.05)],
+      expr: `(1-${T})*SA(X+sin(Y*0.9+${T}*6)*{amt}*sin(PI*${T})*22,Y+cos(X*0.5)*{amt}*sin(PI*${T})*5)+(${T})*SB(X,Y)`,
+      defaultDurationMs: 650,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-hblur",
+    },
+    {
+      id: "pixelize",
+      kind: "transition",
+      category: "transitions",
+      name: "Pixelize",
+      description: "Both clips shatter into growing mosaic blocks and re-form as the new scene.",
+      params: [num("blocks", "Block size", 1, 0.5, 2.5, 0.1)],
+      expr: `(1-${T})*SA(floor(X/(1+{blocks}*26*sin(PI*${T})))*(1+{blocks}*26*sin(PI*${T}))+(1+{blocks}*26*sin(PI*${T}))*0.5,floor(Y/(1+{blocks}*26*sin(PI*${T})))*(1+{blocks}*26*sin(PI*${T}))+(1+{blocks}*26*sin(PI*${T}))*0.5)+(${T})*SB(floor(X/(1+{blocks}*26*sin(PI*${T})))*(1+{blocks}*26*sin(PI*${T}))+(1+{blocks}*26*sin(PI*${T}))*0.5,floor(Y/(1+{blocks}*26*sin(PI*${T})))*(1+{blocks}*26*sin(PI*${T}))+(1+{blocks}*26*sin(PI*${T}))*0.5)`,
+      defaultDurationMs: 550,
+      defaultEase: "linear",
+      preview: "gl",
+      thumb: "fxt-pixel",
     },
     // ── Intro / outro field effects (kind:"effect", preview:"field") ──
     // Single-clip effects driven by the same declarative field dialect as

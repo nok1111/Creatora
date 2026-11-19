@@ -1493,16 +1493,12 @@ fn fx_thumbs() {
     // Merge: 8 manifest transitions + the 12 curated legacy xfades.
     // two_clip_doc puts the 1 s join at frames 30–60 of a 90-frame
     // timeline — sample the gesture across it.
-    let mut kinds: Vec<String> = crate::render::fxlib::manifest()
+    let kinds: Vec<String> = crate::render::fxlib::manifest()
         .entries
         .iter()
         .filter(|e| e.kind == "transition")
         .map(|e| e.id.clone())
         .collect();
-    kinds.extend([
-        "crossfade", "dipToBlack", "dipToWhite", "dissolve", "hblur", "pixelize",
-        "zoomin", "radial", "circleopen", "wipeleft", "slideleft", "hlslice",
-    ].iter().map(|s| s.to_string()));
     let tr_frames: [u32; 8] = [30, 34, 38, 42, 46, 50, 54, 59];
     for kind in &kinds {
         let (mut doc, srcs) = two_clip_doc(kind, &[], &a_mp4, &b_mp4);
@@ -1536,9 +1532,19 @@ fn transition_audit() {
     let tmp = tmpdir("traudit");
     let (tw, th, a_mp4, b_mp4) = if std::env::var("TR_FOOTAGE").is_ok() {
         // Real moving footage — warp/parallax/flash defects that still
-        // frames hide become visible. clipA/clipB are 1080p30 6 s.
+        // frames hide become visible. TR_SRC_A/TR_SRC_B override the
+        // sources (e.g. frame-counter clips for temporal audits).
+        let pick = |var: &str, def: &str| {
+            std::env::var(var)
+                .map(|p| {
+                    let p = PathBuf::from(p);
+                    if p.is_absolute() { p } else { root.join(p) }
+                })
+                .unwrap_or_else(|_| root.join(def))
+        };
         (480u32, 270u32,
-         root.join("qa/media/clipA.mp4"), root.join("qa/media/clipB.mp4"))
+         pick("TR_SRC_A", "qa/media/clipA.mp4"),
+         pick("TR_SRC_B", "qa/media/clipB.mp4"))
     } else {
         let (tw, th) = (384u32, 216u32);
         let a_img = tmp.join("a.png");
@@ -1563,10 +1569,6 @@ fn transition_audit() {
         .filter(|e| e.kind == "transition")
         .map(|e| e.id.clone())
         .collect();
-    kinds.extend([
-        "crossfade", "dipToBlack", "dipToWhite", "dissolve", "hblur", "pixelize",
-        "zoomin", "radial", "circleopen", "wipeleft", "slideleft", "hlslice",
-    ].iter().map(|s| s.to_string()));
     if let Ok(only) = std::env::var("TR_KIND") {
         kinds.retain(|k| k == &only);
     }

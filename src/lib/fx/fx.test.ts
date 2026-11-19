@@ -85,9 +85,14 @@ describe("fx manifest", () => {
     }
   });
 
-  it("transition entries declare a native render strategy", () => {
+  it("transition entries declare a render strategy", () => {
     for (const e of fxEntries().filter((x) => x.kind === "transition")) {
-      expect(e.render, `${e.id} has no native render`).toBeDefined();
+      // render = compiled FFmpeg graph; expr-only = GL preview recipe
+      // whose export falls back to the native xfade of the same id.
+      expect(
+        e.render !== undefined || e.expr !== undefined,
+        `${e.id} has neither render nor expr`,
+      ).toBe(true);
       expect(e.preview).toBe("gl");
     }
   });

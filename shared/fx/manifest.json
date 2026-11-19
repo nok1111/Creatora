@@ -617,6 +617,426 @@
       "thumb": "fxt-zoomin"
     },
     {
+      "id": "wipeleft",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Wipe Left",
+      "description": "The next clip sweeps in behind a soft, slightly irregular front with a line of light on the reveal edge.",
+      "params": [
+        {
+          "key": "soft",
+          "label": "Edge softness",
+          "type": "number",
+          "def": 0.02,
+          "min": 0.005,
+          "max": 0.08,
+          "step": 0.002
+        },
+        {
+          "key": "light",
+          "label": "Edge light",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1.2,
+          "step": 0.05
+        },
+        {
+          "key": "tint",
+          "label": "Light",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "White",
+            "Gold",
+            "Cyan"
+          ]
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            255,
+            255,
+            140
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            255,
+            205,
+            235
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            255,
+            140,
+            255
+          ]
+        }
+      },
+      "expr": "(clip((X-({T}*W*1.1-W*0.05)-sin(Y/H*7+{T}*3)*W*0.01)/(W*{soft}),0,1))*SA(X,Y)+(1-(clip((X-({T}*W*1.1-W*0.05)-sin(Y/H*7+{T}*3)*W*0.01)/(W*{soft}),0,1)))*SB(X,Y)+(255-((clip((X-({T}*W*1.1-W*0.05)-sin(Y/H*7+{T}*3)*W*0.01)/(W*{soft}),0,1))*SA(X,Y)+(1-(clip((X-({T}*W*1.1-W*0.05)-sin(Y/H*7+{T}*3)*W*0.01)/(W*{soft}),0,1)))*SB(X,Y)))*(min((({light}*pow(sin(PI*{T}),2)*exp(0-pow(X-({T}*W*1.1-W*0.05),2)/((W*{soft})*(W*{soft})*5))))*(if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))),255))/255",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X",
+          "ay": "Y",
+          "m": "clip((X-({T}*W*1.1-W*0.05)-sin(Y/H*7+{T}*3)*W*0.01)/(W*{soft}),0,1)",
+          "glow": "({light}*pow(sin(PI*{T}),2)*exp(0-pow(X-({T}*W*1.1-W*0.05),2)/((W*{soft})*(W*{soft})*5)))"
+        }
+      },
+      "defaultDurationMs": 550,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-wipe"
+    },
+    {
+      "id": "slideleft",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Slide Left",
+      "description": "The incoming clip pushes the frame across with a hint of motion blur on the seam.",
+      "params": [
+        {
+          "key": "direction",
+          "label": "Direction",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "Left",
+            "Right"
+          ]
+        },
+        {
+          "key": "blur",
+          "label": "Motion blur",
+          "type": "number",
+          "def": 0.035,
+          "min": 0,
+          "max": 0.15,
+          "step": 0.005
+        }
+      ],
+      "derive": {
+        "dx": {
+          "from": "direction",
+          "values": [
+            -1,
+            1
+          ]
+        },
+        "dy": {
+          "from": "direction",
+          "values": [
+            0,
+            0
+          ]
+        }
+      },
+      "expr": "(if(between((X+{dx}*W*(-0.5000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(-0.5000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(-0.5000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(-0.5000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(-0.5000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(-0.5000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(-0.3000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(-0.3000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(-0.3000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(-0.3000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(-0.3000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(-0.3000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(-0.1000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(-0.1000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(-0.1000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(-0.1000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(-0.1000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(-0.1000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(0.1000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(0.1000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(0.1000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(0.1000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(0.1000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(0.1000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(0.3000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(0.3000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(0.3000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(0.3000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(0.3000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(0.3000*{blur}*sin(PI*{T})+1-{T}))))+if(between((X+{dx}*W*(0.5000*{blur}*sin(PI*{T})-{T})),0,W-1)*between((Y+{dy}*H*(0.5000*{blur}*sin(PI*{T})-{T})),0,H-1),SA((X+{dx}*W*(0.5000*{blur}*sin(PI*{T})-{T})),(Y+{dy}*H*(0.5000*{blur}*sin(PI*{T})-{T}))),SB((X+{dx}*W*(0.5000*{blur}*sin(PI*{T})+1-{T})),(Y+{dy}*H*(0.5000*{blur}*sin(PI*{T})+1-{T})))))/6",
+      "render": {
+        "kind": "strip"
+      },
+      "defaultDurationMs": 550,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-slide"
+    },
+    {
+      "id": "radial",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Radial",
+      "description": "A clock sweep from twelve o'clock peels the frame away, traced by an arc of light.",
+      "params": [
+        {
+          "key": "light",
+          "label": "Arc light",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1.2,
+          "step": 0.05
+        },
+        {
+          "key": "tint",
+          "label": "Light",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "White",
+            "Gold",
+            "Cyan"
+          ]
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            255,
+            255,
+            140
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            255,
+            205,
+            235
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            255,
+            140,
+            255
+          ]
+        }
+      },
+      "expr": "(clip((mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T})/0.02+0.5,0,1))*SA(X,Y)+(1-(clip((mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T})/0.02+0.5,0,1)))*SB(X,Y)+(255-((clip((mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T})/0.02+0.5,0,1))*SA(X,Y)+(1-(clip((mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T})/0.02+0.5,0,1)))*SB(X,Y)))*(min((({light}*pow(sin(PI*{T}),2)*exp(0-pow(mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T},2)/0.004)))*(if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))),255))/255",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X",
+          "ay": "Y",
+          "m": "clip((mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T})/0.02+0.5,0,1)",
+          "glow": "({light}*pow(sin(PI*{T}),2)*exp(0-pow(mod(atan2(X-(W*0.5),(H*0.5)-Y)/6.2831853+1,1)-{T},2)/0.004))"
+        }
+      },
+      "defaultDurationMs": 650,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-radial"
+    },
+    {
+      "id": "circleopen",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Circle Open",
+      "description": "The next clip opens through a centred iris, its edge traced by a thin ring of light.",
+      "params": [
+        {
+          "key": "light",
+          "label": "Ring light",
+          "type": "number",
+          "def": 0.5,
+          "min": 0,
+          "max": 1.2,
+          "step": 0.05
+        },
+        {
+          "key": "tint",
+          "label": "Light",
+          "type": "enum",
+          "def": 0,
+          "options": [
+            "White",
+            "Gold",
+            "Cyan"
+          ]
+        }
+      ],
+      "derive": {
+        "cr": {
+          "from": "tint",
+          "values": [
+            255,
+            255,
+            140
+          ]
+        },
+        "cg": {
+          "from": "tint",
+          "values": [
+            255,
+            205,
+            235
+          ]
+        },
+        "cb": {
+          "from": "tint",
+          "values": [
+            255,
+            140,
+            255
+          ]
+        }
+      },
+      "expr": "(clip(((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1))/0.06,0,1))*SA(X,Y)+(1-(clip(((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1))/0.06,0,1)))*SB(X,Y)+(255-((clip(((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1))/0.06,0,1))*SA(X,Y)+(1-(clip(((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1))/0.06,0,1)))*SB(X,Y)))*(min((({light}*pow(sin(PI*{T}),2)*exp(0-pow((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1),2)/0.02)))*(if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))),255))/255",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X",
+          "ay": "Y",
+          "m": "clip(((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1))/0.06,0,1)",
+          "glow": "({light}*pow(sin(PI*{T}),2)*exp(0-pow((hypot(X-(W*0.5),Y-(H*0.5))/hypot((W*0.5),(H*0.5)))*1.06-({T}*1.25-0.1),2)/0.02))"
+        }
+      },
+      "defaultDurationMs": 600,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-circle"
+    },
+    {
+      "id": "hlslice",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Blinds",
+      "description": "Alternating slats sweep the scene away in a staggered cascade — true venetian blinds.",
+      "params": [
+        {
+          "key": "slats",
+          "label": "Slats",
+          "type": "number",
+          "def": 9,
+          "min": 5,
+          "max": 16,
+          "step": 1
+        },
+        {
+          "key": "soft",
+          "label": "Edge softness",
+          "type": "number",
+          "def": 0.03,
+          "min": 0.005,
+          "max": 0.1,
+          "step": 0.005
+        }
+      ],
+      "expr": "(clip(if(eq(mod(floor(Y/(H/{slats})),2),0),1,-1)*(X-if(gt(if(eq(mod(floor(Y/(H/{slats})),2),0),1,-1),0),({T}*1.45-floor(Y/(H/{slats}))*(0.45/{slats}))*W,W-({T}*1.45-floor(Y/(H/{slats}))*(0.45/{slats}))*W))/(W*{soft}),0,1))*SA(X,Y)+(1-(clip(if(eq(mod(floor(Y/(H/{slats})),2),0),1,-1)*(X-if(gt(if(eq(mod(floor(Y/(H/{slats})),2),0),1,-1),0),({T}*1.45-floor(Y/(H/{slats}))*(0.45/{slats}))*W,W-({T}*1.45-floor(Y/(H/{slats}))*(0.45/{slats}))*W))/(W*{soft}),0,1)))*SB(X,Y)",
+      "render": {
+        "kind": "fields",
+        "div": 8,
+        "fields": {
+          "ax": "X",
+          "ay": "Y",
+          "m": "clip(if(eq(mod(floor(Y/(H/{slats})),2),0),1,-1)*(X-if(gt(if(eq(mod(floor(Y/(H/{slats})),2),0),1,-1),0),({T}*1.45-floor(Y/(H/{slats}))*(0.45/{slats}))*W,W-({T}*1.45-floor(Y/(H/{slats}))*(0.45/{slats}))*W))/(W*{soft}),0,1)"
+        }
+      },
+      "defaultDurationMs": 600,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-blinds"
+    },
+    {
+      "id": "crossfade",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Crossfade",
+      "description": "Clean dissolve between clips.",
+      "params": [],
+      "expr": "(1-{T})*SA(X,Y)+({T})*SB(X,Y)",
+      "defaultDurationMs": 500,
+      "defaultEase": "linear",
+      "preview": "gl",
+      "thumb": "fxt-xfade"
+    },
+    {
+      "id": "dipToBlack",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Dip to Black",
+      "description": "The scene sinks through black and rises into the next clip.",
+      "params": [],
+      "expr": "if(lt({T},0.5),SA(X,Y)*(1-{T}*2),SB(X,Y)*({T}*2-1))",
+      "defaultDurationMs": 700,
+      "defaultEase": "linear",
+      "preview": "gl",
+      "thumb": "fxt-dipb"
+    },
+    {
+      "id": "dipToWhite",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Dip to White",
+      "description": "The scene flashes through white into the next clip.",
+      "params": [],
+      "expr": "if(lt({T},0.5),SA(X,Y)+(255-SA(X,Y))*{T}*2,SB(X,Y)*({T}*2-1)+255*(1-({T}*2-1)))",
+      "defaultDurationMs": 700,
+      "defaultEase": "linear",
+      "preview": "gl",
+      "thumb": "fxt-dipw"
+    },
+    {
+      "id": "dissolve",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Dissolve",
+      "description": "Pixels trade places in a fine random scatter until the new scene takes over.",
+      "params": [
+        {
+          "key": "soft",
+          "label": "Edge softness",
+          "type": "number",
+          "def": 0.05,
+          "min": 0.01,
+          "max": 0.15,
+          "step": 0.005
+        }
+      ],
+      "expr": "(1-clip((mod(sin(X*12.9898+Y*78.233)*43758.5453,1)-{T})/{soft}+0.5,0,1))*SA(X,Y)+clip((mod(sin(X*12.9898+Y*78.233)*43758.5453,1)-{T})/{soft}+0.5,0,1)*SB(X,Y)",
+      "defaultDurationMs": 600,
+      "defaultEase": "linear",
+      "preview": "gl",
+      "thumb": "fxt-dissolve"
+    },
+    {
+      "id": "hblur",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Blur Dissolve",
+      "description": "The frame drifts out of focus as the next clip surfaces through it.",
+      "params": [
+        {
+          "key": "amt",
+          "label": "Smear",
+          "type": "number",
+          "def": 1,
+          "min": 0.3,
+          "max": 2,
+          "step": 0.05
+        }
+      ],
+      "expr": "(1-{T})*SA(X+sin(Y*0.9+{T}*6)*{amt}*sin(PI*{T})*22,Y+cos(X*0.5)*{amt}*sin(PI*{T})*5)+({T})*SB(X,Y)",
+      "defaultDurationMs": 650,
+      "defaultEase": "easeInOutCubic",
+      "preview": "gl",
+      "thumb": "fxt-hblur"
+    },
+    {
+      "id": "pixelize",
+      "kind": "transition",
+      "category": "transitions",
+      "name": "Pixelize",
+      "description": "Both clips shatter into growing mosaic blocks and re-form as the new scene.",
+      "params": [
+        {
+          "key": "blocks",
+          "label": "Block size",
+          "type": "number",
+          "def": 1,
+          "min": 0.5,
+          "max": 2.5,
+          "step": 0.1
+        }
+      ],
+      "expr": "(1-{T})*SA(floor(X/(1+{blocks}*26*sin(PI*{T})))*(1+{blocks}*26*sin(PI*{T}))+(1+{blocks}*26*sin(PI*{T}))*0.5,floor(Y/(1+{blocks}*26*sin(PI*{T})))*(1+{blocks}*26*sin(PI*{T}))+(1+{blocks}*26*sin(PI*{T}))*0.5)+({T})*SB(floor(X/(1+{blocks}*26*sin(PI*{T})))*(1+{blocks}*26*sin(PI*{T}))+(1+{blocks}*26*sin(PI*{T}))*0.5,floor(Y/(1+{blocks}*26*sin(PI*{T})))*(1+{blocks}*26*sin(PI*{T}))+(1+{blocks}*26*sin(PI*{T}))*0.5)",
+      "defaultDurationMs": 550,
+      "defaultEase": "linear",
+      "preview": "gl",
+      "thumb": "fxt-pixel"
+    },
+    {
       "id": "focusPull",
       "kind": "effect",
       "category": "intro",

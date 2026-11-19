@@ -122,6 +122,15 @@ export function Preview({
     return () => window.clearTimeout(id);
   }, [glFilterOk]);
 
+  // Transition GL recovery: same pattern — without it, one early hiccup
+  // latched every library transition into the flat DOM-alpha fallback
+  // for the rest of the session (all transitions looked identical).
+  useEffect(() => {
+    if (glTrOk) return;
+    const id = window.setTimeout(() => setGlTrOk(true), 2500);
+    return () => window.clearTimeout(id);
+  }, [glTrOk]);
+
   // Any user gesture re-arms the AudioContext: the WebAudio chain
   // (MediaElementSource → gain → destination) is silent while the context
   // is suspended, so resume eagerly, not only on the play toggle.

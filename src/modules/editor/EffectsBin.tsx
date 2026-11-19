@@ -1,31 +1,22 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
-  ArrowLeft,
   Blend,
-  Circle,
-  Columns3,
   Contrast,
   Droplets,
   Eraser,
   Expand,
   Eye,
-  Grid3x3,
   Layers,
   LogIn,
   LogOut,
-  Moon,
-  MoveLeft,
   MoveRight,
   RefreshCw,
-  Shuffle,
   Sparkles,
   Star,
   Sun,
-  Target,
   Type,
   Wand2,
-  Waves,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -101,13 +92,6 @@ const OVERLAY_ICONS: Record<string, LucideIcon> = {
 /** Basic per-clip color controls — legacy effectDef types that belong in
     the Grade tab next to the looks, not under VFX. */
 const ADJUST_IDS = new Set(["brightness", "contrast", "saturation", "blur"]);
-
-const tr = (id: string, label: string, icon: LucideIcon): FxItem => ({
-  id,
-  label,
-  icon,
-  stripImg: thumbUrl(id),
-});
 
 /** Phase E signature picks — the tiles a creator would choose Creatora
     for. Marked in the bin; kept honest by the catalog audit. */
@@ -206,20 +190,9 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
       ...fxEntries()
         .filter((e) => e.kind === "transition")
         .map((e) => ({ id: e.id, label: e.name, icon: Zap, description: e.description, thumb: e.thumb, stripImg: thumbUrl(e.id) })),
-      // Curated legacy set — one tile per distinct gesture. The rest
-      // still render in old projects (plan.rs maps every xfade); they
-      // are simply no longer offered as new tiles.
-      tr("crossfade", "Crossfade", Blend),
-      tr("dipToBlack", "Dip to black", Moon),
-      tr("dipToWhite", "Dip to white", Sun),
-      tr("dissolve", "Dissolve", Shuffle),
-      tr("hblur", "Blur dissolve", Waves),
-      tr("pixelize", "Pixelize", Grid3x3),
-      tr("radial", "Radial", Target),
-      tr("circleopen", "Circle open", Circle),
-      tr("wipeleft", "Wipe left", ArrowLeft),
-      tr("slideleft", "Slide left", MoveLeft),
-      tr("hlslice", "Blinds", Columns3),
+      // Former legacy xfades are manifest entries now (same ids — old
+      // projects upgrade); other native xfades still render in old
+      // projects via plan.rs but are not offered as new tiles.
     ],
   },
   {
