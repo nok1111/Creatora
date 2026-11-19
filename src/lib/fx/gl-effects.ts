@@ -37,6 +37,18 @@ vec4 screen(vec3 l){
   vec3 c = src(vUv);
   return vec4(1. - (1. - c) * (1. - clamp(l, 0., 1.)), texture(uSrc, vUv).a);
 }
+/* Scene-luma gate (export twin: scene_gate in fxeffects.rs — quarter-res
+   gblur on the luma plane). A 9-tap wide kernel approximates that soft
+   local tone map so the overlay multiplies by the CLIP's own light. */
+float sceneLum(){
+  float r = 0.045;
+  vec3 a = src(vUv);
+  a += src(vUv + vec2(r, 0.)) + src(vUv - vec2(r, 0.));
+  a += src(vUv + vec2(0., r)) + src(vUv - vec2(0., r));
+  a += src(vUv + vec2(r * .7)) + src(vUv + vec2(-r * .7));
+  a += src(vUv + vec2(r * .7, -r * .7)) + src(vUv + vec2(-r * .7, r * .7));
+  return dot(a / 9., vec3(0.299, 0.587, 0.114));
+}
 `;
 
 /** 0xRRGGBB param → [r,g,b] 0..1 */
@@ -65,7 +77,9 @@ void main(){
   float halo = exp(-dot(d, d) / 0.18);
   float s = streak * 1.6 + core * 1.4 + halo * 0.5 + g;
   vec3 tint = mix(uP1.rgb, vec3(1.), clamp(core * 0.7, 0., 1.));
-  frag = screen(tint * s * uP1.w);
+  // scene gate: the flare sits inside the frame — dims where the
+  // scene is already blown out (export: scene_gate, same curve).
+  frag = screen(tint * s * uP1.w * (1. - 0.4 * smoothstep(0.35, 0.9, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => {
       const asp = w / h;
@@ -101,7 +115,8 @@ void main(){
   float b2 = uP2.z * exp(-dot(d3, d3) / (2. * s2));
   float I = 2.2 * (halo + aux + b2);
   vec3 tint = mix(uP1.rgb, vec3(1.), clamp(core * 1.2 + b2 * 0.5, 0., 1.));
-  frag = screen(tint * I * uP1.w);
+  // scene gate: an exposure burn — already-hot film can't burn twice.
+  frag = screen(tint * I * uP1.w * (1. - 0.5 * smoothstep(0.25, 0.85, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => {
       const asp = w / h;
@@ -129,7 +144,9 @@ void main(){
   float a = atan(d.y, d.x) - uP0.z;
   float comb = pow(max(0.5 + 0.5 * sin(a * uP0.w), 0.), uP2.y);
   float rad = exp(-length(d) / max(uP2.x, 0.02));
-  frag = screen(uP1.rgb * comb * rad * uP1.w * uP2.w);
+  // scene gate: shafts live in lit air — dims to 20% inside shadows.
+  frag = screen(uP1.rgb * comb * rad * uP1.w * uP2.w
+              * (0.2 + 0.8 * smoothstep(0.28, 0.8, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => {
       const asp = w / h;
@@ -354,7 +371,9 @@ void main(){
                           + uP2.w * 0.5 * exp(-r2 / (14. * sig * sig)));
     }
   }
-  frag = screen(acc * uP0.y * uP1.w * 1.4);
+  // scene gate: neon streaks read against dark areas.
+  frag = screen(acc * uP0.y * uP1.w * 1.4
+              * (1. - 0.45 * smoothstep(0.2, 0.8, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => [
       6.2832 * c.speed * t, 0.8 + 0.2 * Math.sin(6.2832 * 0.9 * t), c.trails, 0,
@@ -377,7 +396,9 @@ void main(){
   float rad = exp(-length(d) / max(uP2.x, 0.02));
   float halo = exp(-dot(d, d) / 0.16);
   float I = comb * rad + uP3.x * halo;
-  frag = screen(uP1.rgb * I * uP1.w * uP2.w);
+  // scene gate: shafts live in lit air — dims to 20% inside shadows.
+  frag = screen(uP1.rgb * I * uP1.w * uP2.w
+              * (0.2 + 0.8 * smoothstep(0.28, 0.8, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => {
       const asp = w / h;
@@ -448,7 +469,9 @@ void main(){
   float nB = 0.35 + 0.95 * evn(dB * vec2(6., 4.));
   float f = wA * emb(dA) * mix(1., nA, uP2.y)
           + (1. - wA) * emb(dB) * mix(1., nB, uP2.y);
-  frag = screen(uP1.rgb * f * uP1.w * 1.25);
+  // scene gate: embers read against dark areas.
+  frag = screen(uP1.rgb * f * uP1.w * 1.25
+              * (1. - 0.4 * smoothstep(0.2, 0.8, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => [
       c.density, c.size, t, (0.06 + 0.14 * c.speed) * t,
@@ -555,7 +578,9 @@ void main(){
     f += bri * (1.6 * exp(-r2 / (2. * sig * sig))
               + 0.7 * exp(-r2 / (2. * sig * sig * (14. + 30. * uP2.w))));
   }
-  frag = screen(uP1.rgb * f * uP1.w * 1.5);
+  // scene gate: bugs read against dark areas.
+  frag = screen(uP1.rgb * f * uP1.w * 1.5
+              * (1. - 0.55 * smoothstep(0.15, 0.75, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => [
       c.count, c.size, t, 0,
@@ -610,7 +635,9 @@ void main(){
                vec2(0.13, 0.52), 0.45 + 0.55 * uP0.w, uP0.x * 0.55)
              + (1. - wN) * laySnow(vec2(vUv.x * uP2.x + gB, vUv.y + mod(uP3.y + RN * .5, RN)), 1.,
                vec2(0.13, 0.52), 0.45 + 0.55 * uP0.w, uP0.x * 0.55);
-  frag = screen(uP1.rgb * (far + near) * uP1.w * 1.3);
+  // scene gate: flakes catch the scene's light.
+  frag = screen(uP1.rgb * (far + near) * uP1.w * 1.3
+              * (0.65 + 0.35 * smoothstep(0.15, 0.75, sceneLum())));
 }`,
     pack: (c, { t, w, h }) => {
       const rF = (0.05 + 0.09 * c.speed) * 0.7;

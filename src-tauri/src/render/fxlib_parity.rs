@@ -85,11 +85,31 @@ fn ffmpeg() -> Option<PathBuf> {
 }
 
 fn run(args: &[&str]) -> Result<String, String> {
+    // Long graphs (fireflies' per-firefly geq sum) exceed Windows' ~32k
+    // command-line limit — same fix as production run_ffmpeg: a script file.
+    let mut owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    let mut graph_file: Option<PathBuf> = None;
+    if let Some(i) = owned.iter().position(|a| a == "-filter_complex") {
+        if owned[i + 1].len() > 30000 {
+            let p = std::env::temp_dir().join(format!(
+                "creatora_parity_graph_{}_{}.txt",
+                std::process::id(),
+                owned.len()
+            ));
+            std::fs::write(&p, &owned[i + 1]).unwrap();
+            owned[i] = "-/filter_complex".into();
+            owned[i + 1] = p.to_string_lossy().into_owned();
+            graph_file = Some(p);
+        }
+    }
     let o = Command::new(ffmpeg().unwrap())
         .args(["-hide_banner", "-y"])
-        .args(args)
+        .args(&owned)
         .output()
         .map_err(|e| e.to_string())?;
+    if let Some(p) = graph_file {
+        let _ = std::fs::remove_file(p);
+    }
     let err = String::from_utf8_lossy(&o.stderr).to_string();
     if o.status.success() {
         Ok(err)

@@ -181,6 +181,7 @@ fn screen_overlay_frag(
     crop_y: &str,
     env_amt: f64,
     env_speed: f64,
+    gate: &str,
 ) -> Vec<String> {
     let (w, h) = (ctx.w, ctx.h);
     let dur = ctx.clip_ms as f64 / 1000.0;
@@ -211,8 +212,10 @@ fn screen_overlay_frag(
         format!("[{s}]crop=w={w}:h={h}:x='{m}+({crop_x})':y='{m}+({crop_y})'[{sv}]"),
         format!("color=c=black:s=1x1:r={fps}:d={dur},format=rgb24,geq=r='{env}':g='{env}':b='{env}',scale={w}:{h}[{ev}]"),
         format!("[{sv}][{ev}]blend=all_mode=multiply[{ov}]"),
-        format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
+    .into_iter()
+    .chain(scene_gate(e, ctx, &mm, &ov, en, gate))
+    .collect()
 }
 
 /// Cinematic Lens Flare — baked anamorphic streak + core + ghosts.
@@ -259,7 +262,12 @@ fn lens_flare_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collectio
     // crop x increases → content shifts LEFT; drift must be negated.
     let cx = format!("0-{}*sin(6.2832*{}*t+0.7)", fxlib::fmt_num(0.022 * w), fxlib::fmt_num(p["speed"]));
     let cy = format!("0-{}*sin(6.2832*{}*t+2.1)", fxlib::fmt_num(0.012 * h), fxlib::fmt_num(p["speed"] * 0.83));
-    screen_overlay_frag(e, ctx, i, en, &geq_rgb, m, &cx, &cy, p["flicker"], 0.7 + 5.0 * p["speed"])
+    // gate: the flare sits inside the frame — dims where the scene is
+    // already blown out (1−0.4·ss(0.35,0.9)); GLSL twin in gl-effects.
+    screen_overlay_frag(
+        e, ctx, i, en, &geq_rgb, m, &cx, &cy, p["flicker"], 0.7 + 5.0 * p["speed"],
+        &gate_mask(format!("1-0.4*{}", ssq(0.35, 0.9, gate_luma()))),
+    )
 }
 
 /// Light Leak — baked organic blob field, drifting in from an edge.
@@ -326,7 +334,12 @@ fn light_leak_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collectio
             ),
         }
     };
-    screen_overlay_frag(e, ctx, i, en, &geq_rgb, m, &nx, &ny, p["flicker"], 0.4 + 3.0 * p["speed"])
+    // gate: an exposure burn — already-hot film can't burn twice
+    // (1−0.5·ss(0.25,0.85)); GLSL twin in gl-effects.
+    screen_overlay_frag(
+        e, ctx, i, en, &geq_rgb, m, &nx, &ny, p["flicker"], 0.4 + 3.0 * p["speed"],
+        &gate_mask(format!("1-0.5*{}", ssq(0.25, 0.85, gate_luma()))),
+    )
 }
 
 /// God Rays — per-frame quarter-res geq fan (sway+breathe inside T).
@@ -364,8 +377,15 @@ fn god_rays_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collections
             expr(0.75),
         ),
         format!("[{gv}]scale={w}:{h}[{ov}]"),
-        format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
+    .into_iter()
+    .chain(scene_gate(
+        e, ctx, &mm, &ov, en,
+        // gate: shafts live in lit air — 0.2+0.8·ss(0.28,0.8) dims the
+        // fan to 20% inside shadows; GLSL twin in gl-effects.
+        &gate_mask(format!("0.2+0.8*{}", ssq(0.28, 0.8, gate_luma()))),
+    ))
+    .collect()
 }
 
 /// Prism Refraction — plane-split dispersion + baked spectral glint.
@@ -738,8 +758,15 @@ fn neon_trails_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collecti
         format!("[{ev}]scale={gw}:{gh_}[{ev}]"),
         format!("[{nr}][{ev}]blend=all_mode=multiply[{ns}]"),
         format!("[{ns}]scale={w}:{h},gblur=sigma=2[{no}]", w = ctx.w, h = ctx.h),
-        format!("[{mm}][{no}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
+    .into_iter()
+    .chain(scene_gate(
+        e, ctx, &mm, &no, en,
+        // gate: neon streaks read against dark — 1−0.45·ss(0.2,0.8);
+        // GLSL twin in gl-effects.
+        &gate_mask(format!("1-0.45*{}", ssq(0.2, 0.8, gate_luma()))),
+    ))
+    .collect()
 }
 
 /// Golden Rays — godRays machinery with warm gold tint, softer comb and
@@ -778,8 +805,15 @@ fn golden_rays_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collecti
             expr(0.45),
         ),
         format!("[{gv}]scale={w}:{h}[{ov}]", w = ctx.w, h = ctx.h),
-        format!("[{mm}][{ov}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
+    .into_iter()
+    .chain(scene_gate(
+        e, ctx, &mm, &ov, en,
+        // gate: shafts live in lit air — 0.2+0.8·ss(0.28,0.8) dims the
+        // fan to 20% inside shadows; GLSL twin in gl-effects.
+        &gate_mask(format!("0.2+0.8*{}", ssq(0.28, 0.8, gate_luma()))),
+    ))
+    .collect()
 }
 
 // ── batch 3: embers / fog / fireflies / snow ─────────────────────────
@@ -788,6 +822,56 @@ fn golden_rays_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collecti
 fn ssq(a: f64, b: f64, x: &str) -> String {
     let t = format!("clip(({x}-{})/{},0,1)", fxlib::fmt_num(a), fxlib::fmt_num(b - a));
     format!("({t}*{t}*(3-2*{t}))")
+}
+
+/// Scene-luma gate: replaces the flat `[mm][ov]blend=screen` tail with a
+/// multiply of the overlay by the CLIP's own blurred luminance (quarter-
+/// res, shaped per effect by `mask` — a geq expr on `lum(X,Y)/255`
+/// returning 0..255). Shafts die in shadows, glows sink into dark areas
+/// and leaks burn less on already-hot pixels — the overlay stops
+/// floating over the footage and starts living in it. GLSL twin:
+/// `sceneLum()` + per-effect mask in gl-effects.ts.
+fn scene_gate(e: &Effect, ctx: &FxCtx, mm: &str, ov: &str, en: &str, mask: &str) -> Vec<String> {
+    // `q*` labels: attr prefixes must not collide with the calling
+    // effect's own gm/gs/go. The clip stream arrives at its FIT size
+    // (scale=decrease can shrink below ctx.w×h), so overlay and mask are
+    // scale2ref'd to the main stream — blend requires equal dims.
+    let (mm2, ml, lg, lms, ovs, mm3, lm, ov2, ovm) = (
+        attr_name(e, "qa"),
+        attr_name(e, "qb"),
+        attr_name(e, "qc"),
+        attr_name(e, "qd"),
+        attr_name(e, "qs"),
+        attr_name(e, "qm"),
+        attr_name(e, "qe"),
+        attr_name(e, "qo"),
+        attr_name(e, "qf"),
+    );
+    let (gw, gh) = ((ctx.w / 4).max(16), (ctx.h / 4).max(16));
+    vec![
+        format!("[{mm}]split=2[{mm2}][{ml}]"),
+        // No `format=gray` here: it propagates the negotiation back
+        // through `split` and turns the SHARED buffers (and thus the
+        // whole clip) gray. geq reads r/g/b and emits the mask on all
+        // three channels — stays whatever format the clip carries.
+        format!("[{ml}]scale={gw}:{gh},gblur=sigma=4[{lg}]"),
+        format!("[{lg}]geq=r='{mask}':g='{mask}':b='{mask}'[{lms}]"),
+        format!("[{ov}][{mm2}]scale2ref[{ovs}][{mm3}]"),
+        format!("[{lms}][{ovs}]scale2ref[{lm}][{ov2}]"),
+        format!("[{ov2}][{lm}]blend=all_mode=multiply[{ovm}]"),
+        format!("[{mm3}][{ovm}]blend=all_mode=screen:all_opacity=1{en}"),
+    ]
+}
+
+/// Mask expr for the gate: `body` maps the blurred luma L∈[0,1] → [0,1]
+/// multiplier; evaluated per pixel on the quarter-res plane.
+fn gate_mask(body: String) -> String {
+    format!("255*({body})")
+}
+
+/// Rec.601 luma of the blurred clip sample, normalized to [0,1].
+fn gate_luma() -> &'static str {
+    "((0.299*r(X,Y)+0.587*g(X,Y)+0.114*b(X,Y))/255)"
 }
 
 /// Bilinear value noise at lattice coords (px,py) — same sin-hash the
@@ -923,8 +1007,12 @@ fn floating_embers_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::coll
         format!("[{eb2}][{wb}]blend=all_mode=multiply[{bw}]"),
         format!("[{aw}][{bw}]blend=all_mode=addition[{sm}]"),
         format!("[{sm}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h),
-        format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
     ]);
+    // gate: embers read against dark — 1−0.4·ss(0.2,0.8); GLSL twin.
+    out.extend(scene_gate(
+        e, ctx, &mm, &go, en,
+        &gate_mask(format!("1-0.4*{}", ssq(0.2, 0.8, gate_luma()))),
+    ));
     out
 }
 
@@ -1107,8 +1195,15 @@ fn fireflies_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collection
             expr(p["cb"]),
         ),
         format!("[{gs}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h),
-        format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"),
     ]
+    .into_iter()
+    .chain(scene_gate(
+        e, ctx, &mm, &go, en,
+        // gate: bugs read against dark — 1−0.55·ss(0.15,0.75);
+        // GLSL twin in gl-effects.
+        &gate_mask(format!("1-0.55*{}", ssq(0.15, 0.75, gate_luma()))),
+    ))
+    .collect()
 }
 
 /// Falling Snow — bake+scroll, two independent strips (far/near).
@@ -1224,7 +1319,12 @@ fn falling_snow_frag(e: &Effect, ctx: &FxCtx, i: f64, en: &str, p: &std::collect
     let go = attr_name(e, "so");
     out.push(format!("[{l0}][{l1}]blend=all_mode=addition[{ss2}]", l0 = layer_labels[0], l1 = layer_labels[1]));
     out.push(format!("[{ss2}]scale={w}:{h},gblur=sigma=1.5[{go}]", w = ctx.w, h = ctx.h));
-    out.push(format!("[{mm}][{go}]blend=all_mode=screen:all_opacity=1{en}"));
+    // gate: flakes catch the scene's light — 0.65+0.35·ss(0.15,0.75);
+    // GLSL twin in gl-effects.
+    out.extend(scene_gate(
+        e, ctx, &mm, &go, en,
+        &gate_mask(format!("0.65+0.35*{}", ssq(0.15, 0.75, gate_luma()))),
+    ));
     out
 }
 
