@@ -316,15 +316,18 @@ const RIP = (() => {
   const lxA = `(W*0.5+${jag(`(${ay0}/H)`)})`;
   // Distance into the owning half along the source-space tear normal.
   const inHalf = `(${s}*(${ax0}-${lxA}))`;
-  const fray = `(mod(sin(Y*113.7+X*7.31)*43758.5453,1)-0.5)*{fray}*W*0.016`;
-  const own = `clip(${inHalf}/(W*0.004)+0.5+${fray},0,1)`;
+  // Fray and fiber are smooth sine striations along the tear (functions
+  // of Y/H only) — per-pixel hash would dither the mask into speckle,
+  // while layered bands read as torn paper strands.
+  const fray = `((0.5*sin(Y/H*43.0+1.3)+0.35*sin(Y/H*97.0+4.2)+0.15*sin(Y/H*211.0+0.7))*{fray}*W*0.011)`;
+  const own = `clip(${inHalf}/(W*0.005)+0.5+${fray},0,1)`;
   const inFrame = `clip(min(min(${ax0},W-1-${ax0}),min(${ay0},H-1-${ay0}))+0.5,0,1)`;
   const m = `clip(${torn}*${own}*${inFrame}+1-${torn},0,1)`;
   // Curled lip: the last ~2.5% of each half compresses toward the tear.
   const curl = `pow(clip(1-${inHalf}/(W*0.025),0,1),2)*{curl}*W*0.010`;
   const ax = `(${ax0}+${s}*${curl})`;
   const edge = `clip(1-abs(${inHalf})/(W*0.011),0,1)`;
-  const fiber = `(0.45+0.55*mod(sin(Y*113.7+X*7.31)*43758.5453,1))`;
+  const fiber = `(0.50+0.28*sin(Y/H*163.0+2.4)+0.22*sin(Y/H*331.0+0.9))`;
   const glow = `(${edge}*${fiber}*{edge}*${torn})`;
   const merged = `(${m})*SA(${ax},${ay0})+(1-(${m}))*SB(X,Y)`;
   const tint = `if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))`;

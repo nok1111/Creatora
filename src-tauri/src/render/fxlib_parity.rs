@@ -1493,12 +1493,15 @@ fn fx_thumbs() {
     // Merge: 8 manifest transitions + the 12 curated legacy xfades.
     // two_clip_doc puts the 1 s join at frames 30–60 of a 90-frame
     // timeline — sample the gesture across it.
-    let kinds: Vec<String> = crate::render::fxlib::manifest()
+    let mut kinds: Vec<String> = crate::render::fxlib::manifest()
         .entries
         .iter()
         .filter(|e| e.kind == "transition")
         .map(|e| e.id.clone())
         .collect();
+    if let Ok(only) = std::env::var("TR_KIND") {
+        kinds.retain(|k| k == &only);
+    }
     let tr_frames: [u32; 8] = [30, 34, 38, 42, 46, 50, 54, 59];
     for kind in &kinds {
         let (mut doc, srcs) = two_clip_doc(kind, &[], &a_mp4, &b_mp4);
