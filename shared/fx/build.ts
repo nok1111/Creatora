@@ -371,26 +371,29 @@ const lumeSweepExpr = () => LUME.expr;
 // ── Zoom Punch (manifest "zoomin" — replaces the native xfade) ────────
 // The stock xfade zoomin pushes A to ~4× before handing over, so the
 // mid-gesture reads as a grey mosaic blob. This version caps the punch
-// at ~2× and dissolves A centre-first — the most-magnified pixels are
-// gone before they can smear — while a soft radial flash peaks as A
-// exits. B is identity (fields can't warp it) but arrives through the
-// light, so it reads as camera continuity rather than a reveal.
+// at ~2.3× and dissolves A centre-first — the most-magnified pixels are
+// gone before they can smear. B is identity (fields can't warp it) but
+// arrives behind a lume ring that travels with the reveal front, so it
+// reads as flying through a lit aperture rather than a soft iris.
 const PUNCH = (() => {
   const cx = "(W*0.5)", cy = "(H*0.5)";
   const dx = `(X-${cx})`, dy = `(Y-${cy})`;
   // Normalized radius: 0 centre → 1 corner.
   const rr = `(hypot(${dx},${dy})/hypot(${cx},${cy}))`;
-  // Punch-in accelerates and tops out at 1+{zoom}·1.5 — visible growth
-  // for most of the gesture instead of a last-second snap.
-  const s = `(1+{zoom}*1.5*pow(${T},1.4))`;
+  // Punch-in is present early and keeps accelerating — front-loaded so
+  // the growth reads on real footage, not a last-second snap.
+  const s = `(1+{zoom}*1.9*pow(${T},1.15))`;
   const ax = `(${cx}+${dx}/${s})`;
   const ay = `(${cy}+${dy}/${s})`;
   // Zoom-through: B opens as a disc growing from the centre while the
   // still-zoomed A evacuates to a thin rim at the frame edges — the eye
   // reads "flying through the old frame into the new scene".
   const front = `(${T}*1.5-0.32)`;
-  const m = `clip((${rr}*1.05-${front})/0.2,0,1)`;
-  const glow = `({flash}*pow(sin(PI*${T}),4)*exp(0-${rr}*${rr}/0.3)*1.0)`;
+  const m = `clip((${rr}*1.05-${front})/0.1,0,1)`;
+  // Lume ring on the reveal front + a soft fill so the incoming scene
+  // arrives through light. Ring falls off as the front passes corners.
+  const ring = `exp(0-pow(${rr}*1.05-${front},2)/0.015)`;
+  const glow = `({flash}*pow(sin(PI*${T}),4)*(0.35*exp(0-${rr}*${rr}/0.3)+0.85*${ring}))`;
   const merged = `(${m})*SA(${ax},${ay})+(1-(${m}))*SB(X,Y)`;
   const tint = `if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))`;
   const tinted = `min((${glow})*(${tint}),255)`;

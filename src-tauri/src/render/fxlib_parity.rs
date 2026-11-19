@@ -1534,21 +1534,28 @@ fn transition_audit() {
     let out_dir = root.join("qa/out/transitions");
     std::fs::create_dir_all(&out_dir).unwrap();
     let tmp = tmpdir("traudit");
-    let (tw, th) = (384u32, 216u32);
-
-    let a_img = tmp.join("a.png");
-    let b_img = tmp.join("b.png");
-    run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:60:60"),
-          "-frames:v", "1", "-update", "1", a_img.to_str().unwrap()]).unwrap();
-    run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:1050:160"),
-          "-frames:v", "1", "-update", "1", b_img.to_str().unwrap()]).unwrap();
-    let a_mp4 = tmp.join("a.mp4");
-    let b_mp4 = tmp.join("b.mp4");
-    for (img, mp4) in [(&a_img, &a_mp4), (&b_img, &b_mp4)] {
-        run(&["-loop", "1", "-t", "4", "-i", img.to_str().unwrap(),
-              "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
-              mp4.to_str().unwrap()]).unwrap();
-    }
+    let (tw, th, a_mp4, b_mp4) = if std::env::var("TR_FOOTAGE").is_ok() {
+        // Real moving footage — warp/parallax/flash defects that still
+        // frames hide become visible. clipA/clipB are 1080p30 6 s.
+        (480u32, 270u32,
+         root.join("qa/media/clipA.mp4"), root.join("qa/media/clipB.mp4"))
+    } else {
+        let (tw, th) = (384u32, 216u32);
+        let a_img = tmp.join("a.png");
+        let b_img = tmp.join("b.png");
+        run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:60:60"),
+              "-frames:v", "1", "-update", "1", a_img.to_str().unwrap()]).unwrap();
+        run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:1050:160"),
+              "-frames:v", "1", "-update", "1", b_img.to_str().unwrap()]).unwrap();
+        let a_mp4 = tmp.join("a.mp4");
+        let b_mp4 = tmp.join("b.mp4");
+        for (img, mp4) in [(&a_img, &a_mp4), (&b_img, &b_mp4)] {
+            run(&["-loop", "1", "-t", "4", "-i", img.to_str().unwrap(),
+                  "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
+                  mp4.to_str().unwrap()]).unwrap();
+        }
+        (tw, th, a_mp4, b_mp4)
+    };
 
     let mut kinds: Vec<String> = crate::render::fxlib::manifest()
         .entries
@@ -1578,7 +1585,11 @@ fn transition_audit() {
         let (mut doc, srcs) = two_clip_doc(kind, &[], &a_mp4, &b_mp4);
         doc.canvas.width = tw;
         doc.canvas.height = th;
-        let out = out_dir.join(format!("audit_{kind}.png"));
+        let out = out_dir.join(if std::env::var("TR_FOOTAGE").is_ok() {
+            format!("faudit_{kind}.png")
+        } else {
+            format!("audit_{kind}.png")
+        });
         let p = plan::build_plan(&doc, &srcs).expect("plan");
         let sel = frames.iter().map(|n| format!("eq(n\\,{n})")).collect::<Vec<_>>().join("+");
         let args = p.ffmpeg_args(&out);
