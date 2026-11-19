@@ -749,7 +749,14 @@ export function addTransition(
   const b = track.clips.find((c) => c.id === clipBId);
   if (!a || !b || a === b) return null;
   const aEnd = a.startMs + a.durationMs;
-  const d = Math.max(1, Math.min(durationMs, a.durationMs - 1, b.durationMs - 1));
+  // One transition per junction (enforced below). Re-applying replaces the
+  // kind but keeps the duration the user sized it to — and the tuned
+  // params/ease when it's the same kind re-dropped.
+  const existing = track.transitions.find((x) => x.clipA === clipAId && x.clipB === clipBId);
+  const d = Math.max(
+    1,
+    Math.min(existing?.durationMs ?? durationMs, a.durationMs - 1, b.durationMs - 1),
+  );
   if (d <= 0) return null;
 
   const next = cloneDoc(doc);
@@ -772,8 +779,13 @@ export function addTransition(
   // Library transitions (shared/fx manifest) start from validated params.
   const lib = fxTransition(kind);
   if (lib) {
-    tr.params = validateParams(lib, opts?.params ?? defaultParams(lib)).params;
-    if (opts?.ease && FX_MANIFEST.eases[opts.ease]) tr.ease = opts.ease;
+    const same = existing?.type === kind;
+    tr.params = validateParams(
+      lib,
+      opts?.params ?? (same && existing?.params ? existing.params : defaultParams(lib)),
+    ).params;
+    const ease = opts?.ease ?? (same ? existing?.ease : undefined);
+    if (ease && FX_MANIFEST.eases[ease]) tr.ease = ease;
   }
   // One transition per junction: re-applying replaces the existing one
   // (otherwise two transitions stack on the same pair and the preview/render

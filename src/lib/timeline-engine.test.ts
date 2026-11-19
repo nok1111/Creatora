@@ -290,8 +290,10 @@ describe("effects / keyframes / transitions", () => {
     const trs = d.timeline.tracks[0].transitions;
     expect(trs).toHaveLength(1);
     expect(trs[0].type).toBe("liquidMelt");
-    expect(trs[0].durationMs).toBe(900);
-    expect(findClip(d, b.clipId)!.clip.startMs).toBe(1100);
+    // Replacing the kind preserves the user's sized duration — only the
+    // recipe changes. A new length goes through setTransitionDuration.
+    expect(trs[0].durationMs).toBe(500);
+    expect(findClip(d, b.clipId)!.clip.startMs).toBe(1500);
   });
 
   it("transitions ripple later clips so junctions can be chained and resized", () => {
