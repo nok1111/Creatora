@@ -68,6 +68,65 @@ void main(){
   return { source, uniforms };
 }
 
+/** Fast path for transitions whose render is `kind:"fields"`: the ax/ay/m
+ *  (and optional glow) recipes are evaluated ONCE per pixel and the blend
+ *  runs as vec4 ops — same math as the export's geq fields + remap +
+ *  maskedmerge + screen-blend chain. The generic `buildFragmentShader`
+ *  path re-evaluates the whole merged expr per channel (~4× the field
+ *  math per pixel), which makes heavy warps (rip, tearRift) stutter. */
+export function buildTransitionFieldShader(e: FxEntry, ease?: string): ShaderSpec | null {
+  const fields = e.render?.kind === "fields" ? e.render.fields : null;
+  if (!fields) return null;
+  const easeName = ease && FX_MANIFEST.eases[ease] ? ease : (e.defaultEase ?? "linear");
+  const easeBody = FX_MANIFEST.eases[easeName];
+  const tpl = (s: string) =>
+    s
+      .replace(/\{T\}/g, () => easeBody)
+      .replace(/\{u\}/g, "u")
+      .replace(/\{(\w+)\}/g, (_, n: string) => `u_${n}`);
+  const asts = (["ax", "ay", "m", "glow"] as const).map(
+    (k) => [k, fields[k] ? parse(tpl(fields[k] as string)) : null] as const,
+  );
+  const uniforms = [
+    ...new Set(asts.flatMap(([, a]) => (a ? [...freeVars(a)] : []))),
+  ]
+    .filter((n) => n.startsWith("u_"))
+    .map((n) => n.slice(2));
+  if (asts[3][1]) for (const t of ["cr", "cg", "cb"]) if (!uniforms.includes(t)) uniforms.push(t);
+  const decl = uniforms.map((n) => `uniform float u_${n};`).join("\n");
+  const g = (i: number, dflt: string) =>
+    asts[i][1] ? toGlsl(asts[i][1]) : dflt;
+  const source = `#version 300 es
+precision highp float;
+uniform sampler2D uA;
+uniform sampler2D uB;
+uniform vec2 uRes;
+uniform float uU;
+${decl}
+out vec4 outColor;
+float W; float H; float X; float Y; float u; float PLANE;
+float fx_mod(float a, float b){ return a - b*floor(a/b); }
+void main(){
+  W = uRes.x; H = uRes.y; u = uU;
+  X = floor(gl_FragCoord.x);
+  Y = H - 1.0 - floor(gl_FragCoord.y);
+  PLANE = 0.0;
+  vec2 s = vec2(${g(0, "X")}, ${g(1, "Y")});
+  ivec2 pa = ivec2(int(clamp(floor(s.x),0.0,W-1.0)), int(clamp(floor(s.y),0.0,H-1.0)));
+  ivec2 pb = ivec2(int(X), int(Y));
+  vec4 a = texelFetch(uA, pa, 0);
+  vec4 b = texelFetch(uB, pb, 0);
+  float mm = clamp(${g(2, "1.0")}, 0.0, 1.0);
+  vec4 o = a * mm + b * (1.0 - mm);
+  ${asts[3][1] ? `vec3 tint = vec3(u_cr, u_cg, u_cb) / 255.0;
+  vec3 l = min(clamp(${g(3, "0.0")}, 0.0, 4.0) * tint, vec3(1.0));
+  o.rgb = o.rgb + (1.0 - o.rgb) * l;` : ""}
+  outColor = vec4(o.rgb * o.a, o.a);
+}
+`;
+  return { source, uniforms };
+}
+
 /** Single-clip field effects (intro/outro, render.kind="fields") — the
  *  declarative ax/ay/m/glow recipe compiled straight to GLSL: same math
  *  the export's geq field videos + remap/maskedmerge/screen graph runs.

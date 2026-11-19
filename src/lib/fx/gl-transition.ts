@@ -18,7 +18,7 @@
  */
 
 import { resolveConstants, type FxEntry } from "./manifest";
-import { VERTEX_SHADER, buildFragmentShader } from "./gl-shader";
+import { VERTEX_SHADER, buildFragmentShader, buildTransitionFieldShader } from "./gl-shader";
 
 export type GlStatus = "ok" | "lost" | "unavailable";
 export type TexSource = HTMLCanvasElement | HTMLVideoElement | HTMLImageElement;
@@ -120,7 +120,7 @@ export class TransitionGL {
     const hit = this.programs.get(key);
     if (hit) return hit;
     if (!this.vs) this.vs = this.compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
-    const spec = buildFragmentShader(entry, ease);
+    const spec = buildTransitionFieldShader(entry, ease) ?? buildFragmentShader(entry, ease);
     const fs = this.compile(gl, gl.FRAGMENT_SHADER, spec.source);
     if (!this.vs || !fs) {
       this.setStatus("unavailable");
@@ -207,12 +207,24 @@ export class TransitionGL {
     gl.uniform2f(prog.loc.get("uRes")!, o.w, o.h);
     gl.uniform1f(prog.loc.get("uU")!, Math.min(1, Math.max(0, o.u)));
     const consts = resolveConstants(o.entry, o.params);
-    for (const n of prog.uniforms) gl.uniform1f(prog.loc.get(`u_${n}`) ?? null, consts[n] ?? 0);
+    for (const n of prog.uniforms)
+      gl.uniform1f(
+        prog.loc.get(`u_${n}`) ?? null,
+        consts[n] ?? ((n === "cr" || n === "cg" || n === "cb") ? 255 : 0),
+      );
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return !gl.isContextLost();
+  }
+
+  /** Precompile the shader program for a transition ahead of its window —
+   *  the first draw otherwise pays a multi-hundred-ms compile hitch right
+   *  at the junction. Safe to call repeatedly (cached). */
+  warm(entry: FxEntry, ease?: string): void {
+    if (!this.ensure()) return;
+    this.program(entry, ease);
   }
 
   /** Free GPU objects but keep the context for fast reuse; the context
@@ -221,15 +233,15 @@ export class TransitionGL {
   release() {
     const gl = this.gl;
     if (gl && !gl.isContextLost()) {
-      for (const p of this.programs.values()) gl.deleteProgram(p.program);
+      // Keep compiled programs: shader compile is the expensive part
+      // (hundreds of ms at a junction) and warm() precompiles the whole
+      // timeline — deleting programs here would re-arm the hitch for the
+      // next transition. Textures/buffer are the real memory.
       if (this.tex) for (const t of this.tex) gl.deleteTexture(t);
       if (this.quad) gl.deleteBuffer(this.quad);
-      if (this.vs) gl.deleteShader(this.vs);
     }
-    this.programs.clear();
     this.tex = null;
     this.quad = null;
-    this.vs = null;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => this.dispose(), IDLE_DROP_MS);
   }

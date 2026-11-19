@@ -29,7 +29,8 @@ import {
 } from "@/lib/effects";
 import { resumeAudio } from "@/services/audio-preview";
 import { activeLibraryTransitions } from "@/lib/fx/active-transitions";
-import { transitionGL } from "@/lib/fx/gl-transition";
+import { transitionGL, hasTransitionRecipe } from "@/lib/fx/gl-transition";
+import { fxTransition } from "@/lib/fx/manifest";
 import type { LayerInfo } from "@/lib/fx/layer-raster";
 import { TransitionLayer } from "@/modules/editor/TransitionLayer";
 import { FilterLayer } from "@/modules/editor/FilterLayer";
@@ -130,6 +131,24 @@ export function Preview({
     const id = window.setTimeout(() => setGlTrOk(true), 2500);
     return () => window.clearTimeout(id);
   }, [glTrOk]);
+
+  // Precompile transition shaders ahead of their windows: the first
+  // draw() otherwise pays a few-hundred-ms program compile right at the
+  // junction and the preview hitches mid-gesture. Re-warm whenever the
+  // doc's transition set or the GL health changes.
+  useEffect(() => {
+    if (!doc || !glTrOk) return;
+    const id = window.setTimeout(() => {
+      const tg = transitionGL();
+      const vd = docOverride ?? effectiveDoc(doc, activeVersionId);
+      for (const track of vd.timeline.tracks)
+        for (const tr of track.transitions) {
+          const entry = fxTransition(tr.type);
+          if (hasTransitionRecipe(entry)) tg.warm(entry, tr.ease);
+        }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [doc, docOverride, activeVersionId, glTrOk]);
 
   // Any user gesture re-arms the AudioContext: the WebAudio chain
   // (MediaElementSource → gain → destination) is silent while the context
