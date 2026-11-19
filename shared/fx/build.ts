@@ -283,6 +283,59 @@ const RIFT = (() => {
 const tearRiftExpr = () =>
   `(${RIFT.m})*SA(${RIFT.ax},${RIFT.ay})+(1-(${RIFT.m}))*SB(X,Y)`;
 
+// ── Rip (sheet torn in half from the middle) ───────────────────────────
+// The frame behaves as a sheet: a rip unzips top→bottom along a
+// wandering centre line, then the two halves peel apart — rotating a few
+// degrees outward and sagging under gravity — while the torn edges carry
+// a bright fibrous deckle. Coverage is resolved in source space: an
+// output pixel shows A only when its warped sample still lands on the
+// correct side of the tear, so the gap tracks the halves exactly.
+const RIP = (() => {
+  const jag = (yy: string) =>
+    `(W*(0.030*sin(${yy}*6.7+0.8)+0.014*sin(${yy}*17.3+2.9)+0.007*sin(${yy}*41.7+1.2)+0.003*sin(${yy}*89.3+4.1)))`;
+  const lx = `(W*0.5+${jag("(Y/H)")})`;
+  const dxl = `(X-${lx})`;
+  const s = `(gte(${dxl},0)*2-1)`;
+  // The rip unzips top→bottom in the first ~40%; `open` lags behind the
+  // front so the gap is a wedge — widest behind the tear, pinched at it.
+  const front = `(${T}*2.5)`;
+  const torn = `clip((${front}-(Y/H))/0.10,0,1)`;
+  const open = `clip((${front}-(Y/H))/0.30,0,1)`;
+  // Separation paces the gesture: a steady peel early (pow 1.6 term)
+  // plus a late fling (pow 7 term) that only lands once the eased T is
+  // past ~0.8 — the halves stay on screen for the middle of the window
+  // and exit inside the last ~15% instead of a third early.
+  const sep = `({pull}*W*(0.32*pow(${T},1.6)+0.25*pow(${T},7))*${open})`;
+  const ang = `(${s}*{lean}*0.09*pow(${T},1.5)*${open})`;
+  const drop = `({sag}*H*0.14*pow(${T},2.5)*${open})`;
+  const cx = `(W*(0.5+${s}*0.25))`, cy = "(H*0.5)";
+  const qx = `(X-${s}*${sep}-${cx})`;
+  const qy = `(Y-${drop}-${cy})`;
+  const ax0 = `(${cx}+${qx}*cos(${ang})+${qy}*sin(${ang}))`;
+  const ay0 = `(${cy}-${qx}*sin(${ang})+${qy}*cos(${ang}))`;
+  const lxA = `(W*0.5+${jag(`(${ay0}/H)`)})`;
+  // Distance into the owning half along the source-space tear normal.
+  const inHalf = `(${s}*(${ax0}-${lxA}))`;
+  const fray = `(mod(sin(Y*113.7+X*7.31)*43758.5453,1)-0.5)*{fray}*W*0.016`;
+  const own = `clip(${inHalf}/(W*0.004)+0.5+${fray},0,1)`;
+  const inFrame = `clip(min(min(${ax0},W-1-${ax0}),min(${ay0},H-1-${ay0}))+0.5,0,1)`;
+  const m = `clip(${torn}*${own}*${inFrame}+1-${torn},0,1)`;
+  // Curled lip: the last ~2.5% of each half compresses toward the tear.
+  const curl = `pow(clip(1-${inHalf}/(W*0.025),0,1),2)*{curl}*W*0.010`;
+  const ax = `(${ax0}+${s}*${curl})`;
+  const edge = `clip(1-abs(${inHalf})/(W*0.011),0,1)`;
+  const fiber = `(0.45+0.55*mod(sin(Y*113.7+X*7.31)*43758.5453,1))`;
+  const glow = `(${edge}*${fiber}*{edge}*${torn})`;
+  const merged = `(${m})*SA(${ax},${ay0})+(1-(${m}))*SB(X,Y)`;
+  const tint = `if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))`;
+  const tinted = `min((${glow})*(${tint}),255)`;
+  return {
+    fields: { ax, ay: ay0, m, glow },
+    expr: `${merged}+(255-(${merged}))*(${tinted})/255`,
+  };
+})();
+const ripExpr = () => RIP.expr;
+
 // ── Block Cascade ──────────────────────────────────────────────────────
 // A breaks into square tiles that drop out of frame top→bottom with
 // per-tile jitter, accelerating under "gravity" and fading at the end of
@@ -797,6 +850,40 @@ export const MANIFEST: FxManifest = {
       thumb: "fxt-rift",
     },
     {
+      id: "rip",
+      kind: "transition",
+      category: "transitions",
+      name: "Rip",
+      description:
+        "The frame is a sheet torn down the middle — the rip unzips top to bottom, both halves peel apart with a lean and a sag, and the torn edge frays with a lit paper-fiber deckle.",
+      params: [
+        num("pull", "Separation", 1, 0.6, 1.4, 0.05),
+        num("lean", "Peel angle", 1, 0, 1.8, 0.05),
+        num("sag", "Droop", 0.6, 0, 1, 0.05),
+        num("fray", "Fray", 1, 0, 2, 0.05),
+        num("curl", "Curl", 1, 0, 2, 0.05),
+        num("edge", "Edge light", 0.7, 0, 1.5, 0.05),
+        {
+          key: "tint",
+          label: "Paper",
+          type: "enum",
+          def: 0,
+          options: ["Bright", "Warm", "Cool"],
+        },
+      ],
+      derive: {
+        cr: { from: "tint", values: [255, 255, 200] },
+        cg: { from: "tint", values: [255, 235, 215] },
+        cb: { from: "tint", values: [255, 205, 245] },
+      },
+      expr: ripExpr(),
+      render: { kind: "fields", div: 8, fields: RIP.fields },
+      defaultDurationMs: 750,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-rip",
+    },
+    {
       id: "blockCascade",
       kind: "transition",
       category: "transitions",
@@ -1075,19 +1162,6 @@ export const MANIFEST: FxManifest = {
       defaultEase: "linear",
       preview: "gl",
       thumb: "fxt-dipw",
-    },
-    {
-      id: "dissolve",
-      kind: "transition",
-      category: "transitions",
-      name: "Dissolve",
-      description: "Pixels trade places in a fine random scatter until the new scene takes over.",
-      params: [num("soft", "Edge softness", 0.05, 0.01, 0.15, 0.005)],
-      expr: `(1-clip((mod(sin(X*12.9898+Y*78.233)*43758.5453,1)-${T})/{soft}+0.5,0,1))*SA(X,Y)+clip((mod(sin(X*12.9898+Y*78.233)*43758.5453,1)-${T})/{soft}+0.5,0,1)*SB(X,Y)`,
-      defaultDurationMs: 600,
-      defaultEase: "linear",
-      preview: "gl",
-      thumb: "fxt-dissolve",
     },
     {
       id: "hblur",
