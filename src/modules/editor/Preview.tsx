@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -586,8 +586,13 @@ export function Preview({
               }}
             />
           ) : null;
+          // The wrapping Fragment MUST be keyed by clip.id: without it the
+          // list item's identity is its index, so when an earlier clip on
+          // the track ends React reconciles index-0's old children against
+          // the next clip's — unmounting and remounting the <video>, which
+          // resets currentTime to 0 and flashes the media's first frame.
           return isImg ? (
-            <>
+            <Fragment key={clip.id}>
               {filterEl}
               <img
                 key={clip.id}
@@ -601,9 +606,9 @@ export function Preview({
                 onPointerDown={(e) => dragClip(clip.id, e)}
               />
               {overlayEl}
-            </>
+            </Fragment>
           ) : (
-            <>
+            <Fragment key={clip.id}>
               {filterEl}
               <video
                 key={clip.id}
@@ -617,7 +622,7 @@ export function Preview({
                 onPointerDown={(e) => dragClip(clip.id, e)}
               />
               {overlayEl}
-            </>
+            </Fragment>
           );
         })}
 
