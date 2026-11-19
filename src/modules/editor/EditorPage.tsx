@@ -242,11 +242,12 @@ export function EditorPage() {
               <button
                 key={tb}
                 onClick={() => setLeftTab(tb)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide transition-colors ${
+                title={t(key)}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1 py-1 text-[9px] font-medium uppercase tracking-tight transition-colors ${
                   leftTab === tb ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                <Icon className="size-3.5" /> {t(key)}
+                <Icon className="size-3.5 shrink-0" /> <span className="truncate">{t(key)}</span>
               </button>
             ))}
           </div>

@@ -50,6 +50,7 @@ export function SfxBin() {
   const [query, setQuery] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => () => audioRef.current?.pause(), []);
 
@@ -111,6 +112,12 @@ export function SfxBin() {
       <audio
         ref={audioRef}
         onEnded={() => setPlaying(null)}
+        onTimeUpdate={(e) => {
+          const el = e.currentTarget;
+          if (barRef.current && el.duration) {
+            barRef.current.style.width = `${(el.currentTime / el.duration) * 100}%`;
+          }
+        }}
         className="hidden"
       />
       <div className="border-b border-border p-2">
@@ -145,6 +152,7 @@ export function SfxBin() {
           <div
             key={s.id}
             draggable
+            onClick={() => togglePlay(s)}
             onDragStart={(e) => {
               e.dataTransfer.setData("application/x-creatora-sfx", s.file);
               e.dataTransfer.setData(
@@ -163,19 +171,32 @@ export function SfxBin() {
               });
             }}
             onDragEnd={() => setDragPayload(null)}
-            className="group flex cursor-grab items-center gap-2 rounded border border-border bg-background/60 p-1.5 text-xs hover:bg-accent"
+            className={cn(
+              "group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded border bg-background/60 p-1.5 text-xs hover:bg-accent",
+              playing === s.id
+                ? "border-primary/50 bg-primary/10 hover:bg-primary/10"
+                : "border-border",
+            )}
           >
-            <button
-              onClick={() => togglePlay(s)}
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary hover:bg-primary/25"
-              title={s.name}
+            {playing === s.id && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-primary/20">
+                <div ref={barRef} className="h-full bg-primary transition-[width]" />
+              </div>
+            )}
+            <div
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full",
+                playing === s.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-primary/15 text-primary",
+              )}
             >
               {playing === s.id ? (
                 <Pause className="size-3" />
               ) : (
                 <Play className="ml-0.5 size-3" />
               )}
-            </button>
+            </div>
             <div className="min-w-0 flex-1">
               <div className="truncate">{s.name}</div>
               <div className="text-[10px] text-muted-foreground">
@@ -183,7 +204,10 @@ export function SfxBin() {
               </div>
             </div>
             <button
-              onClick={() => addAt(s)}
+              onClick={(e) => {
+                e.stopPropagation();
+                addAt(s);
+              }}
               className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
               title={t("editor.clipAdded")}
             >
