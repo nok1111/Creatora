@@ -13,6 +13,9 @@ export interface MediaDragPayload {
   filePath: string;
   durationMs: number;
   kind: AssetKind;
+  /** Bundled SFX filename — set for Sounds-bin drags, which carry no asset
+      row yet (the sound is imported lazily on drop). */
+  sfxFile?: string;
 }
 
 export type EffectCategory = "start" | "end" | "merge" | "overlay";

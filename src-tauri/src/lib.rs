@@ -92,6 +92,7 @@ pub fn run() {
             project::commands::delete_project,
             project::commands::export_project_bundle,
             media::commands::import_media,
+            media::commands::import_sfx,
             media::commands::cancel_job,
             media::commands::list_jobs,
             media::commands::regenerate_thumbnail,

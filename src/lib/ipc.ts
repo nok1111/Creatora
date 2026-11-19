@@ -130,6 +130,7 @@ export const api = {
 
   // Media
   importMedia: (paths: string[]) => cmd<string>("import_media", { paths }),
+  importSfx: (files: string[]) => cmd<import("./media-types").AssetSummary[]>("import_sfx", { files }),
   cancelJob: (jobId: string) => cmd<boolean>("cancel_job", { jobId }),
   listJobs: (kindPrefix?: string, limit?: number) =>
     cmd<JobRow[]>("list_jobs", { kindPrefix, limit }),

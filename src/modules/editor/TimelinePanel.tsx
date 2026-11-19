@@ -26,6 +26,8 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/ipc";
 import { useProject } from "@/stores/project";
 import { useEditor } from "@/stores/editor";
 import {
@@ -139,6 +141,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const setSnapEnabled = useEditor((s) => s.setSnapEnabled);
   const mutate = useEditor((s) => s.mutate);
+  const qc = useQueryClient();
   const activeVersionId = useEditor((s) => s.activeVersionId);
   const mutateInGesture = useEditor((s) => s.mutateInGesture);
   const beginGesture = useEditor((s) => s.beginGesture);
@@ -723,7 +726,8 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       mirrors moveClipToTrack's rules: audio only on audio tracks, locked
       rejects everything. Unknown kind (foreign drag) stays permissive. */
   const dropValid = (track: Track, kind: string | undefined) =>
-    !track.locked && (!kind || (track.kind === "audio") === (kind === "audio"));
+    !track.locked &&
+    (!kind || (track.kind === "audio") === (kind === "audio" || kind === "sfx"));
 
   /** Effects-bin drops apply onto the clip under the cursor — every tile maps
       to a render-supported primitive (baked keyframes / xfade / clip.fx). */
@@ -920,6 +924,47 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       } catch { /* malformed payload — ignore */ }
       return;
     }
+    // Sounds-bin drag: the sound has no catalog row yet — import it lazily,
+    // then drop it like any audio asset on this lane.
+    const sfxFile = e.dataTransfer.getData("application/x-creatora-sfx");
+    if (sfxFile) {
+      if (track.locked) {
+        toast.error(t("editor.dropLocked"));
+        return;
+      }
+      if (!dropValid(track, "sfx")) {
+        toast.error(t("editor.dropWrongTrack"));
+        return;
+      }
+      const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
+      const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+      void api
+        .importSfx([sfxFile])
+        .then(([a]) => {
+          if (!a) return;
+          let clipId = "";
+          mutate((d) => {
+            const r = addClip(d, {
+              mediaRef: a.id,
+              startMs: ms,
+              durationMs: a.durationMs ?? 3000,
+              sourceDurationMs: a.durationMs ?? null,
+              trackKind: track.kind,
+              trackId: track.id,
+            });
+            clipId = r.clipId;
+            if (!r.doc.mediaRefs.some((m) => m.assetId === a.id)) {
+              r.doc.mediaRefs.push({ assetId: a.id, path: a.filePath, hash: null });
+            }
+            return r.doc;
+          });
+          select([clipId]);
+          qc.invalidateQueries({ queryKey: ["assets"] });
+          toast.success(t("editor.clipAdded"));
+        })
+        .catch(() => toast.error(t("editor.sfxImportFailed")));
+      return;
+    }
     const assetId = e.dataTransfer.getData("application/x-creatora-asset");
     if (!assetId) return;
     if (track.locked) {
@@ -958,7 +1003,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       audio track, video and images a video track. */
   const onDragOverNew = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!e.dataTransfer.types.includes("application/x-creatora-asset")) {
+    if (
+      !e.dataTransfer.types.includes("application/x-creatora-asset") &&
+      !e.dataTransfer.types.includes("application/x-creatora-sfx")
+    ) {
       e.dataTransfer.dropEffect = "none";
       setHint(null);
       return;
@@ -978,6 +1026,35 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
   const onDropNew = (e: React.DragEvent) => {
     e.preventDefault();
     setHint(null);
+    const sfxFile = e.dataTransfer.getData("application/x-creatora-sfx");
+    if (sfxFile) {
+      const lane = e.currentTarget as HTMLElement;
+      const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+      void api
+        .importSfx([sfxFile])
+        .then(([a]) => {
+          if (!a) return;
+          mutate((d) => {
+            const nt = addTrack(d, "audio");
+            const r = addClip(nt.doc, {
+              mediaRef: a.id,
+              startMs: ms,
+              durationMs: a.durationMs ?? 3000,
+              sourceDurationMs: a.durationMs ?? null,
+              trackKind: "audio",
+              trackId: nt.trackId,
+            });
+            if (!r.doc.mediaRefs.some((m) => m.assetId === a.id)) {
+              r.doc.mediaRefs.push({ assetId: a.id, path: a.filePath, hash: null });
+            }
+            return r.doc;
+          });
+          qc.invalidateQueries({ queryKey: ["assets"] });
+          toast.success(t("editor.clipAdded"));
+        })
+        .catch(() => toast.error(t("editor.sfxImportFailed")));
+      return;
+    }
     const assetId = e.dataTransfer.getData("application/x-creatora-asset");
     if (!assetId) return;
     const pl2 = getDragPayload();
@@ -986,7 +1063,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
     const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
     const filePath = e.dataTransfer.getData("application/x-creatora-path");
-    const trackKind = kind === "audio" ? "audio" : "video";
+    const trackKind = kind === "audio" || kind === "sfx" ? "audio" : "video";
     mutate((d) => {
       // Empty space means "new lane": always create the track (V2, A2, …)
       // so a second asset of the same kind does not land on the first lane.
@@ -1502,7 +1579,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     );
                     return;
                   }
-                  if (!e.dataTransfer.types.includes("application/x-creatora-asset")) {
+                  if (
+                    !e.dataTransfer.types.includes("application/x-creatora-asset") &&
+                    !e.dataTransfer.types.includes("application/x-creatora-sfx")
+                  ) {
                     e.dataTransfer.dropEffect = "none";
                     setHint(null);
                     return;

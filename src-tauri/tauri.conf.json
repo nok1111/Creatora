@@ -35,7 +35,8 @@
     "targets": "all",
     "resources": {
       "../tools/bin": "tools/bin",
-      "../tools/THIRD_PARTY_NOTICES": "tools/THIRD_PARTY_NOTICES"
+      "../tools/THIRD_PARTY_NOTICES": "tools/THIRD_PARTY_NOTICES",
+      "../shared/sfx/files": "sfx"
     },
     "icon": [
       "icons/32x32.png",

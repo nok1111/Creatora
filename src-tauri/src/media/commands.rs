@@ -339,6 +339,50 @@ pub fn cancel_job(jobs: State<'_, JobManager>, job_id: String) -> CmdResult<bool
     Ok(jobs.cancel(&job_id))
 }
 
+/// Bundled SFX library dir: `sfx/` beside the exe (install resources), or
+/// `shared/sfx/files` in the repo for dev builds.
+fn sfx_dir() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    {
+        candidates.push(dir.join("sfx"));
+    }
+    if cfg!(debug_assertions) {
+        candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../shared/sfx/files"));
+    }
+    candidates.into_iter().find(|d| d.is_dir())
+}
+
+/// Bulk-import bundled SFX as regular `audio` assets, lazily — only sounds
+/// the user actually drops enter the catalog (import_one dedups by path),
+/// so the media bin stays clean while preview/export resolve normally.
+#[tauri::command]
+pub fn import_sfx(
+    app: tauri::AppHandle,
+    db: State<'_, Arc<Db>>,
+    files: Vec<String>,
+) -> CmdResult<Vec<AssetSummary>> {
+    let dir = sfx_dir().ok_or_else(|| AppError::NotFound("sfx dir".into()))?;
+    let thumbs_dir = data_dir(&app)?.join("thumbs");
+    let mut out = Vec::with_capacity(files.len());
+    for f in &files {
+        if f.contains("..") || f.contains('/') || f.contains('\\') {
+            continue;
+        }
+        let path = dir.join(f);
+        if !path.is_file() {
+            continue;
+        }
+        if let Ok(a) = import_one(&thumbs_dir, &db, &path) {
+            out.push(a);
+        }
+    }
+    let _ = app.asset_protocol_scope().allow_directory(&dir, true);
+    Ok(out)
+}
+
 /// Durable job rows for the Export Center / activity views.
 /// `kind_prefix` e.g. "render.export", "social.", None = everything.
 #[tauri::command]

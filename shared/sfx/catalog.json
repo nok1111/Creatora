@@ -1,0 +1,1013 @@
+{
+  "categories": [
+    {
+      "id": "whoosh",
+      "icon": "Wind"
+    },
+    {
+      "id": "impact",
+      "icon": "Bomb"
+    },
+    {
+      "id": "riser",
+      "icon": "TrendingUp"
+    },
+    {
+      "id": "ui",
+      "icon": "MousePointerClick"
+    },
+    {
+      "id": "glitch",
+      "icon": "Radio"
+    },
+    {
+      "id": "camera",
+      "icon": "Camera"
+    },
+    {
+      "id": "foley",
+      "icon": "Footprints"
+    },
+    {
+      "id": "ambience",
+      "icon": "CloudRain"
+    },
+    {
+      "id": "retro",
+      "icon": "Gamepad2"
+    },
+    {
+      "id": "stinger",
+      "icon": "Music"
+    },
+    {
+      "id": "comedy",
+      "icon": "Laugh"
+    }
+  ],
+  "sounds": [
+    {
+      "id": "whoosh-fast",
+      "name": "Whoosh Fast",
+      "category": "whoosh",
+      "file": "whoosh-fast.ogg",
+      "durationMs": 1561,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-airy",
+      "name": "Whoosh Airy",
+      "category": "whoosh",
+      "file": "whoosh-airy.ogg",
+      "durationMs": 1891,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-deep",
+      "name": "Whoosh Deep",
+      "category": "whoosh",
+      "file": "whoosh-deep.ogg",
+      "durationMs": 2042,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-whip",
+      "name": "Whoosh Whip",
+      "category": "whoosh",
+      "file": "whoosh-whip.ogg",
+      "durationMs": 1333,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-sweep",
+      "name": "Whoosh Sweep",
+      "category": "whoosh",
+      "file": "whoosh-sweep.ogg",
+      "durationMs": 1705,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-tight",
+      "name": "Whoosh Tight",
+      "category": "whoosh",
+      "file": "whoosh-tight.ogg",
+      "durationMs": 1123,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-swirl",
+      "name": "Whoosh Swirl",
+      "category": "whoosh",
+      "file": "whoosh-swirl.ogg",
+      "durationMs": 2348,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "swish-quick",
+      "name": "Quick Swish",
+      "category": "whoosh",
+      "file": "swish-quick.ogg",
+      "durationMs": 382,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-double",
+      "name": "Double Whoosh",
+      "category": "whoosh",
+      "file": "whoosh-double.ogg",
+      "durationMs": 986,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "whoosh-reverse",
+      "name": "Reverse Whoosh",
+      "category": "whoosh",
+      "file": "whoosh-reverse.ogg",
+      "durationMs": 1290,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "impact-boom",
+      "name": "Cinematic Boom",
+      "category": "impact",
+      "file": "impact-boom.ogg",
+      "durationMs": 4219,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "impact-punch",
+      "name": "Impact Punch",
+      "category": "impact",
+      "file": "impact-punch.ogg",
+      "durationMs": 1763,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "impact-sub-drop",
+      "name": "Sub Drop",
+      "category": "impact",
+      "file": "impact-sub-drop.ogg",
+      "durationMs": 3749,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "impact-tail",
+      "name": "Hit Tail",
+      "category": "impact",
+      "file": "impact-tail.ogg",
+      "durationMs": 4297,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "impact-thud",
+      "name": "Thud Dry",
+      "category": "impact",
+      "file": "impact-thud.ogg",
+      "durationMs": 1172,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "hit-cinematic",
+      "name": "Cinematic Hit",
+      "category": "impact",
+      "file": "hit-cinematic.ogg",
+      "durationMs": 2951,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "hit-hard",
+      "name": "Hard Hit",
+      "category": "impact",
+      "file": "hit-hard.ogg",
+      "durationMs": 556,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "boom-impact",
+      "name": "Boom Impact",
+      "category": "impact",
+      "file": "boom-impact.ogg",
+      "durationMs": 2308,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "braam",
+      "name": "Braam",
+      "category": "impact",
+      "file": "braam.ogg",
+      "durationMs": 4108,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "riser-tension",
+      "name": "Tension Riser",
+      "category": "riser",
+      "file": "riser-tension.ogg",
+      "durationMs": 4891,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "riser-big",
+      "name": "Big Riser",
+      "category": "riser",
+      "file": "riser-big.ogg",
+      "durationMs": 6900,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "riser-short",
+      "name": "Short Riser",
+      "category": "riser",
+      "file": "riser-short.ogg",
+      "durationMs": 3042,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "riser-rev-cymbal",
+      "name": "Reverse Cymbal",
+      "category": "riser",
+      "file": "riser-rev-cymbal.ogg",
+      "durationMs": 3500,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "riser-rev-cymbal-l",
+      "name": "Reverse Cymbal Long",
+      "category": "riser",
+      "file": "riser-rev-cymbal-l.ogg",
+      "durationMs": 5500,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "riser-classic",
+      "name": "Riser",
+      "category": "riser",
+      "file": "riser-classic.ogg",
+      "durationMs": 3306,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "downlifter",
+      "name": "Downlifter",
+      "category": "riser",
+      "file": "downlifter.ogg",
+      "durationMs": 2314,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "tape-stop",
+      "name": "Tape Stop",
+      "category": "riser",
+      "file": "tape-stop.ogg",
+      "durationMs": 1157,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "rewind",
+      "name": "Rewind",
+      "category": "riser",
+      "file": "rewind.ogg",
+      "durationMs": 1256,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "click-01",
+      "name": "Click",
+      "category": "ui",
+      "file": "click-01.ogg",
+      "durationMs": 21,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "click-soft",
+      "name": "Soft Click",
+      "category": "ui",
+      "file": "click-soft.ogg",
+      "durationMs": 20,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "pop-01",
+      "name": "Pop",
+      "category": "ui",
+      "file": "pop-01.ogg",
+      "durationMs": 376,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "pop-bubble",
+      "name": "Bubble Pop",
+      "category": "ui",
+      "file": "pop-bubble.ogg",
+      "durationMs": 381,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "swipe-up",
+      "name": "Swipe Up",
+      "category": "ui",
+      "file": "swipe-up.ogg",
+      "durationMs": 624,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "swipe-down",
+      "name": "Swipe Down",
+      "category": "ui",
+      "file": "swipe-down.ogg",
+      "durationMs": 602,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "click",
+      "name": "Click Snap",
+      "category": "ui",
+      "file": "click.ogg",
+      "durationMs": 150,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "pop",
+      "name": "Pop Snap",
+      "category": "ui",
+      "file": "pop.ogg",
+      "durationMs": 229,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "ding",
+      "name": "Ding",
+      "category": "ui",
+      "file": "ding.ogg",
+      "durationMs": 2166,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "notification",
+      "name": "Notification",
+      "category": "ui",
+      "file": "notification.ogg",
+      "durationMs": 1316,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "msg-sent",
+      "name": "Message Sent",
+      "category": "ui",
+      "file": "msg-sent.ogg",
+      "durationMs": 409,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "msg-received",
+      "name": "Message Received",
+      "category": "ui",
+      "file": "msg-received.ogg",
+      "durationMs": 926,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "success",
+      "name": "Success",
+      "category": "ui",
+      "file": "success.ogg",
+      "durationMs": 900,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "like",
+      "name": "Like",
+      "category": "ui",
+      "file": "like.ogg",
+      "durationMs": 686,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "toggle-on",
+      "name": "Toggle On",
+      "category": "ui",
+      "file": "toggle-on.ogg",
+      "durationMs": 249,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "toggle-off",
+      "name": "Toggle Off",
+      "category": "ui",
+      "file": "toggle-off.ogg",
+      "durationMs": 249,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "error-buzz",
+      "name": "Error Buzz",
+      "category": "ui",
+      "file": "error-buzz.ogg",
+      "durationMs": 473,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "wrong",
+      "name": "Wrong Answer",
+      "category": "ui",
+      "file": "wrong.ogg",
+      "durationMs": 859,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "typing",
+      "name": "Typing",
+      "category": "ui",
+      "file": "typing.ogg",
+      "durationMs": 1966,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "mouse-click",
+      "name": "Mouse Click",
+      "category": "ui",
+      "file": "mouse-click.ogg",
+      "durationMs": 150,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "kb-enter",
+      "name": "Keyboard Enter",
+      "category": "ui",
+      "file": "kb-enter.ogg",
+      "durationMs": 159,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "censor-bleep",
+      "name": "Censor Bleep",
+      "category": "ui",
+      "file": "censor-bleep.ogg",
+      "durationMs": 776,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "countdown",
+      "name": "Countdown Beeps",
+      "category": "ui",
+      "file": "countdown.ogg",
+      "durationMs": 3909,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "vibrate",
+      "name": "Phone Vibrate",
+      "category": "ui",
+      "file": "vibrate.ogg",
+      "durationMs": 1354,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "alarm",
+      "name": "Alarm Clock",
+      "category": "ui",
+      "file": "alarm.ogg",
+      "durationMs": 1868,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "bubble",
+      "name": "Bubble",
+      "category": "ui",
+      "file": "bubble.ogg",
+      "durationMs": 269,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "glitch-01",
+      "name": "Glitch 1",
+      "category": "glitch",
+      "file": "glitch-01.ogg",
+      "durationMs": 400,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "glitch-02",
+      "name": "Glitch 2",
+      "category": "glitch",
+      "file": "glitch-02.ogg",
+      "durationMs": 700,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "glitch-03",
+      "name": "Glitch 3",
+      "category": "glitch",
+      "file": "glitch-03.ogg",
+      "durationMs": 1000,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "glitch-05",
+      "name": "Glitch 5",
+      "category": "glitch",
+      "file": "glitch-05.ogg",
+      "durationMs": 500,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "glitch-hit",
+      "name": "Glitch Hit",
+      "category": "glitch",
+      "file": "glitch-hit.ogg",
+      "durationMs": 762,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "shutter",
+      "name": "Camera Shutter",
+      "category": "camera",
+      "file": "shutter.ogg",
+      "durationMs": 210,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "camera-flash",
+      "name": "Camera Flash",
+      "category": "camera",
+      "file": "camera-flash.ogg",
+      "durationMs": 1356,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "projector-loop",
+      "name": "Projector Loop",
+      "category": "camera",
+      "file": "projector-loop.ogg",
+      "durationMs": 10000,
+      "source": "daedal",
+      "license": "CC0"
+    },
+    {
+      "id": "door-knock",
+      "name": "Door Knock",
+      "category": "foley",
+      "file": "door-knock.ogg",
+      "durationMs": 557,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "footsteps",
+      "name": "Footsteps",
+      "category": "foley",
+      "file": "footsteps.ogg",
+      "durationMs": 3047,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "heartbeat",
+      "name": "Heartbeat",
+      "category": "foley",
+      "file": "heartbeat.ogg",
+      "durationMs": 1435,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "clock-ticking",
+      "name": "Clock Ticking",
+      "category": "foley",
+      "file": "clock-ticking.ogg",
+      "durationMs": 3573,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "rain",
+      "name": "Rain",
+      "category": "ambience",
+      "file": "rain.ogg",
+      "durationMs": 8097,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "wind",
+      "name": "Wind",
+      "category": "ambience",
+      "file": "wind.ogg",
+      "durationMs": 8055,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "birds",
+      "name": "Birds",
+      "category": "ambience",
+      "file": "birds.ogg",
+      "durationMs": 5623,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "ocean",
+      "name": "Ocean Waves",
+      "category": "ambience",
+      "file": "ocean.ogg",
+      "durationMs": 9102,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "campfire",
+      "name": "Campfire",
+      "category": "ambience",
+      "file": "campfire.ogg",
+      "durationMs": 8056,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "stream",
+      "name": "Stream",
+      "category": "ambience",
+      "file": "stream.ogg",
+      "durationMs": 8055,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "thunder",
+      "name": "Thunder",
+      "category": "ambience",
+      "file": "thunder.ogg",
+      "durationMs": 5849,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "coin",
+      "name": "Coin",
+      "category": "retro",
+      "file": "coin.ogg",
+      "durationMs": 689,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "jump",
+      "name": "Jump",
+      "category": "retro",
+      "file": "jump.ogg",
+      "durationMs": 329,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "power-up",
+      "name": "Power Up",
+      "category": "retro",
+      "file": "power-up.ogg",
+      "durationMs": 829,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "level-up",
+      "name": "Level Up",
+      "category": "retro",
+      "file": "level-up.ogg",
+      "durationMs": 1156,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "laser",
+      "name": "Laser Zap",
+      "category": "retro",
+      "file": "laser.ogg",
+      "durationMs": 457,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "explosion-8bit",
+      "name": "8-bit Explosion",
+      "category": "retro",
+      "file": "explosion-8bit.ogg",
+      "durationMs": 1024,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "pickup",
+      "name": "Pickup",
+      "category": "retro",
+      "file": "pickup.ogg",
+      "durationMs": 416,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "victory",
+      "name": "Victory Fanfare",
+      "category": "retro",
+      "file": "victory.ogg",
+      "durationMs": 1806,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "game-over",
+      "name": "Game Over",
+      "category": "retro",
+      "file": "game-over.ogg",
+      "durationMs": 1955,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "menu-select",
+      "name": "Menu Select",
+      "category": "retro",
+      "file": "menu-select.ogg",
+      "durationMs": 276,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "applause",
+      "name": "Applause",
+      "category": "stinger",
+      "file": "applause.ogg",
+      "durationMs": 3600,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "drum-roll",
+      "name": "Drum Roll",
+      "category": "stinger",
+      "file": "drum-roll.ogg",
+      "durationMs": 3331,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "fanfare",
+      "name": "Fanfare",
+      "category": "stinger",
+      "file": "fanfare.ogg",
+      "durationMs": 3200,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "tada",
+      "name": "Ta-da",
+      "category": "stinger",
+      "file": "tada.ogg",
+      "durationMs": 1876,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "gong",
+      "name": "Gong",
+      "category": "stinger",
+      "file": "gong.ogg",
+      "durationMs": 6106,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "cymbal-crash",
+      "name": "Cymbal Crash",
+      "category": "stinger",
+      "file": "cymbal-crash.ogg",
+      "durationMs": 772,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "magic-sparkle",
+      "name": "Magic Sparkle",
+      "category": "stinger",
+      "file": "magic-sparkle.ogg",
+      "durationMs": 2400,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "harp",
+      "name": "Harp Glissando",
+      "category": "stinger",
+      "file": "harp.ogg",
+      "durationMs": 2717,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "cash",
+      "name": "Cash Register",
+      "category": "stinger",
+      "file": "cash.ogg",
+      "durationMs": 1236,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "air-horn",
+      "name": "Air Horn",
+      "category": "stinger",
+      "file": "air-horn.ogg",
+      "durationMs": 2099,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "horror-hit",
+      "name": "Horror Hit",
+      "category": "stinger",
+      "file": "horror-hit.ogg",
+      "durationMs": 3266,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "suspense",
+      "name": "Suspense Sting",
+      "category": "stinger",
+      "file": "suspense.ogg",
+      "durationMs": 3700,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "fail",
+      "name": "Fail Stinger",
+      "category": "stinger",
+      "file": "fail.ogg",
+      "durationMs": 1956,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "dun-dun",
+      "name": "Dun Dun Dun",
+      "category": "stinger",
+      "file": "dun-dun.ogg",
+      "durationMs": 3400,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "boing",
+      "name": "Boing",
+      "category": "comedy",
+      "file": "boing.ogg",
+      "durationMs": 905,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "bonk",
+      "name": "Bonk",
+      "category": "comedy",
+      "file": "bonk.ogg",
+      "durationMs": 506,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "record-scratch",
+      "name": "Record Scratch",
+      "category": "comedy",
+      "file": "record-scratch.ogg",
+      "durationMs": 644,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "sad-trombone",
+      "name": "Sad Trombone",
+      "category": "comedy",
+      "file": "sad-trombone.ogg",
+      "durationMs": 3105,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "ba-dum-tss",
+      "name": "Ba Dum Tss",
+      "category": "comedy",
+      "file": "ba-dum-tss.ogg",
+      "durationMs": 1766,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "whistle-up",
+      "name": "Slide Whistle Up",
+      "category": "comedy",
+      "file": "whistle-up.ogg",
+      "durationMs": 1056,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "whistle-down",
+      "name": "Slide Whistle Down",
+      "category": "comedy",
+      "file": "whistle-down.ogg",
+      "durationMs": 1056,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "bike-horn",
+      "name": "Bike Horn",
+      "category": "comedy",
+      "file": "bike-horn.ogg",
+      "durationMs": 655,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "crickets",
+      "name": "Awkward Crickets",
+      "category": "comedy",
+      "file": "crickets.ogg",
+      "durationMs": 3565,
+      "source": "clipabay",
+      "license": "CC0"
+    },
+    {
+      "id": "cartoon-run",
+      "name": "Cartoon Run",
+      "category": "comedy",
+      "file": "cartoon-run.ogg",
+      "durationMs": 1397,
+      "source": "clipabay",
+      "license": "CC0"
+    }
+  ]
+}

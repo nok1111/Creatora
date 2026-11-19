@@ -13,6 +13,7 @@ import {
   Save,
   Sparkles,
   Undo2,
+  AudioLines,
 } from "lucide-react";
 import { api } from "@/lib/ipc";
 import { useProject } from "@/stores/project";
@@ -41,6 +42,7 @@ import { SubtitlesPanel } from "./SubtitlesPanel";
 import { MediaBin } from "./MediaBin";
 import { GraphicsBin } from "./GraphicsBin";
 import { EffectsBin } from "./EffectsBin";
+import { SfxBin } from "./SfxBin";
 import { Inspector } from "./Inspector";
 import { ExportDialog } from "./ExportDialog";
 
@@ -74,8 +76,8 @@ export function EditorPage() {
   const [bottomTab, setBottomTab] = useState<"timeline" | "subtitles">(
     params.get("tab") === "subtitles" ? "subtitles" : "timeline",
   );
-  const [leftTab, setLeftTab] = useState<"media" | "graphics" | "effects">(
-    params.get("left") === "graphics" ? "graphics" : params.get("left") === "effects" ? "effects" : "media",
+  const [leftTab, setLeftTab] = useState<"media" | "graphics" | "effects" | "sounds">(
+    params.get("left") === "graphics" ? "graphics" : params.get("left") === "effects" ? "effects" : params.get("left") === "sounds" ? "sounds" : "media",
   );
 
   const assetsQ = useQuery({
@@ -236,7 +238,7 @@ export function EditorPage() {
           style={{ width: `min(${panelSizes.left}px, 45%)` }}
         >
           <div className="flex gap-1 border-b border-r border-border px-1.5 py-1">
-            {([["media", Music4, "editor.tabMedia"], ["graphics", ImageIcon, "editor.tabGraphics"], ["effects", Sparkles, "editor.tabEffects"]] as const).map(([tb, Icon, key]) => (
+            {([["media", Music4, "editor.tabMedia"], ["graphics", ImageIcon, "editor.tabGraphics"], ["effects", Sparkles, "editor.tabEffects"], ["sounds", AudioLines, "editor.tabSounds"]] as const).map(([tb, Icon, key]) => (
               <button
                 key={tb}
                 onClick={() => setLeftTab(tb)}
@@ -249,7 +251,7 @@ export function EditorPage() {
             ))}
           </div>
           <div className="min-h-0 flex-1">
-            {leftTab === "media" ? <MediaBin assets={assetsQ.data ?? []} /> : leftTab === "effects" ? <EffectsBin /> : <GraphicsBin />}
+            {leftTab === "media" ? <MediaBin assets={assetsQ.data ?? []} /> : leftTab === "effects" ? <EffectsBin /> : leftTab === "sounds" ? <SfxBin /> : <GraphicsBin />}
           </div>
         </div>
         <ResizeHandle

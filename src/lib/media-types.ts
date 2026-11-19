@@ -3,6 +3,7 @@
 export type AssetKind =
   | "video"
   | "audio"
+  | "sfx"
   | "image"
   | "graphic"
   | "font"
