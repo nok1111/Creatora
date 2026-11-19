@@ -195,6 +195,8 @@ export const es: typeof en = {
     sfxImport: "Importar sonidos",
     sfxImported: "Importados",
     sfxLibrary: "Librería",
+    removeAsset: "Quitar de la biblioteca",
+    removeAssetUsed: "Quitar — los clips perderán el medio",
     "sfxCat.all": "Todos",
     "sfxCat.whoosh": "Whooshes",
     "sfxCat.impact": "Impactos",

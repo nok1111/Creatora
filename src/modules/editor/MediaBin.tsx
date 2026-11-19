@@ -1,6 +1,7 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput, Link2 } from "lucide-react";
+import { useState } from "react";
+import { Film, Image as ImageIcon, Plus, AlertTriangle, Zap, FolderInput, Link2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,6 +14,7 @@ import { setDragPayload } from "@/lib/drag-payload";
 import type { AssetSummary } from "@/lib/media-types";
 import { EmptyState } from "@/components/EmptyState";
 import { AudioTile } from "@/components/AudioTile";
+import { AnchoredMenu, AnchoredMenuItem } from "@/components/ui/anchored-menu";
 import { reportError } from "@/lib/errors";
 
 /** Project media bin: imported assets → click + or drag onto a track. */
@@ -23,6 +25,7 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
   const mutate = useEditor((s) => s.mutate);
   const select = useEditor((s) => s.select);
   const qc = useQueryClient();
+  const [ctx, setCtx] = useState<{ x: number; y: number; asset: AssetSummary } | null>(null);
 
   if (!doc) return null;
 
@@ -117,6 +120,10 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
               });
             }}
             onDragEnd={() => setDragPayload(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setCtx({ x: e.clientX, y: e.clientY, asset: a });
+            }}
             className="group flex cursor-grab items-center gap-2 rounded border border-border bg-background/60 p-1.5 text-xs hover:bg-accent"
           >
             {a.thumbnailPath ? (
@@ -193,6 +200,36 @@ export function MediaBin({ assets }: { assets: AssetSummary[] }) {
           />
         )}
       </div>
+      <AnchoredMenu
+        open={!!ctx}
+        onClose={() => setCtx(null)}
+        anchor={ctx ? { x: ctx.x, y: ctx.y } : null}
+        side="bottom"
+        align="start"
+        offset={2}
+        className="min-w-44"
+      >
+        {ctx && (
+          <AnchoredMenuItem
+            destructive
+            onClick={async () => {
+              const a = ctx.asset;
+              setCtx(null);
+              try {
+                await api.deleteAsset(a.id);
+                await qc.invalidateQueries({ queryKey: ["assets"] });
+              } catch (e) {
+                reportError(e);
+              }
+            }}
+          >
+            <Trash2 className="size-3.5" />{" "}
+            {doc.mediaRefs.some((m) => m.assetId === ctx.asset.id)
+              ? t("editor.removeAssetUsed")
+              : t("editor.removeAsset")}
+          </AnchoredMenuItem>
+        )}
+      </AnchoredMenu>
     </div>
   );
 }

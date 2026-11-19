@@ -192,6 +192,8 @@ export const en = {
     sfxImport: "Import sounds",
     sfxImported: "Imported",
     sfxLibrary: "Library",
+    removeAsset: "Remove from library",
+    removeAssetUsed: "Remove — clips will lose media",
     "sfxCat.all": "All",
     "sfxCat.whoosh": "Whooshes",
     "sfxCat.impact": "Impacts",

@@ -1,4 +1,4 @@
-import { FolderInput, Pause, Play, Plus, Search } from "lucide-react";
+import { FolderInput, Pause, Play, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import { useEditor } from "@/stores/editor";
 import { addClip } from "@/lib/timeline-engine";
 import { setDragPayload } from "@/lib/drag-payload";
 import type { AssetSummary } from "@/lib/media-types";
+import { AnchoredMenu, AnchoredMenuItem } from "@/components/ui/anchored-menu";
+import { reportError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import catalogJson from "../../../shared/sfx/catalog.json";
 
@@ -53,6 +55,7 @@ export function SfxBin({ assets }: { assets: AssetSummary[] }) {
   const [cat, setCat] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; asset: AssetSummary } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
 
@@ -144,6 +147,7 @@ export function SfxBin({ assets }: { assets: AssetSummary[] }) {
     src: string | undefined;
     onDrag: (e: React.DragEvent) => void;
     onAdd: () => void;
+    onCtx?: (e: React.MouseEvent) => void;
   }) => (
     <div
       key={p.key}
@@ -151,6 +155,7 @@ export function SfxBin({ assets }: { assets: AssetSummary[] }) {
       onClick={() => togglePlay(p.id, p.src)}
       onDragStart={p.onDrag}
       onDragEnd={() => setDragPayload(null)}
+      onContextMenu={p.onCtx}
       className={cn(
         "group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded border bg-background/60 p-1.5 text-xs hover:bg-accent",
         playing === p.id
@@ -272,6 +277,10 @@ export function SfxBin({ assets }: { assets: AssetSummary[] }) {
               });
             },
             onAdd: () => placeClip(a, 3000),
+            onCtx: (e) => {
+              e.preventDefault();
+              setCtx({ x: e.clientX, y: e.clientY, asset: a });
+            },
           }),
         )}
         {imported.length > 0 && (
@@ -307,6 +316,36 @@ export function SfxBin({ assets }: { assets: AssetSummary[] }) {
           }),
         )}
       </div>
+      <AnchoredMenu
+        open={!!ctx}
+        onClose={() => setCtx(null)}
+        anchor={ctx ? { x: ctx.x, y: ctx.y } : null}
+        side="bottom"
+        align="start"
+        offset={2}
+        className="min-w-44"
+      >
+        {ctx && (
+          <AnchoredMenuItem
+            destructive
+            onClick={async () => {
+              const a = ctx.asset;
+              setCtx(null);
+              try {
+                await api.deleteAsset(a.id);
+                await qc.invalidateQueries({ queryKey: ["assets"] });
+              } catch (e) {
+                reportError(e);
+              }
+            }}
+          >
+            <Trash2 className="size-3.5" />{" "}
+            {doc.mediaRefs.some((m) => m.assetId === ctx.asset.id)
+              ? t("editor.removeAssetUsed")
+              : t("editor.removeAsset")}
+          </AnchoredMenuItem>
+        )}
+      </AnchoredMenu>
     </div>
   );
 }
