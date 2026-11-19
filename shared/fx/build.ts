@@ -268,8 +268,12 @@ const RIFT = (() => {
   const lx = `(W*(0.5+0.09*sin(${v}*8.9+2.1)+0.05*sin(${v}*27.3+4.7)+0.025*sin(${v}*61.7)))`;
   const dxl = `(X-${lx})`;
   const side = `(gte(${dxl},0)*2-1)`;
-  const gap = `{gap}*W*0.4*${T}`;
-  const riftw = `(${T}*{width}*W*0.28*(0.7+0.3*sin(${v}*43.3+1.3)))`;
+  const gap = `{gap}*W*1.2*${T}`;
+  // The organic rift only opens ~0.2·W but the seam can sit 0.665·W from
+  // the frame edge — the T^7 swallow term rips the tear into the corners
+  // at the very end so coverage reaches 100% at u=1 (no boundary pop,
+  // and no early finish either).
+  const riftw = `(${T}*{width}*W*0.28*(0.7+0.3*sin(${v}*43.3+1.3))+W*0.95*pow(${T},20))`;
   return {
     ax: `(X-${side}*${gap})`,
     ay: `(Y+${gap}*0.3*clip(abs(${dxl})/(0.35*W),0,1))`,
@@ -363,6 +367,39 @@ const LUME = (() => {
   };
 })();
 const lumeSweepExpr = () => LUME.expr;
+
+// ── Zoom Punch (manifest "zoomin" — replaces the native xfade) ────────
+// The stock xfade zoomin pushes A to ~4× before handing over, so the
+// mid-gesture reads as a grey mosaic blob. This version caps the punch
+// at ~2× and dissolves A centre-first — the most-magnified pixels are
+// gone before they can smear — while a soft radial flash peaks as A
+// exits. B is identity (fields can't warp it) but arrives through the
+// light, so it reads as camera continuity rather than a reveal.
+const PUNCH = (() => {
+  const cx = "(W*0.5)", cy = "(H*0.5)";
+  const dx = `(X-${cx})`, dy = `(Y-${cy})`;
+  // Normalized radius: 0 centre → 1 corner.
+  const rr = `(hypot(${dx},${dy})/hypot(${cx},${cy}))`;
+  // Punch-in accelerates and tops out at 1+{zoom}·1.5 — visible growth
+  // for most of the gesture instead of a last-second snap.
+  const s = `(1+{zoom}*1.5*pow(${T},1.4))`;
+  const ax = `(${cx}+${dx}/${s})`;
+  const ay = `(${cy}+${dy}/${s})`;
+  // Zoom-through: B opens as a disc growing from the centre while the
+  // still-zoomed A evacuates to a thin rim at the frame edges — the eye
+  // reads "flying through the old frame into the new scene".
+  const front = `(${T}*1.5-0.32)`;
+  const m = `clip((${rr}*1.05-${front})/0.2,0,1)`;
+  const glow = `({flash}*pow(sin(PI*${T}),4)*exp(0-${rr}*${rr}/0.3)*1.0)`;
+  const merged = `(${m})*SA(${ax},${ay})+(1-(${m}))*SB(X,Y)`;
+  const tint = `if(eq(PLANE,0),{cr},if(eq(PLANE,1),{cg},if(eq(PLANE,2),{cb},0)))`;
+  const tinted = `min((${glow})*(${tint}),255)`;
+  return {
+    fields: { ax, ay, m, glow },
+    expr: `${merged}+(255-(${merged}))*(${tinted})/255`,
+  };
+})();
+const zoomPunchExpr = () => PUNCH.expr;
 
 const num = (
   key: string,
@@ -767,6 +804,36 @@ export const MANIFEST: FxManifest = {
       defaultEase: "easeInOutCubic",
       preview: "gl",
       thumb: "fxt-lume",
+    },
+    {
+      id: "zoomin",
+      kind: "transition",
+      category: "transitions",
+      name: "Zoom In",
+      description:
+        "The outgoing clip punches toward camera — capped so it never blurs to mush — and dissolves centre-out through a soft radial flash.",
+      params: [
+        num("zoom", "Punch", 0.7, 0.3, 1, 0.02),
+        num("flash", "Flash", 0.6, 0, 1.5, 0.05),
+        {
+          key: "tint",
+          label: "Light",
+          type: "enum",
+          def: 0,
+          options: ["White", "Gold", "Cyan"],
+        },
+      ],
+      derive: {
+        cr: { from: "tint", values: [255, 255, 140] },
+        cg: { from: "tint", values: [255, 205, 235] },
+        cb: { from: "tint", values: [255, 140, 255] },
+      },
+      expr: zoomPunchExpr(),
+      render: { kind: "fields", div: 8, fields: PUNCH.fields },
+      defaultDurationMs: 550,
+      defaultEase: "easeInOutCubic",
+      preview: "gl",
+      thumb: "fxt-zoomin",
     },
     // ── Intro / outro field effects (kind:"effect", preview:"field") ──
     // Single-clip effects driven by the same declarative field dialect as

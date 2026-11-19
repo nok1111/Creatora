@@ -27,7 +27,6 @@ import {
   Wand2,
   Waves,
   Zap,
-  ZoomIn,
 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -216,7 +215,6 @@ export const FX_CATALOG: { id: EffectCategory; labelKey: string; icon: LucideIco
       tr("dissolve", "Dissolve", Shuffle),
       tr("hblur", "Blur dissolve", Waves),
       tr("pixelize", "Pixelize", Grid3x3),
-      tr("zoomin", "Zoom", ZoomIn),
       tr("radial", "Radial", Target),
       tr("circleopen", "Circle open", Circle),
       tr("wipeleft", "Wipe left", ArrowLeft),

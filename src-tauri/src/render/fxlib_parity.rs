@@ -1515,3 +1515,81 @@ fn fx_thumbs() {
     let _ = std::fs::remove_dir_all(&tmp);
     eprintln!("fx thumbs → {}", out_dir.display());
 }
+
+/// Merge-transition visual audit: 16 frames per transition in an 8x2
+/// sheet — row 1 covers boundary-in + first half of the gesture, row 2
+/// the second half + boundary-out + post-transition frames. Catches end
+/// glitches (snap/pop right at the last mixed frame) that the 8-frame
+/// thumb strips skip.
+///   cargo test --lib render::fxlib_parity::transition_audit -- --ignored --nocapture
+#[test]
+#[ignore]
+fn transition_audit() {
+    if ffmpeg().is_none() {
+        eprintln!("skipping: ffmpeg unavailable");
+        return;
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let sample = root.join("shared/fx/sample.png");
+    let out_dir = root.join("qa/out/transitions");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let tmp = tmpdir("traudit");
+    let (tw, th) = (384u32, 216u32);
+
+    let a_img = tmp.join("a.png");
+    let b_img = tmp.join("b.png");
+    run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:60:60"),
+          "-frames:v", "1", "-update", "1", a_img.to_str().unwrap()]).unwrap();
+    run(&["-i", sample.to_str().unwrap(), "-vf", &format!("crop={tw}:{th}:1050:160"),
+          "-frames:v", "1", "-update", "1", b_img.to_str().unwrap()]).unwrap();
+    let a_mp4 = tmp.join("a.mp4");
+    let b_mp4 = tmp.join("b.mp4");
+    for (img, mp4) in [(&a_img, &a_mp4), (&b_img, &b_mp4)] {
+        run(&["-loop", "1", "-t", "4", "-i", img.to_str().unwrap(),
+              "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
+              mp4.to_str().unwrap()]).unwrap();
+    }
+
+    let mut kinds: Vec<String> = crate::render::fxlib::manifest()
+        .entries
+        .iter()
+        .filter(|e| e.kind == "transition")
+        .map(|e| e.id.clone())
+        .collect();
+    kinds.extend([
+        "crossfade", "dipToBlack", "dipToWhite", "dissolve", "hblur", "pixelize",
+        "zoomin", "radial", "circleopen", "wipeleft", "slideleft", "hlslice",
+    ].iter().map(|s| s.to_string()));
+    if let Ok(only) = std::env::var("TR_KIND") {
+        kinds.retain(|k| k == &only);
+    }
+
+    // Join at frames 30–60 of a 90-frame timeline.
+    // Row 1: 29 (pure A), 30 (boundary-in), then across the gesture.
+    // Row 2: 57–59 (last mixed frames), 60 (boundary-out), 61–62 (pure B).
+    let frames: [u32; 16] = if std::env::var("TR_TAIL").is_ok() {
+        // Dense tail: every frame from 48 → 62 to inspect continuity.
+        [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+    } else {
+        [29, 30, 32, 35, 38, 41, 44, 47,
+         50, 53, 55, 57, 58, 59, 60, 62]
+    };
+    for kind in &kinds {
+        let (mut doc, srcs) = two_clip_doc(kind, &[], &a_mp4, &b_mp4);
+        doc.canvas.width = tw;
+        doc.canvas.height = th;
+        let out = out_dir.join(format!("audit_{kind}.png"));
+        let p = plan::build_plan(&doc, &srcs).expect("plan");
+        let sel = frames.iter().map(|n| format!("eq(n\\,{n})")).collect::<Vec<_>>().join("+");
+        let args = p.ffmpeg_args(&out);
+        let fc_at = args.iter().position(|a| a == "-filter_complex").unwrap();
+        let mut a: Vec<String> = args[1..fc_at].to_vec();
+        a.push("-filter_complex".into());
+        a.push(format!("{};[vout]select='{sel}',format=rgb24,tile=8x2[sel]", p.filter_complex));
+        a.extend(["-map".into(), "[sel]".into(), "-frames:v".into(), "1".into(), out.to_string_lossy().into()]);
+        let refs: Vec<&str> = a.iter().map(String::as_str).collect();
+        run(&refs).unwrap_or_else(|e| panic!("audit render failed for {kind}:\n{e}"));
+        eprintln!("audit {kind}");
+    }
+    eprintln!("transition audit → {}", out_dir.display());
+}
