@@ -93,7 +93,7 @@
     --hairline: 0 0% 100%;          /* used as hsl(var(--hairline) / .06) */
     --warning-foreground: 40 65% 14%;
     --topbar: 246 11% 11%;
-    --topbar-foreground: 265 8% 70%;
+    --topbar-foreground: 265 10% 76%;
     --topbar-accent: 246 9% 19%;
     --topbar-accent-foreground: 30 35% 93%;
     --topbar-border: 250 10% 24%;

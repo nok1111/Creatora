@@ -249,7 +249,7 @@ export function Inspector() {
               key={id}
               className={`rounded px-2 py-1 text-[10px] font-medium ${
                 activeTab === id
-                  ? "bg-primary/15 text-primary"
+                  ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
               onClick={() => setInspTab(id)}

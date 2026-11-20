@@ -275,12 +275,13 @@ export function ExportDialog({
                       key={p.key}
                       onClick={() => pickPreset(p)}
                       className={cn(
-                        "rounded-xl border-2 p-2.5 text-left transition-all",
+                        "relative rounded-xl border-2 p-2.5 text-left transition-all",
                         active
-                          ? "border-primary bg-primary/10 shadow-raise"
+                          ? "border-primary bg-primary/15 shadow-raise"
                           : "border-border hover:border-muted-foreground/50 hover:bg-accent/40",
                       )}
                     >
+                      {active && <span className="absolute right-2 top-2 size-2 rounded-full bg-primary" />}
                       <Icon className={cn("size-4", active ? "text-primary" : "text-muted-foreground")} />
                       <div className="mt-1 text-xs font-medium">{t(`exportDlg.preset_${p.key}`)}</div>
                       <div className="text-[10px] leading-tight text-muted-foreground">

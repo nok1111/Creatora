@@ -375,7 +375,7 @@ export function SubtitlesPanel({ assets }: { assets: Map<string, AssetSummary> }
               onClick={() => setToolsTab(id)}
               className={`flex flex-1 flex-col items-center gap-0.5 rounded px-1 py-1.5 text-[10px] transition-colors ${
                 toolsTab === id
-                  ? "bg-primary/15 text-foreground"
+                  ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent"
               }`}
             >

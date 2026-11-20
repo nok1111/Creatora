@@ -244,7 +244,7 @@ export function EditorPage() {
                 onClick={() => setLeftTab(tb)}
                 title={t(key)}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1 py-1 text-[9px] font-medium uppercase tracking-tight transition-colors ${
-                  leftTab === tb ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  leftTab === tb ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
                 <Icon className="size-3.5 shrink-0" /> <span className="truncate">{t(key)}</span>
@@ -316,7 +316,7 @@ export function EditorPage() {
               key={tab}
               onClick={() => setBottomTab(tab)}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide transition-colors ${
-                bottomTab === tab ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                bottomTab === tab ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
               <Icon className="size-3.5" /> {t(labelKey)}

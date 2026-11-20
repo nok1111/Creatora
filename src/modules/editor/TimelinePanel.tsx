@@ -98,9 +98,9 @@ import type { AssetSummary } from "@/lib/media-types";
 
 /** Soft per-kind clip tint so lanes read at a glance. */
 const CLIP_TONES: Record<TrackKind, { bg: string; border: string }> = {
-  video: { bg: "bg-sky-500/20", border: "border-sky-400/50" },
-  audio: { bg: "bg-red-400/20", border: "border-red-400/50" },
-  image: { bg: "bg-emerald-400/15", border: "border-emerald-400/50" },
+  video: { bg: "bg-pop-lavender/15", border: "border-pop-lavender/45" },
+  audio: { bg: "bg-pop-lime/15", border: "border-pop-lime/40" },
+  image: { bg: "bg-pop-butter/15", border: "border-pop-butter/40" },
   text: { bg: "bg-zinc-800/50", border: "border-zinc-500/50" },
   graphics: { bg: "bg-violet-400/15", border: "border-violet-400/50" },
 };
@@ -1372,7 +1372,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 flex-1 text-[10px]"
+                className="h-6 flex-1 border-dashed text-[10px] hover:border-primary/60 hover:text-primary"
                 onClick={() => mutate((d) => addTrack(d, "video").doc)}
               >
                 <Plus className="mr-0.5 size-3" /> {t("editor.addVideo")}
@@ -1380,7 +1380,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 flex-1 text-[10px]"
+                className="h-6 flex-1 border-dashed text-[10px] hover:border-pop-lime/60 hover:text-pop-lime"
                 onClick={() => mutate((d) => addTrack(d, "audio").doc)}
               >
                 <Music className="mr-0.5 size-3" /> {t("editor.addAudio")}
@@ -2231,10 +2231,10 @@ function PlayheadOverlay({
   };
   return (
     <div
-      className="pointer-events-none absolute top-0 bottom-0 z-40 w-px bg-destructive"
+      className="pointer-events-none absolute top-0 bottom-0 z-40 w-px bg-primary"
       style={{ left: msToPx(playheadMs) }}
     >
-      <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-destructive" />
+      <div className="absolute -left-1.5 top-0 size-3 rotate-45 bg-primary" />
       <div
         className="pointer-events-auto absolute inset-y-0 -left-1 w-[9px] cursor-ew-resize"
         onPointerDown={grab}
