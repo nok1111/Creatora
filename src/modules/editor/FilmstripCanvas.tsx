@@ -22,6 +22,7 @@ interface Strip {
 const strips = new Map<string, Promise<Strip | null>>();
 
 function loadStrip(srcPath: string): Promise<Strip | null> {
+  if (!srcPath) return Promise.resolve(null);
   let p = strips.get(srcPath);
   if (!p) {
     p = (async () => {

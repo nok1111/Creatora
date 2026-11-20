@@ -25,6 +25,11 @@ pub fn generate_waveform(
     path: String,
     buckets: usize,
 ) -> CmdResult<Option<String>> {
+    // Clips whose mediaRef is unresolved pass "" — a job would just burn
+    // ffmpeg on `-i ""` and log noise; treat it as "no waveform".
+    if path.is_empty() {
+        return Ok(None);
+    }
     let key = {
         let m = std::fs::metadata(&path)
             .map(|m| (m.len(), m.modified().ok()))

@@ -53,9 +53,11 @@
     --sidebar-accent-foreground: var(--topbar-accent-foreground);
     --sidebar-border: var(--topbar-border);
     --radius: 0.75rem;
+    color-scheme: light;
   }
 
   .dark {
+    color-scheme: dark;
     /* Creative Pop — dark-first creative workspace.
        Graphite foundation, coral primary, lavender creative accent,
        lime success, butter warning. Cream ink for warmth.
@@ -136,6 +138,25 @@
   input[type="color"],
   progress {
     accent-color: hsl(var(--primary));
+  }
+  /* Native selects — dozens of call sites, so the design system lives
+     here instead of per-element classes. Keeps the native chevron;
+     color-scheme (set per theme above) makes the dropdown list and
+     arrow match the active theme. */
+  select {
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.375rem;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  select:focus-visible {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 1px hsl(var(--ring));
+  }
+  select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   ::selection {
     @apply bg-primary/30;

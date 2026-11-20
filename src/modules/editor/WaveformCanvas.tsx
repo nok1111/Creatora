@@ -29,6 +29,7 @@ export function WaveformCanvas({
     let live = true;
     (async () => {
       try {
+        if (!srcPath) return; // unresolved mediaRef — nothing to decode
         let w = await api.readWaveform(srcPath, buckets);
         if (!w) {
           const jobId = await api.generateWaveform(srcPath, buckets);
@@ -55,7 +56,7 @@ export function WaveformCanvas({
     const W = cv.width;
     const H = cv.height;
     g.clearRect(0, 0, W, H);
-    g.fillStyle = "rgba(56, 189, 248, 0.55)";
+    g.fillStyle = "rgba(184, 243, 107, 0.55)"; // pop lime — brand, not browser cyan
     const mid = H / 2;
     const b0 = Math.floor((sourceInMs / Math.max(1, wf.durationMs)) * wf.buckets);
     const b1 = Math.ceil(((sourceInMs + durationMs) / Math.max(1, wf.durationMs)) * wf.buckets);

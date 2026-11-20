@@ -967,6 +967,11 @@ pub fn generate_filmstrip(
     path: String,
     frames: usize,
 ) -> CmdResult<Option<String>> {
+    // Unresolved mediaRefs arrive as "" — ffmpeg would fail with
+    // "Invalid argument" and pollute the job log; return cache-miss.
+    if path.is_empty() {
+        return Ok(None);
+    }
     let out = filmstrips_dir(&app).join(format!("{}.jpg", filmstrip_key(&path, frames)));
     if out.is_file() {
         return Ok(None); // cache hit — read_filmstrip returns the path
