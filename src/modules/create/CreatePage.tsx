@@ -17,6 +17,8 @@ const FORMATS = [
     art: "lavender", dashed: false, tone: "border-accent text-accent-foreground" },
   { id: "sq", label: "Square post", hint: "Square · 1:1", w: 1080, h: 1080,
     art: "lime", dashed: false, tone: "border-success/40 text-success" },
+  { id: "uhd", label: "4K UHD", hint: "Horizontal · 16:9", w: 3840, h: 2160,
+    art: "primary", dashed: false, tone: "border-primary/40 text-primary" },
   { id: "custom", label: "Custom format", hint: "Any size", w: 1280, h: 720,
     art: "muted", dashed: true, tone: "border-border text-muted-foreground" },
 ] as const;
