@@ -102,7 +102,7 @@ fn run(args: &[&str]) -> Result<String, String> {
             graph_file = Some(p);
         }
     }
-    let o = Command::new(ffmpeg().unwrap())
+    let o = crate::proc_ext::silent(ffmpeg().unwrap())
         .args(["-hide_banner", "-y"])
         .args(&owned)
         .output()
@@ -593,7 +593,7 @@ fn transition_keeps_timeline_exact() {
         let refs: Vec<&str> = args[1..].iter().map(String::as_str).collect();
         run(&refs).unwrap_or_else(|e| panic!("{kind}: {e}"));
         // 3 s @ 30 fps = 90 frames.
-        let probe = Command::new(ffmpeg().unwrap().with_file_name("ffprobe.exe"))
+        let probe = crate::proc_ext::silent(ffmpeg().unwrap().with_file_name("ffprobe.exe"))
             .args([
                 "-v",
                 "error",
@@ -789,7 +789,7 @@ fn raw_frame(doc: &ProjectDoc, srcs: &HashMap<String, SourceInfo>, n: u32) -> Ve
     a.push("-filter_complex".into());
     a.push(format!("{};[vout]select=eq(n\\,{n}),format=rgb24[sel]", p.filter_complex));
     a.extend(["-map", "[sel]", "-frames:v", "1", "-f", "rawvideo", "-"].map(String::from));
-    let o = Command::new(ffmpeg().unwrap())
+    let o = crate::proc_ext::silent(ffmpeg().unwrap())
         .args(["-hide_banner", "-v", "error", "-y"])
         .args(&a)
         .output()
@@ -966,7 +966,7 @@ fn filter_thumbs() {
             format!("{frags},scale={scale}:-2")
         };
         let out = out_dir.join(format!("{}.png", entry.id));
-        let st = Command::new(&ff)
+        let st = crate::proc_ext::silent(&ff)
             .args(["-hide_banner", "-y", "-i"])
             .arg(&sample)
             .args(["-vf", &chain, "-frames:v", "1", "-update", "1"])
@@ -1011,7 +1011,7 @@ fn filter_verify() {
     };
     let render = |chain: &str, name: &str| -> PathBuf {
         let out = tmp.join(name);
-        let st = Command::new(&ff)
+        let st = crate::proc_ext::silent(&ff)
             .args(["-hide_banner", "-v", "error", "-y", "-i"])
             .arg(&sample)
             .args(["-vf", chain, "-frames:v", "1", "-update", "1"])
@@ -1022,7 +1022,7 @@ fn filter_verify() {
         out
     };
     let raw = |p: &Path| -> Vec<u8> {
-        Command::new(&ff)
+        crate::proc_ext::silent(&ff)
             .args(["-hide_banner", "-v", "error", "-y", "-i"])
             .arg(p)
             .args(["-vf", "scale=320:-2,format=rgb24", "-f", "rawvideo", "-"])
@@ -1119,7 +1119,7 @@ fn light_thumbs() {
         .join(";");
         let chain = format!("scale={tw}:{th},setsar=1,{frags},select='{sel}',tile=8x1");
         let out = out_dir.join(format!("{}.png", entry.id));
-        let mut c = Command::new(&ff);
+        let mut c = crate::proc_ext::silent(&ff);
         c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
             .arg(&sample);
         let _g = push_chain(&mut c, &chain);
@@ -1156,7 +1156,7 @@ fn light_verify() {
         speed: 1.0,
     };
     let raw = |p: &Path| -> Vec<u8> {
-        Command::new(&ff)
+        crate::proc_ext::silent(&ff)
             .args(["-hide_banner", "-v", "error", "-y", "-i"])
             .arg(p)
             .args(["-vf", "format=rgb24", "-f", "rawvideo", "-"])
@@ -1166,7 +1166,7 @@ fn light_verify() {
     };
     let base = raw(&{
         let b = tmp.join("base.png");
-        Command::new(&ff)
+        crate::proc_ext::silent(&ff)
             .args(["-hide_banner", "-v", "error", "-y", "-i"])
             .arg(&sample)
             .args(["-vf", "scale=384:216", "-frames:v", "1", "-update", "1"])
@@ -1199,7 +1199,7 @@ fn light_verify() {
         for n in [20u32, 60] {
             let out = tmp.join(format!("{}_{n}.png", entry.id));
             let chain = format!("scale=384:216,setsar=1,{frags},select=eq(n\\,{n})");
-            let mut c = Command::new(&ff);
+            let mut c = crate::proc_ext::silent(&ff);
             c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "3", "-i"])
                 .arg(&sample);
             let _g = push_chain(&mut c, &chain);
@@ -1304,7 +1304,7 @@ fn light_frames() {
         let frags = crate::render::fxeffects::fragments(&fx, &ctx).unwrap_or_default().join(";");
         let chain = format!("scale=1280:720,setsar=1,{frags},select=eq(n\\,30)");
         let out = out_dir.join(format!("{}.png", entry.id));
-        let mut c = Command::new(&ff);
+        let mut c = crate::proc_ext::silent(&ff);
         c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "2", "-i"])
             .arg(&sample);
         let _g = push_chain(&mut c, &chain);
@@ -1364,7 +1364,7 @@ fn light_scenes() {
                 format!("{f},")
             };
             let chain = format!("scale=384:216,setsar=1,{grade},format=rgb24,{frags}format=rgb24,select=eq(n\\,30)");
-            let mut c = Command::new(&ff);
+            let mut c = crate::proc_ext::silent(&ff);
             c.args(["-hide_banner", "-v", "error", "-y", "-loop", "1", "-framerate", "30", "-t", "2", "-i"])
                 .arg(&sample);
             let _g = push_chain(&mut c, &chain);
@@ -1376,7 +1376,7 @@ fn light_scenes() {
         cells.push(cells_row);
     }
     // assemble: 5 rows x 4 cols via one ffmpeg run, drawtext labels
-    let mut cmd = Command::new(&ff);
+    let mut cmd = crate::proc_ext::silent(&ff);
     cmd.args(["-hide_banner", "-v", "error", "-y"]);
     for r in &cells {
         for c in r {

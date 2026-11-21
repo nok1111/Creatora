@@ -9,7 +9,6 @@ use rusqlite::OptionalExtension;
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
 use tauri::{Manager, State};
 use xxhash_rust::xxh3::xxh3_64;
@@ -73,7 +72,7 @@ pub fn make_thumbnail(
     let ffmpeg = super::ffmpeg_path()?;
     std::fs::create_dir_all(thumbs_dir).ok()?;
     let out = thumbs_dir.join(format!("{asset_id}.jpg"));
-    let mut cmd = Command::new(ffmpeg);
+    let mut cmd = crate::proc_ext::silent(ffmpeg);
     cmd.arg("-hide_banner")
         .arg("-loglevel")
         .arg("error")
@@ -844,7 +843,7 @@ pub fn proxy_one(proxies_dir: &Path, db: &Db, asset_id: &str) -> Result<String, 
     }
     std::fs::create_dir_all(proxies_dir).map_err(|e| e.to_string())?;
     let out = proxies_dir.join(format!("{asset_id}.mp4"));
-    let status = std::process::Command::new(crate::media::ffmpeg_path().ok_or("ffmpeg not found")?)
+    let status = crate::proc_ext::silent(crate::media::ffmpeg_path().ok_or("ffmpeg not found")?)
         .args([
             "-hide_banner",
             "-loglevel",

@@ -13,7 +13,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::Arc;
 use tauri::State;
 
@@ -141,7 +141,7 @@ pub fn run_ffmpeg(
         "render: ffmpeg {}",
         args.iter().map(|a| if a.len() > 600 { format!("{}…", &a[..600]) } else { a.clone() }).collect::<Vec<_>>().join(" ")
     );
-    let mut child: Child = Command::new(&ffmpeg)
+    let mut child: Child = crate::proc_ext::silent(&ffmpeg)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

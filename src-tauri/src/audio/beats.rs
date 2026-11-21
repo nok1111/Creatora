@@ -12,7 +12,7 @@
 
 use crate::media::ffmpeg_path;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 const SR: usize = 22_050;
 const HOP: usize = SR / 100; // 10 ms
@@ -22,7 +22,7 @@ const HOP: usize = SR / 100; // 10 ms
 pub fn detect_beats(path: &Path, in_ms: i64, out_ms: i64, sensitivity: f64) -> Result<Vec<f64>, String> {
     let ff = ffmpeg_path().ok_or("ffmpeg not provisioned")?;
     let dur = ((out_ms - in_ms).max(0) as f64) / 1000.0;
-    let mut cmd = Command::new(ff);
+    let mut cmd = crate::proc_ext::silent(ff);
     cmd.args(["-v", "error", "-nostdin", "-ss", &format!("{:.3}", in_ms.max(0) as f64 / 1000.0)]);
     if dur > 0.0 {
         cmd.args(["-t", &format!("{dur:.3}")]);

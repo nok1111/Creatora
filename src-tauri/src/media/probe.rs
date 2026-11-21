@@ -3,7 +3,6 @@
 use crate::error::AppError;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct MediaInfo {
@@ -60,7 +59,7 @@ pub fn probe(path: &Path) -> Result<MediaInfo, AppError> {
 }
 
 fn run_probe(ffprobe: &PathBuf, path: &Path) -> Result<MediaInfo, AppError> {
-    let out = Command::new(ffprobe)
+    let out = crate::proc_ext::silent(ffprobe)
         .args([
             "-v",
             "error",

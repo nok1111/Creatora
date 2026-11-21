@@ -4,7 +4,6 @@
 
 use super::{ffmpeg_path, probe};
 use std::path::Path;
-use std::process::Command;
 
 /// Default strip layout — enough granularity for any sane zoom level
 /// while keeping the JPEG small.
@@ -23,7 +22,7 @@ pub fn filmstrip(path: &Path, out: &Path, frames: usize) -> Result<(), String> {
         .unwrap_or(60_000) as f64
         / 1000.0;
     let fps = frames.max(1) as f64 / dur_s;
-    let status = Command::new(ff)
+    let status = crate::proc_ext::silent(ff)
         .args([
             "-hide_banner",
             "-loglevel",

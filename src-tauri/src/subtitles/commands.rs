@@ -8,7 +8,7 @@ use crate::project::{document::*, store};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -304,7 +304,7 @@ pub fn parse_whisper_json(json: &str) -> Vec<SubtitleCue> {
 /// Extract mono 16 kHz WAV for whisper via ffmpeg.
 fn prepare_audio(src: &Path, out_wav: &Path) -> Result<(), String> {
     let ff = crate::media::ffmpeg_path().ok_or("ffmpeg not found")?;
-    let st = Command::new(ff)
+    let st = crate::proc_ext::silent(ff)
         .args([
             "-hide_banner",
             "-loglevel",
@@ -364,7 +364,7 @@ pub(crate) fn transcribe_to_cues(
     }
     ctx.progress(at(0.1), Some("Transcribing"));
     let out_json = tmp.with_extension("json");
-    let mut cmd = Command::new(whisper);
+    let mut cmd = crate::proc_ext::silent(whisper);
     cmd.args([
         "-m",
         &model_path.to_string_lossy(),

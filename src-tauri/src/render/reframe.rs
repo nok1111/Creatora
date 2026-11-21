@@ -19,7 +19,7 @@ use crate::error::AppError;
 use serde::Serialize;
 use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,7 +58,7 @@ pub fn analyze_motion(
     let ow = 96usize;
     let oh = ((sh as f64 * ow as f64 / sw as f64) / 2.0).round() as usize * 2;
     let oh = oh.max(2);
-    let mut child = Command::new(&ffmpeg)
+    let mut child = crate::proc_ext::silent(&ffmpeg)
         .args([
             "-hide_banner",
             "-loglevel",

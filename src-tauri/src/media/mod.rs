@@ -3,7 +3,6 @@ pub mod probe;
 pub mod filmstrip;
 
 use std::path::PathBuf;
-use std::process::Command;
 
 /// Locate a tool binary by name ("ffmpeg"/"ffprobe"): bundled copy under
 /// tools/bin next to the exe, repo tools/bin in dev builds, CREATORA_FFMPEG/
@@ -48,7 +47,7 @@ fn runnable(path: &PathBuf) -> bool {
     if path.components().count() > 1 && !path.is_file() {
         return false;
     }
-    Command::new(path)
+    crate::proc_ext::silent(path)
         .arg("-version")
         .output()
         .map(|o| o.status.success())
@@ -58,7 +57,7 @@ fn runnable(path: &PathBuf) -> bool {
 /// `ffmpeg -version` first line, or None if ffmpeg is unavailable.
 pub fn ffmpeg_version() -> Option<String> {
     let path = ffmpeg_path()?;
-    let out = Command::new(path).arg("-version").output().ok()?;
+    let out = crate::proc_ext::silent(path).arg("-version").output().ok()?;
     if !out.status.success() {
         return None;
     }

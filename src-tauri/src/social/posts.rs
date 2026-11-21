@@ -1006,7 +1006,7 @@ pub fn reveal_path(path: String) -> CmdResult<()> {
     }
     #[cfg(windows)]
     {
-        std::process::Command::new("explorer")
+        crate::proc_ext::silent("explorer")
             .arg("/select,")
             .arg(&p)
             .spawn()

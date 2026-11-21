@@ -6,6 +6,7 @@ mod external_drop;
 pub mod graphics;
 pub mod jobs;
 pub mod media;
+pub mod proc_ext;
 pub mod project;
 pub mod render;
 pub mod repurpose;

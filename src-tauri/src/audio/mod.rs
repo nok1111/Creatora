@@ -7,7 +7,6 @@ pub mod commands;
 use crate::media::ffmpeg_path;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::process::Command;
 
 fn ff() -> Result<std::path::PathBuf, String> {
     ffmpeg_path().ok_or_else(|| "ffmpeg not provisioned".to_string())
@@ -26,7 +25,7 @@ pub struct Waveform {
 /// data size regardless of file length (zoom re-requests finer buckets).
 pub fn waveform(path: &Path, buckets: usize) -> Result<Waveform, String> {
     let buckets = buckets.clamp(16, 64_000);
-    let out = Command::new(ff()?)
+    let out = crate::proc_ext::silent(ff()?)
         .args([
             "-hide_banner",
             "-loglevel",
@@ -81,7 +80,7 @@ pub fn waveform(path: &Path, buckets: usize) -> Result<Waveform, String> {
 
 fn probe_duration_ms(path: &Path) -> Option<i64> {
     let fp = crate::media::ffprobe_path()?;
-    let out = Command::new(fp)
+    let out = crate::proc_ext::silent(fp)
         .args([
             "-v",
             "error",
@@ -116,7 +115,7 @@ pub struct Loudness {
 /// `loudnorm print_format=json` analysis — parses the JSON block ffmpeg
 /// prints to stderr.
 pub fn loudness(path: &Path) -> Result<Loudness, String> {
-    let out = Command::new(ff()?)
+    let out = crate::proc_ext::silent(ff()?)
         .args([
             "-hide_banner",
             "-i",
@@ -167,7 +166,7 @@ pub fn detect_silence(
     noise_db: f64,
     min_ms: i64,
 ) -> Result<Vec<SilenceRegion>, String> {
-    let out = Command::new(ff()?)
+    let out = crate::proc_ext::silent(ff()?)
         .args([
             "-hide_banner",
             "-i",
