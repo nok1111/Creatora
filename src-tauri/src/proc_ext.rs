@@ -16,3 +16,19 @@ pub fn silent<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
     }
     cmd
 }
+
+/// Open a URL in the default browser without flashing a console.
+/// `webbrowser` spawns `cmd /c start` on Windows — its own child Command,
+/// not routed through `silent` — so each open flashes a terminal window.
+/// `explorer.exe` is a GUI-subsystem process and opens URLs natively.
+pub fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        silent("explorer").arg(url).spawn()?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        webbrowser::open(url).map_err(|e| std::io::Error::other(e.to_string()))
+    }
+}

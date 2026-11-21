@@ -135,7 +135,7 @@ pub fn social_oauth_begin(
         }
     }
 
-    webbrowser::open(&url).map_err(|e| AppError::Internal(format!("open browser: {e}")))?;
+    crate::proc_ext::open_url(&url).map_err(|e| AppError::Internal(format!("open browser: {e}")))?;
 
     let scopes_out = oauth.scopes.clone();
     let db2 = (*db).clone();

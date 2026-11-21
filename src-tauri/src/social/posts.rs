@@ -994,7 +994,7 @@ pub fn open_external_url(url: String) -> CmdResult<()> {
             "only http(s) URLs can be opened".into(),
         ));
     }
-    webbrowser::open(u).map_err(|e| AppError::Internal(format!("open browser: {e}")))
+    crate::proc_ext::open_url(u).map_err(|e| AppError::Internal(format!("open browser: {e}")))
 }
 
 /// Reveal a file in Explorer — used by "open location" everywhere.
