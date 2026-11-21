@@ -28,3 +28,9 @@ Desktop.ini
 !.vscode/extensions.json
 !.vscode/settings.json
 tsconfig.tsbuildinfo
+
+# QA artifacts (render outputs, downloaded source packs, caches)
+qa/out/
+qa/sfx_dl/
+__pycache__/
+*.pyc
