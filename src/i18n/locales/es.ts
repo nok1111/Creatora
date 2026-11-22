@@ -970,6 +970,8 @@ export const es: typeof en = {
     startEditing: "Empezar a editar",
     untitled: "Proyecto sin título",
     nextStep: "Siguiente paso en el editor: importa tus medios (arrastrar y soltar funciona).",
+    editingNow: "Editando ahora",
+    backToEditor: "Volver al editor",
   },
   gfxB: {
     addElement: "Añadir elemento",

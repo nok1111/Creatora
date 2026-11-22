@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Clapperboard, Undo2 } from "lucide-react";
 import { useProject } from "@/stores/project";
 import { requestProjectSwitch } from "@/services/project-switch";
 import { FormatArt, type FormatTone } from "@/components/FormatArt";
@@ -28,6 +28,8 @@ export function CreatePage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const createNew = useProject((s) => s.createNew);
+  const doc = useProject((s) => s.doc);
+  const dirty = useProject((s) => s.dirty);
   const initial = FORMATS.some((f) => f.id === params.get("format"))
     ? (params.get("format") as (typeof FORMATS)[number]["id"])
     : "vert";
@@ -145,6 +147,32 @@ export function CreatePage() {
       <p className="text-[11px] text-muted-foreground">
         {t("create.nextStep")}
       </p>
+
+      {doc && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-1 px-4 py-3 shadow-raise">
+          <div className="flex min-w-0 items-center gap-3">
+            <Clapperboard className="size-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {t("create.editingNow")}
+              </div>
+              <div className="flex items-center gap-1.5 truncate text-sm font-medium">
+                <span className="truncate">{doc.meta?.name}</span>
+                {dirty && <span title={t("common.unsaved")} className="size-1.5 shrink-0 rounded-full bg-warning" />}
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {doc.canvas.width}×{doc.canvas.height}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => nav("/editor")}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/50 hover:text-primary"
+          >
+            <Undo2 className="size-3.5" /> {t("create.backToEditor")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

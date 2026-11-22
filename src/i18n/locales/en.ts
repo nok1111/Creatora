@@ -967,6 +967,8 @@ export const en = {
     startEditing: "Start editing",
     untitled: "Untitled project",
     nextStep: "Next step inside the editor: import your media (drag & drop works).",
+    editingNow: "Editing now",
+    backToEditor: "Back to editor",
   },
   gfxB: {
     addElement: "Add element",
