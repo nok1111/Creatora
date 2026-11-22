@@ -1,6 +1,6 @@
 [package]
 name = "creatora"
-version = "1.0.1"
+version = "1.0.2"
 description = "Creatora — all-in-one Creator Studio"
 authors = ["Creatora"]
 license = "Proprietary"
