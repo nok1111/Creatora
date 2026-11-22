@@ -179,6 +179,10 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
 
   const msToPx = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec]);
   const pxToMs = useCallback((px: number) => (px / pxPerSec) * 1000, [pxPerSec]);
+  /** Left edge of the lanes column in viewport px — drag drops that land on
+      the sticky track-header column still resolve a time against this. */
+  const laneLeftX = () =>
+    scrollRef.current?.querySelector<HTMLElement>("[data-lanes]")?.getBoundingClientRect().left ?? 0;
 
   // Active cue under the playhead — selector returns a primitive, so the
   // panel only re-renders when the active cue actually changes (cheap at
@@ -729,6 +733,47 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     !track.locked &&
     (!kind || (track.kind === "audio") === (kind === "audio" || kind === "sfx"));
 
+  /** Shared by lane rows and their sticky track headers: the header column
+      overlays the leftmost ~HEADER_W px of the lanes, so drops near the
+      left edge land on the header — they must still resolve a time (≈0). */
+  const onLaneDragOver = (e: React.DragEvent, track: Track) => {
+    e.preventDefault();
+    const ms = Math.max(0, snap(pxToMs(e.clientX - laneLeftX())));
+    // Effects-bin drop: ghost highlights the clip it would hit.
+    if (e.dataTransfer.types.includes("application/x-creatora-effect")) {
+      const target = track.clips.find(
+        (c) => ms >= c.startMs && ms < c.startMs + c.durationMs,
+      );
+      const valid =
+        !!target && !track.locked && track.kind !== "audio" &&
+        isEffectPayload(getDragPayload());
+      e.dataTransfer.dropEffect = valid ? "copy" : "none";
+      setHint(
+        target
+          ? { trackId: track.id, startMs: target.startMs, durationMs: target.durationMs, valid }
+          : null,
+      );
+      return;
+    }
+    if (
+      !e.dataTransfer.types.includes("application/x-creatora-asset") &&
+      !e.dataTransfer.types.includes("application/x-creatora-sfx")
+    ) {
+      e.dataTransfer.dropEffect = "none";
+      setHint(null);
+      return;
+    }
+    const payload = getDragPayload();
+    const valid = dropValid(track, payload && !isEffectPayload(payload) ? payload.kind : undefined);
+    e.dataTransfer.dropEffect = valid ? "copy" : "none";
+    setHint({
+      trackId: track.id,
+      startMs: ms,
+      durationMs: payload && !isEffectPayload(payload) ? payload.durationMs : 3000,
+      valid,
+    });
+  };
+
   /** Effects-bin drops apply onto the clip under the cursor — every tile maps
       to a render-supported primitive (baked keyframes / xfade / clip.fx). */
   const applyFxDrop = (track: Track, ms: number, category: EffectCategory, itemId: string) => {
@@ -916,8 +961,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     setHint(null);
     const fxJson = e.dataTransfer.getData("application/x-creatora-effect");
     if (fxJson) {
-      const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
-      const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+      const ms = Math.max(0, snap(pxToMs(e.clientX - laneLeftX())));
       try {
         const { category, itemId } = JSON.parse(fxJson);
         applyFxDrop(track, ms, category, itemId);
@@ -936,8 +980,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
         toast.error(t("editor.dropWrongTrack"));
         return;
       }
-      const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
-      const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+      const ms = Math.max(0, snap(pxToMs(e.clientX - laneLeftX())));
       void api
         .importSfx([sfxFile])
         .then(([a]) => {
@@ -977,8 +1020,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       toast.error(t("editor.dropWrongTrack"));
       return;
     }
-    const lane = (e.currentTarget as HTMLElement).closest("[data-lane]") as HTMLElement;
-    const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+    const ms = Math.max(0, snap(pxToMs(e.clientX - laneLeftX())));
     const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
     const filePath = e.dataTransfer.getData("application/x-creatora-path");
     mutate((d) => {
@@ -1012,8 +1054,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
       return;
     }
     const payload = getDragPayload();
-    const lane = e.currentTarget as HTMLElement;
-    const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+    const ms = Math.max(0, snap(pxToMs(e.clientX - laneLeftX())));
     e.dataTransfer.dropEffect = "copy";
     setHint({
       trackId: NEW_TRACK,
@@ -1059,8 +1100,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
     if (!assetId) return;
     const pl2 = getDragPayload();
     const kind = (pl2 && !isEffectPayload(pl2) ? pl2.kind : undefined) ?? assets.get(assetId)?.kind;
-    const lane = e.currentTarget as HTMLElement;
-    const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
+    const ms = Math.max(0, snap(pxToMs(e.clientX - laneLeftX())));
     const dur = Number(e.dataTransfer.getData("application/x-creatora-duration")) || 3000;
     const filePath = e.dataTransfer.getData("application/x-creatora-path");
     const trackKind = kind === "audio" || kind === "sfx" ? "audio" : "video";
@@ -1323,6 +1363,8 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                   track.locked ? "opacity-60" : ""
                 }`}
                 style={{ height: laneHeight(trackFxRows(track)) }}
+                onDragOver={(e) => onLaneDragOver(e, track)}
+                onDrop={(e) => onDrop(e, track)}
               >
                 {editingTrack === track.id ? (
                   <input
@@ -1368,7 +1410,11 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                 {trackActions(track)}
               </div>
             ))}
-            <div className="flex gap-1 p-1.5">
+            <div
+              className="flex gap-1 p-1.5"
+              onDragOver={onDragOverNew}
+              onDrop={onDropNew}
+            >
               <Button
                 variant="outline"
                 size="sm"
@@ -1389,7 +1435,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
           </div>
 
           {/* Ruler + lanes */}
-          <div className="relative flex flex-1 flex-col">
+          <div data-lanes className="relative flex flex-1 flex-col">
             <div
               className="sticky top-0 z-30 h-6 cursor-ew-resize border-b border-border bg-card/95 backdrop-blur"
               onPointerDown={onRulerPointerDown}
@@ -1559,44 +1605,7 @@ export function TimelinePanel({ assets }: { assets: Map<string, AssetSummary> })
                     (moveLane.valid ? "bg-primary/15" : "bg-destructive/15"),
                 )}
                 style={{ height: laneHeight(trackFxRows(track)), width: lanesW }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  const lane = e.currentTarget as HTMLElement;
-                  const ms = snap(pxToMs(e.clientX - lane.getBoundingClientRect().left));
-                  // Effects-bin drop: ghost highlights the clip it would hit.
-                  if (e.dataTransfer.types.includes("application/x-creatora-effect")) {
-                    const target = track.clips.find(
-                      (c) => ms >= c.startMs && ms < c.startMs + c.durationMs,
-                    );
-                    const valid =
-                      !!target && !track.locked && track.kind !== "audio" &&
-                      isEffectPayload(getDragPayload());
-                    e.dataTransfer.dropEffect = valid ? "copy" : "none";
-                    setHint(
-                      target
-                        ? { trackId: track.id, startMs: target.startMs, durationMs: target.durationMs, valid }
-                        : null,
-                    );
-                    return;
-                  }
-                  if (
-                    !e.dataTransfer.types.includes("application/x-creatora-asset") &&
-                    !e.dataTransfer.types.includes("application/x-creatora-sfx")
-                  ) {
-                    e.dataTransfer.dropEffect = "none";
-                    setHint(null);
-                    return;
-                  }
-                  const payload = getDragPayload();
-                  const valid = dropValid(track, payload && !isEffectPayload(payload) ? payload.kind : undefined);
-                  e.dataTransfer.dropEffect = valid ? "copy" : "none";
-                  setHint({
-                    trackId: track.id,
-                    startMs: ms,
-                    durationMs: payload && !isEffectPayload(payload) ? payload.durationMs : 3000,
-                    valid,
-                  });
-                }}
+                onDragOver={(e) => onLaneDragOver(e, track)}
                 onDrop={(e) => onDrop(e, track)}
               >
                 {/* Insertion ghost — where the clip will land. */}
